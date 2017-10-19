@@ -1,0 +1,54 @@
+html, body
+{
+    height: 100%;
+    margin:0;
+    padding:0;
+}
+
+div {
+    position:relative;
+    height: 100%;
+    width:100%;
+}
+
+div svg {
+    pointer-events: none;
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+    bottom:0;
+    margin:auto;
+}
+
+svg#picDrop {
+  height: 150px;
+}
+
+.svgDragover {
+  fill: white;
+  opacity: 1;
+}
+.svgNotDragged {
+  fill: black;
+  opacity: 0.3;
+}
+
+.droptargetDragover {
+  outline-offset: -25px;
+  background-color: green;
+  outline: 2px dashed white;
+}
+
+.droptargetNotDragged {
+  outline-offset: -20px;
+  background-color: white;
+  outline: 2px dashed grey;
+}
+
+#droptarget, #picDrop {
+  -webkit-transition: outline-offset .15s ease-in-out, background-color .35s linear, fill .15s linear;
+  transition: outline-offset .15s ease-in-out, background-color .35s linear, fill .15s linear;
+
+
+}

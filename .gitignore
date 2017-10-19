@@ -1,0 +1,7 @@
+node_modules/
+
+# Local development
+*.env
+*.dev
+.DS_Store
+.routine.md
