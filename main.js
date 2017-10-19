@@ -26,13 +26,13 @@ app.on('ready', () => {
   console.log(opts)
   win = new BrowserWindow(config.get('winBounds'))
   win.loadURL(url.format({
-    //pathname: path.join(__dirname, 'node_modules/drop-anywhere/example.html'), //
-    pathname: path.join(__dirname, 'assets/list.html'),
+    pathname: path.join(__dirname, 'index.html'), //
+    //pathname: path.join(__dirname, 'assets/list.html'),
     protocol: 'file:',
     slashes: true
   }))
   // Open the DevTools.
-  // win.webContents.openDevTools()
+   win.webContents.openDevTools()
 
   win.once('ready-to-show', win.show)
 
