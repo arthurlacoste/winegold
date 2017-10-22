@@ -1,57 +1,32 @@
 
-<!-- Stylesheets -->
-<link rel="stylesheet" href="assets/css/photon.min.css">
-
-<div class="window">
-
-  <div class="window-content">
-    <table class="table-striped">
+    <table class="ui unstackable table">
       <thead>
         <tr>
-          <th></th>
-          <th>Name</th>
-          <th>Kind</th>
-          <th>File Size</th>
+          <th class="iconCell"></th>
+          <th class="name">Name</th>
+          <th class="minCell">Kind</th>
+          <th class="minCell">File Size</th>
         </tr>
       </thead>
-      <tbody>
-        <tr>
-          <td><span class="icon icon-hourglass"></span></td>
-          <td>photon.css <span class="icon icon-search"></span></td>
-          <td>CSS</td>
-          <td>28K</td>
-        </tr>
-        <tr>
-          <td><span class="icon icon-hourglass"></span></td>
-          <td>photon.css <span class="icon icon-check"></span></td>
-          <td>CSS</td>
-          <td>28K</td>
-        </tr>
-        <tr>
-          <td><span class="icon icon-check"></span></td>
-          <td>photon.css <span class="icon icon-check"></span></td>
-          <td>CSS</td>
-          <td>28K</td>
-        </tr>
-        <tr>
-          <td><span class="icon icon-hourglass"></span></td>
-          <td>photon.css <span class="icon icon-check"></span></td>
-          <td>CSS</td>
-          <td>28K</td>
-        </tr>
+      <tbody id="list">
       </tbody>
     </table>
-  </div>
 
-  <footer class="toolbar toolbar-footer draggable">
-    <div class="toolbar-actions">
-      <button class="btn btn-default">
-        Cancel
-      </button>
-
-      <button class="btn btn-primary pull-right">
-        Start
-      </button>
+  <footer class="ui bottom fixed borderless menu">
+    <div class="item">
+            <div class="ui negative basic button compact">Cancel</div>
+        </div>
+    <div class="right menu">
+  <div class="ui dropdown item">
+    Language <i class="dropdown icon"></i>
+    <div class="menu">
+      <a class="item">English</a>
+      <a class="item">Russian</a>
+      <a class="item">Spanish</a>
     </div>
-  </footer>
+  </div>
+  <div class="item">
+      <div class="ui positive basic button compact toggle">Process all files</div>
+  </div>
 </div>
+  </footer>

@@ -5,12 +5,16 @@ html, body
     padding:0;
 }
 
-div {
-    position:relative;
-    height: 100%;
-    width:100%;
+.ui.table {
+    margin-bottom: 49px;
+    border: 0px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+    max-width: 100%;
 }
 
+table { white-space: nowrap; }
 div svg {
     pointer-events: none;
     position:absolute;
@@ -19,6 +23,24 @@ div svg {
     right:0;
     bottom:0;
     margin:auto;
+}
+
+.name {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  /* width: calc(100vw - 225px); */
+
+}
+
+.iconCell{
+    width: 43px;
+    max-width: 43px;
+}
+
+.minCell {
+  width: 91px;
+  max-width: 91px;
 }
 
 svg#picDrop {
@@ -49,6 +71,13 @@ svg#picDrop {
 #droptarget, #picDrop {
   -webkit-transition: outline-offset .15s ease-in-out, background-color .35s linear, fill .15s linear;
   transition: outline-offset .15s ease-in-out, background-color .35s linear, fill .15s linear;
+}
+#content, #droptarget {
+  position:relative;
+  height: 100%;
+  width:100%;
+}
 
-
+footer {
+  height: 60px;
 }
