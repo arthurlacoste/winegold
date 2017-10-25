@@ -84,14 +84,17 @@ ipc.on('element-ok', function (event, args) {
 })
 
 ipc.on('process-finished', function(event, args){
-  console.log(args.file)
-  //console.log("process-finished " + args);
-  // console.log($('tr[data-content="' + args + '"]').length);
   $('tr[data-content="' + args.file + '"]')
-  .find('i.icon.loading.asterisk')
-  .addClass('unhide')
-  .removeClass('loading asterisk');
-  //console.log(html)
+  .find('i.icon.loading')
+  .addClass('inverted green checkmark validate')
+  .removeClass('notched circle loading');
+})
+
+ipc.on('process-err', function(event,args){
+  $('tr[data-content="' + args.file + '"]')
+  .find('i.icon.loading')
+  .addClass('inverted red warning sign')
+  .removeClass('notched circle loading');
 })
 
 ipc.on('eval-browser', function(event, args){
@@ -109,6 +112,7 @@ ipc.on('add-process-out', function(event,args){
 
 })
 
+
 $(document).on('click', '.showItemInFolder', function(){
   const {shell} = require('electron')
   shell.showItemInFolder($(this).closest('tr').attr('data-content'))
@@ -116,5 +120,8 @@ $(document).on('click', '.showItemInFolder', function(){
 
 $(document).on('click', '.showTerminal', function(){
   let file = $(this).closest('tr').attr('data-content')
-  $('.termView[data-term="' + file + '"]').toggle()
+  let term = $('.termView[data-term="' + file + '"]')
+  $(term).toggle()
+  let termPre = $(term).find('pre')
+  $(termPre).scrollTop($(termPre)[0].scrollHeight)
 })

@@ -38,7 +38,9 @@ function addItem(element) {
   let size = bytes(element.size, {unitSeparator: ' '})
   html = `
   <tr data-content="${element.path}">
-  <td><i class="icon loading asterisk"></i></td>
+  <td>
+    <i class="circular notched circle loading icon"></i>
+  </td>
   <td><div class="name"><span class="innerName" data-filetype="${element.name.split('.').pop()}">${element.name}</sapn></div><span class="icon icon-search"></span></td>
   <td class="iconButtonCell">
     <div class="showItemInFolder ui negative basic button compact icon"><i class="search icon"></i></div>

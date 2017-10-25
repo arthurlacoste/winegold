@@ -5,6 +5,10 @@ html, body
   padding:0;
 }
 
+/*
+ * table
+ */
+
 .ui.table {
   margin-bottom: 49px;
   border: 0px;
@@ -23,11 +27,11 @@ html, body
 }
 
 .iconCell{
-  width: 25px;
+  width: 38px;
 }
 
 .iconButtonCell {
-  width: 114px;
+  width: 104px;
 }
 
 td.iconButtonCell {
@@ -37,6 +41,19 @@ td.iconButtonCell {
 .minCell {
   width: 91px;
 }
+
+.validate {
+    background-color: #2ba540!important;
+    color: #fff!important;
+}
+
+.loading {
+    background-color: #grey!important;
+}
+
+/*
+ * SVG, drag n drop page
+ */
 
 div svg {
   pointer-events: none;
@@ -83,19 +100,17 @@ svg#picDrop {
   width:100%;
 }
 
+/*
+ * Terminal view
+ */
+
 .termView {
+
   color: #00d600;
   background-color: black;
   display: none;
 }
 
-::-webkit-scrollbar-corner {
-/*
-background-image: url(resources/corner.png);
-background-repeat: no-repeat;
-*/
-background-color: black;
-}
 .termView pre {
     margin-left: 12px;
     margin-right: 12px;
@@ -105,6 +120,26 @@ background-color: black;
     overflow-x: hidden;
     white-space: pre-wrap;
     font-family: Lato,'Helvetica Neue',Arial,Helvetica,sans-serif;
+    font-weight: normal;
+}
+
+pre::-webkit-scrollbar {
+    height: 12px;
+	width: 12px;
+	background: #000;
+    }
+pre::-webkit-scrollbar-thumb {
+    background: grey;
+    -webkit-border-radius: 1ex;
+    -webkit-box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+pre::-webkit-scrollbar-corner {
+/*
+background-image: url(resources/corner.png);
+background-repeat: no-repeat;
+*/
+background-color: black;
 }
 
 footer {
