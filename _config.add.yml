@@ -1,0 +1,212 @@
+
+
+htm:
+  symlink: html
+
+html:
+  icon: file text
+  history:
+    Hypertext Markup Language is the standard markup language for
+    creating web pages and web applications. CSS and JavaScript it forms a
+    triad of cornerstone technologies for the World
+    Wide Web. Web browsers receive HTML documents from a web server or from
+    local storage and render them into multimedia web pages. HTML describes
+    the structure of a web page semantically and originally included cues for
+    the appearance of the document.
+  type:
+    - ebook
+    - document
+  output:
+    bf2	: ebook-convert
+    mobi	: ebook-convert
+    odt	  : ebook-convert
+    pdf	  : ebook-convert
+    rtf	  : ebook-convert
+    txt	  : ebook-convert
+    azw4	: ebook-convert
+    docx	: ebook-convert
+    epub	: ebook-convert
+
+bf2:
+  icon: book
+  history:
+    FictionBook is an open XML-based e-book format which originated and gained
+    popularity in Russia. FictionBook files have the .fb2 filename extension.
+  type:
+    - ebook
+  output:
+    html	: ebook-convert
+    mobi	: ebook-convert
+    odt	  : ebook-convert
+    pdf	  : ebook-convert
+    rtf	  : ebook-convert
+    txt	  : ebook-convert
+    azw4	: ebook-convert
+    docx	: ebook-convert
+    epub	: ebook-convert
+
+mobi:
+  icon: book
+  history:
+    The Mobipocket e-book format is based on the Open eBook standard using XHTML
+    and can include JavaScript and frames. It also supports native SQL queries
+    to be used with embedded databases. There is a corresponding e-book reader.
+  type:
+   - ebook
+  output:
+    bf2	: ebook-convert
+    html	: ebook-convert
+    odt	  : ebook-convert
+    pdf	  : ebook-convert
+    rtf	  : ebook-convert
+    txt	  : ebook-convert
+    azw4	: ebook-convert
+    docx	: ebook-convert
+    epub	: ebook-convert
+
+odt:
+  icon: file text
+  history:
+    The Open Document Format for Office Applications, also known as
+    OpenDocument, is an XML-based file format for spreadsheets, charts,
+    presentations and word processing documents. It was developed with the aim
+    of providing an open file format specification for office applications.
+  type:
+    - ebook
+    - document
+  output:
+    bf2	: ebook-convert
+    html	: ebook-convert
+    mobi	: ebook-convert
+    pdf	  : ebook-convert
+    rtf	  : ebook-convert
+    txt	  : ebook-convert
+    azw4	: ebook-convert
+    docx	: ebook-convert
+    epub	: ebook-convert
+
+pdf:
+  icon: file text
+  type:
+    - ebook
+    - document
+  history:
+    The Portable Document Format is a file format used to present
+    documents in a manner independent of application software, hardware, and
+    operating systems. Each PDF file encapsulates a complete description of
+    a fixed-layout flat document, including the text, fonts, graphics, and other
+    information needed to display it.
+  output:
+    bf2	: ebook-convert
+    html	: ebook-convert
+    mobi	: ebook-convert
+    odt	  : ebook-convert
+    rtf	  : ebook-convert
+    txt	  : ebook-convert
+    azw4	: ebook-convert
+    docx	: ebook-convert
+    epub	: ebook-convert
+
+rtf:
+  icon: file text
+  history:
+    The Rich Text Format is a proprietary document file format with published
+    specification developed by Microsoft Corporation from 1987 until 2008 for
+    cross-platform document interchange with Microsoft products.
+  type:
+    - ebook
+    - document
+  output:
+    bf2	: ebook-convert
+    html	: ebook-convert
+    mobi	: ebook-convert
+    odt	  : ebook-convert
+    pdf	  : ebook-convert
+    txt	  : ebook-convert
+    azw4	: ebook-convert
+    docx	: ebook-convert
+    epub	: ebook-convert
+
+txt	  :
+  icon: file text
+  history:
+    A text file (an old alternative name is "flatfile") is a kind of computer
+    file that is structured as a sequence of
+    lines of electronic text. A text file exists stored as data within a
+    computer file system. The end of a text file is often denoted by placing
+    one or more special characters, known as an end-of-file marker, after the
+    last line in a text file. Such markers were required under the CP/M and
+    MS-DOS operating systems. On modern operating systems such as Windows and
+    Unix-like systems, text files do not contain any special EOF character.
+  type:
+    - ebook
+    - document
+  output:
+    bf2	: ebook-convert
+    html	: ebook-convert
+    mobi	: ebook-convert
+    odt	  : ebook-convert
+    pdf	  : ebook-convert
+    rtf	  : ebook-convert
+    azw4	: ebook-convert
+    docx	: ebook-convert
+    epub	: ebook-convert
+
+azw4	:
+  icon: book
+  history:
+    AZW4 is an Amazon proprietary format for textbooks. It is a PDF format in a
+    PDB wrapper, and usually (always?) with DRM. The wrapper provides the same
+    DRM method as is used on the Kindle's Mobipocket format ebooks.
+  type:
+    - ebook
+  output:
+    bf2	: ebook-convert
+    html	: ebook-convert
+    mobi	: ebook-convert
+    odt	  : ebook-convert
+    pdf	  : ebook-convert
+    rtf	  : ebook-convert
+    txt	  : ebook-convert
+    docx	: ebook-convert
+    epub	: ebook-convert
+
+docx	:
+  icon: file text
+  history:
+    Office Open XML is a zipped, XML-based file format developed by Microsoft
+    for representing spreadsheets, charts, presentations and word processing
+    documents.
+  type:
+    - ebook
+    - document
+  output:
+    bf2	: ebook-convert
+    html	: ebook-convert
+    mobi	: ebook-convert
+    odt	  : ebook-convert
+    pdf	  : ebook-convert
+    rtf	  : ebook-convert
+    txt	  : ebook-convert
+    azw4	: ebook-convert
+    epub	: ebook-convert
+
+epub	:
+  icon: book
+  history:
+    ePub is an open format defined by the Open eBook Forum of the International
+    Digital Publishing Forum. It is based on XHTML and XML along with
+    optional CSS style sheets. Its predecessor was the OEB standard.
+    Specifications are found at the IDPF web site.
+  type:
+    - ebook
+  output:
+    bf2	: ebook-convert
+    html	: ebook-convert
+    mobi	: ebook-convert
+    odt	  : ebook-convert
+    pdf	  : ebook-convert
+    rtf	  : ebook-convert
+    txt	  : ebook-convert
+    azw4	: ebook-convert
+    docx	: ebook-convert

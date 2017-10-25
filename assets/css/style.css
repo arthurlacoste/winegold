@@ -1,30 +1,19 @@
 html, body
 {
-    height: 100%;
-    margin:0;
-    padding:0;
+  height: 100%;
+  margin:0;
+  padding:0;
 }
 
 .ui.table {
-    margin-bottom: 49px;
-    border: 0px;
-    border-collapse: collapse;
-    table-layout: fixed;
-    width: 100%;
-    max-width: 100%;
+  margin-bottom: 49px;
+  border: 0px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  max-width: 100%;
+  white-space: nowrap;
 }
-
-table { white-space: nowrap; }
-div svg {
-    pointer-events: none;
-    position:absolute;
-    top:0;
-    left:0;
-    right:0;
-    bottom:0;
-    margin:auto;
-}
-
 .name {
   text-overflow: ellipsis;
   overflow: hidden;
@@ -34,13 +23,29 @@ div svg {
 }
 
 .iconCell{
-    width: 43px;
-    max-width: 43px;
+  width: 25px;
+}
+
+.iconButtonCell {
+  width: 114px;
+}
+
+td.iconButtonCell {
+  text-align: right;
 }
 
 .minCell {
   width: 91px;
-  max-width: 91px;
+}
+
+div svg {
+  pointer-events: none;
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  margin:auto;
 }
 
 svg#picDrop {
@@ -76,6 +81,30 @@ svg#picDrop {
   position:relative;
   height: 100%;
   width:100%;
+}
+
+.termView {
+  color: #00d600;
+  background-color: black;
+  display: none;
+}
+
+::-webkit-scrollbar-corner {
+/*
+background-image: url(resources/corner.png);
+background-repeat: no-repeat;
+*/
+background-color: black;
+}
+.termView pre {
+    margin-left: 12px;
+    margin-right: 12px;
+    max-height: 200px;
+    height:200px;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    font-family: Lato,'Helvetica Neue',Arial,Helvetica,sans-serif;
 }
 
 footer {

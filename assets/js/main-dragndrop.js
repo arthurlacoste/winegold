@@ -60,6 +60,8 @@ function setImgOpacity(value){
       }
       //console.log(JSON.stringify(file))
 
+
+
       // sending to main.js
       ipc.send('url-reception', file)
     }
@@ -71,10 +73,48 @@ function setImgOpacity(value){
   };
 })();
 
-ipc.on('element-ok', function (event, arg) {
-  addItem(arg);
+ipc.on('element-ok', function (event, args) {
+  addItem(args);
+  event.sender.send("start-script", args)
   list += 1;
+
   //const message = `Asynchronous message reply: ${arg}`;
-  console.log(arg);
+  //console.log(args);
   // document.getElementById('async-reply').innerHTML = message;
+})
+
+ipc.on('process-finished', function(event, args){
+  console.log(args.file)
+  //console.log("process-finished " + args);
+  // console.log($('tr[data-content="' + args + '"]').length);
+  $('tr[data-content="' + args.file + '"]')
+  .find('i.icon.loading.asterisk')
+  .addClass('unhide')
+  .removeClass('loading asterisk');
+  //console.log(html)
+})
+
+ipc.on('eval-browser', function(event, args){
+  eval(args);
+})
+
+ipc.on('add-process-out', function(event,args){
+  console.log(`${args.data}`)
+  console.log($('tr[data-term="' + args.file + '"]').find('pre').html());
+  $('tr[data-term="' + args.file + '"]')
+  .find('pre').append(`${args.data}`);
+
+  let termView = $('tr[data-term="' + args.file + '"]').find('pre')
+  $(termView).scrollTop($(termView)[0].scrollHeight)
+
+})
+
+$(document).on('click', '.showItemInFolder', function(){
+  const {shell} = require('electron')
+  shell.showItemInFolder($(this).closest('tr').attr('data-content'))
+})
+
+$(document).on('click', '.showTerminal', function(){
+  let file = $(this).closest('tr').attr('data-content')
+  $('.termView[data-term="' + file + '"]').toggle()
 })

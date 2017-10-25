@@ -1,5 +1,5 @@
 const {app, BrowserWindow} = require("electron");
-
+global.__base = __dirname + '/';
 require('electron-reload')(__dirname);
 
 const path = require('path')
@@ -7,16 +7,22 @@ const url = require('url')
 const fs = require('fs')
 const Config = require('electron-store')
 const config = new Config()
+// const scriptsList = new Config({default: })
 const ipc = require('electron').ipcMain
 var idLog = require('id.log');
 var id = new idLog();
 var extend = require('extend');
 
+id.log(config.get('scriptsList'));
 // Reception of an url
 ipc.on('url-reception', function urlReception(event, args) {
   console.log(args.path)
-  // test if element is allowed
+
+
+  //console.log(scripts);
+
   recognizedExtention = true
+
   // Get informations about the file
   fs.stat(args.path, function(err, stats) {
     if(err) {
@@ -44,6 +50,7 @@ ipc.on('url-reception', function urlReception(event, args) {
 
       // sending element to main list
       event.sender.send('element-ok', list)
+
     } else {
       // element pas ok
 
@@ -51,6 +58,13 @@ ipc.on('url-reception', function urlReception(event, args) {
     }
 
   })
+})
+
+ipc.on("start-script", function(event, args) {
+  // test if element is allowed
+  let sp = require(__base+'lib/scriptProcesser.js')
+  sp.init(event);
+  sp.parseAllScripts(args.path);
 })
 
 // Keep a global reference of the window object, if you don't, the window will

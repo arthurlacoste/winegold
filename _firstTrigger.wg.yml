@@ -1,0 +1,39 @@
+# Winegold script
+
+name: Add Winegold script
+
+# dependencies:
+# default: none
+
+trigger :
+  fileExtension : add.yml
+  # or from: /my/folder for a folder
+  # or file: /my/folder/file for an exact filename and folder
+  # or fileExtensionBetween:
+  # - xml
+  # - yml
+
+# output:
+# full directory OR
+# full directory and filename OR
+# output: <filename> alone
+# default: same as input
+
+# You can send a shell command (exec), a Javascript command, or both.
+
+cmd:
+  exec: osascript -e 'tell app "Terminal"' -e 'do script "echo hello"' -e 'end tell'
+  # eval: console.log("ok")
+  # execInWindow:
+
+
+after:
+  exec: echo "Script ajouté !"
+  # eval: alert("yeah")
+
+# autolaunch: true start automatically the script when trigger is recognized
+# default: false
+autolaunch: true
+
+# execInWindow open Terminal with command
+# execInWindow: true

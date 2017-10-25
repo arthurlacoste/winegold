@@ -4,6 +4,7 @@ function loadList() {
   //document.getElementById("content").innerHTML='<object type="text/html" data="assets/list.html" ></object>';
   $.ajax({
     url: "assets/list.html",
+    async: false,
     success: function (data) {
       $('#content').children().remove();
       $('#content').append(data);
@@ -33,17 +34,29 @@ function addMenuExt() {
 * element: object with size, name, and other information
 */
 function addItem(element) {
-  console.log("test");
+  //console.log($('#list').length);
   let size = bytes(element.size, {unitSeparator: ' '})
   html = `
-  <tr>
-  <td class="iconCell"><i class="icon loading asterisk"></i></td>
-  <td><div class="name"><span class="innerName" data-content="${element.name}" data-filetype="${element.name.split('.').pop()}">${element.name}</sapn></div><span class="icon icon-search"></span></td>
-  <td class="minCell">${addMenuExt()}</td>
-  <td class="minCell">${size}</td>
+  <tr data-content="${element.path}">
+  <td><i class="icon loading asterisk"></i></td>
+  <td><div class="name"><span class="innerName" data-filetype="${element.name.split('.').pop()}">${element.name}</sapn></div><span class="icon icon-search"></span></td>
+  <td class="iconButtonCell">
+    <div class="showItemInFolder ui negative basic button compact icon"><i class="search icon"></i></div>
+    <div class="showTerminal ui negative basic button compact icon"><i class="terminal icon"></i></div>
+  </td>
+  <td>${addMenuExt()}</td>
+  <td>${size}</td>
+  </tr>
+  <tr class="termView" data-term="${element.path}">
+      <th colspan="5">
+      <pre></pre>
+      </th>
   </tr>`;
   $('#list').append(html);
   $('.ui.dropdown').dropdown();
+  //console.log("element added")
+  //console.log($('tr[data-content="' + element.path + '"]').length);
+
 }
 
 // <td>*0.0009765625}Ko</td>
