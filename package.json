@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "electron . -t",
+    "test": "xo && electron . -t",
     "icon": "electron . -t",
     "dist": "electron-builder"
   },
@@ -38,7 +38,8 @@
     "electron-builder": "^19.41.0",
     "electron-icon-maker": "0.0.4",
     "electron-reload": "^1.2.2",
-    "jest": "^21.2.1"
+    "jest": "^21.2.1",
+    "xo": "^0.18.2"
   },
   "dependencies": {
     "bytes": "^3.0.0",
@@ -52,5 +53,8 @@
     "jquery": "^3.2.1",
     "js-yaml": "^3.10.0",
     "semantic-ui-css": "^2.2.12"
+  },
+  "xo": {
+    "global": ["$","document","launchScript","loadList","addItem"]
   }
 }

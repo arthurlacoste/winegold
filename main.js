@@ -1,137 +1,140 @@
-const {app, BrowserWindow} = require("electron");
+const {app, BrowserWindow} = require('electron');
+
 global.__base = __dirname + '/';
 
 const isDev = require('electron-is-dev');
+
 if (isDev) {
-  require('electron-reload')(__dirname);
+	require('electron-reload')(__dirname);
 }
 /*
-var test = false
+Var test = false
 if(process.argv[2]==='-t') { test = true }
 
 console.log(test) */
-const path = require('path')
-const url = require('url')
-const fs = require('fs')
-const Config = require('electron-store')
-const config = new Config()
-// const scriptsList = new Config({default: })
-const ipc = require('electron').ipcMain
-var idLog = require('id.log');
-var id = new idLog();
+const path = require('path');
+const url = require('url');
+const fs = require('fs');
+const Config = require('electron-store');
+
+const config = new Config();
+// Const scriptsList = new Config({default: })
+const ipc = require('electron').ipcMain;
+const IdLog = require('id.log');
+
+const id = new IdLog();
 id.log(config.get('scriptsList'));
 // Reception of an url
 ipc.on('url-reception', function urlReception(event, args) {
-  console.log(args.path)
+	console.log(args.path);
 
+  // Console.log(scripts);
 
-  //console.log(scripts);
-
-  recognizedExtention = true
+	const recognizedExtention = true;
 
   // Get informations about the file
-  fs.stat(args.path, function(err, stats) {
-    if(err) {
-      console.log(err);
-      return;
-    }
-    if(stats.isDirectory()){
-      fs.readdir(args.path, (err, files) => {
-        files.forEach(file => {
+	fs.stat(args.path, (err, stats) => {
+		if (err) {
+			console.log(err);
+			return;
+		}
+		if (stats.isDirectory()) {
+			fs.readdir(args.path, (err, files) => {
+				if (err) {
+					console.log(err);
+					return;
+				}
+				files.forEach(file => {
+					const fileInfo = {
+						path: args.path + '/' + file,
+						name: file
+					};
 
-          let fileInfo = {
-            "path": args.path + "/" + file,
-            "name": file
-          }
+          // Search files recursively
+					urlReception(event, fileInfo);
+				});
+			});
+		} else if (recognizedExtention === true) {
+			const list = {};
 
-          // search files recursively
-          urlReception(event, fileInfo)
-        });
-      })
-    } else if(recognizedExtention===true) {
-      let list = {};
+      // Merging data from all sources
+			Object.assign(list, stats, args);
 
-      // merging data from all sources
-      Object.assign(list, stats, args);
-
-      // sending element to main list
-      event.sender.send('element-ok', list)
-
-    } else {
-      // element pas ok
+      // Sending element to main list
+			event.sender.send('element-ok', list);
+		} else {
+      // Element pas ok
 
       // deja dans la liste, etc
-    }
+		}
+	});
+});
 
-  })
-})
-
-ipc.on("start-script", function(event, args) {
-  // test if element is allowed
-  let sp = require(__base+'lib/scriptProcesser.js')
-  sp.init(event);
-  sp.parseAllScripts(args.path);
-})
+ipc.on('start-script', (event, args) => {
+  // Test if element is allowed
+	const sp = require(__base + 'lib/script-processer.js');
+	sp.init(event);
+	sp.parseAllScripts(args.path);
+});
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 
-let win
+let win;
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 
 app.on('ready', () => {
-  let optsInit = {
-    minHeight: 340,
-    minWidth: 300,
-    show: false,
-    icon: "icons/mac/icon.icns"
-  }
-  let opts = {}
-  Object.assign(opts, config.get('winBounds'), optsInit)
-  console.log(opts)
-  win = new BrowserWindow(config.get('winBounds'))
-  win.loadURL(url.format({
-    pathname: path.join(__dirname, 'index.html'), //
-    //pathname: path.join(__dirname, 'assets/list.html'),
-    protocol: 'file:',
-    slashes: true
-  }))
+	const optsInit = {
+		minHeight: 340,
+		minWidth: 300,
+		show: false,
+		icon: 'icons/mac/icon.icns'
+	};
+	const opts = {};
+	Object.assign(opts, config.get('winBounds'), optsInit);
+	console.log(opts);
+	win = new BrowserWindow(config.get('winBounds'));
+	win.loadURL(url.format({
+		pathname: path.join(__dirname, 'index.html'), //
+    // pathname: path.join(__dirname, 'assets/list.html'),
+		protocol: 'file:',
+		slashes: true
+	}));
 
-  win.once('ready-to-show', win.show)
-  win.setMinimumSize(320,300);
+	win.once('ready-to-show', win.show);
+	win.setMinimumSize(320, 300);
 
-  if (isDev) {
-    win.webContents.openDevTools()
-  }
-  // save window size and position
-  win.on('close', () => {
-    console.log(win.getBounds())
-    config.set('winBounds', win.getBounds())
-  })
+	if (isDev) {
+		win.webContents.openDevTools();
+	}
+  // Save window size and position
+	win.on('close', () => {
+		console.log(win.getBounds());
+		config.set('winBounds', win.getBounds());
+	});
 
-  win.on('move', () => {
-    console.log(win.getBounds())
-    config.set('winBounds', win.getBounds())
-  })
+	win.on('move', () => {
+		console.log(win.getBounds());
+		config.set('winBounds', win.getBounds());
+	});
 
   // Emitted when the window is closed.
-  win.on('closed', function () {
-    win = null
-  })
-})
+	win.on('closed', () => {
+		win = null;
+	});
+});
 
 // Quit when all windows are closed.
-app.on('window-all-closed', function () {
-  app.quit()
-})
+app.on('window-all-closed', () => {
+	app.quit();
+});
 
-app.on('activate', function () {
-  // specific to macOS
-  if (win === null) {
-    createWindow()
-  }
-
-})
+app.on('activate', () => {
+  // Specific to macOS
+	if (win === null) {
+		app.createWindow();
+	}
+});

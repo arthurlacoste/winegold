@@ -1,2 +1,2 @@
-const test = true;
-require('./main');
+
+const main = require('././main');
