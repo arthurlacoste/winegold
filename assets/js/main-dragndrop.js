@@ -125,3 +125,11 @@ $(document).on('click', '.showTerminal', function(){
   let termPre = $(term).find('pre')
   $(termPre).scrollTop($(termPre)[0].scrollHeight)
 })
+/*
+const {BrowserWindow} = require("electron");
+const {app} = require('electron').remote;
+const path = require('path')
+global.__base = __dirname + '/';
+//alert(app.getPath('exe'))
+//alert(path.join(__dirname + "/" + "scripts/config.add.yml"))
+*/

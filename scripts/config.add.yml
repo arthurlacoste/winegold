@@ -22,9 +22,9 @@ trigger :
 # You can send a shell command (exec), a Javascript command, or both.
 
 cmd:
-  exec: osascript -e 'tell app "Terminal"' -e 'do script "echo hello"' -e 'end tell'
-  # eval: console.log("ok")
-  # execInWindow:
+  # exec:
+  # eval : console.log(process.cwd())
+  internal: addScript
 
 
 after:
@@ -36,4 +36,4 @@ after:
 autolaunch: true
 
 # execInWindow open Terminal with command
-# execInWindow: true
+execInWindow: true

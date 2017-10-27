@@ -1,7 +1,15 @@
 const {app, BrowserWindow} = require("electron");
 global.__base = __dirname + '/';
-require('electron-reload')(__dirname);
 
+const isDev = require('electron-is-dev');
+if (isDev) {
+  require('electron-reload')(__dirname);
+}
+/*
+var test = false
+if(process.argv[2]==='-t') { test = true }
+
+console.log(test) */
 const path = require('path')
 const url = require('url')
 const fs = require('fs')
@@ -11,8 +19,6 @@ const config = new Config()
 const ipc = require('electron').ipcMain
 var idLog = require('id.log');
 var id = new idLog();
-var extend = require('extend');
-
 id.log(config.get('scriptsList'));
 // Reception of an url
 ipc.on('url-reception', function urlReception(event, args) {
@@ -80,7 +86,8 @@ app.on('ready', () => {
   let optsInit = {
     minHeight: 340,
     minWidth: 300,
-    show: false
+    show: false,
+    icon: "icons/mac/icon.icns"
   }
   let opts = {}
   Object.assign(opts, config.get('winBounds'), optsInit)
@@ -96,7 +103,9 @@ app.on('ready', () => {
   win.once('ready-to-show', win.show)
   win.setMinimumSize(320,300);
 
-  win.webContents.openDevTools()
+  if (isDev) {
+    win.webContents.openDevTools()
+  }
   // save window size and position
   win.on('close', () => {
     console.log(win.getBounds())
@@ -116,10 +125,7 @@ app.on('ready', () => {
 
 // Quit when all windows are closed.
 app.on('window-all-closed', function () {
-  // specific to macOS
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  app.quit()
 })
 
 app.on('activate', function () {
