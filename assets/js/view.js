@@ -57,4 +57,6 @@ function addItem(element) {
   // console.log($('tr[data-content="' + element.path + '"]').length);
 }
 
-// <td>*0.0009765625}Ko</td>
+module.exports.addItem = addItem;
+module.exports.addMenuExt = addMenuExt;
+module.exports.loadList = loadList;

@@ -1,2 +1,1 @@
-
-const main = require('././main');
+// What the hell ? const main = require('././main');

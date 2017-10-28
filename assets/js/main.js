@@ -1,5 +1,7 @@
+/* eslint no-eval: 0 */
 const ipc = require('electron').ipcRenderer;
-/* global document */
+resolve = require('path').resolve
+var rv = require('assets/js/view');
 
 let list = 0;
 /*
@@ -48,7 +50,7 @@ function setImgOpacity(value) {
 	holder.ondrop = e => {
 		e.preventDefault();
 		if (list === 0) {
-			loadList();
+			rv.loadList();
 		}
     // Console.log(e.dataTransfer.files[0]);
 		for (const f of e.dataTransfer.files) {
@@ -72,7 +74,7 @@ function setImgOpacity(value) {
 })();
 
 ipc.on('element-ok', (event, args) => {
-	addItem(args);
+	rv.addItem(args);
 	event.sender.send('start-script', args);
 	list += 1;
 
@@ -109,6 +111,7 @@ ipc.on('add-process-out', (event, args) => {
 	$(termView).scrollTop($(termView)[0].scrollHeight);
 });
 
+//document on click
 $(document).on('click', '.showItemInFolder', function () {
 	const {shell} = require('electron');
 	shell.showItemInFolder($(this).closest('tr').attr('data-content'));
@@ -121,11 +124,3 @@ $(document).on('click', '.showTerminal', function () {
 	const termPre = $(term).find('pre');
 	$(termPre).scrollTop($(termPre)[0].scrollHeight);
 });
-/*
-Const {BrowserWindow} = require("electron");
-const {app} = require('electron').remote;
-const path = require('path')
-global.__base = __dirname + '/';
-//alert(app.getPath('exe'))
-//alert(path.join(__dirname + "/" + "scripts/config.add.yml"))
-*/

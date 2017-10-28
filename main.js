@@ -1,8 +1,8 @@
 const {app, BrowserWindow} = require('electron');
-
-global.__base = __dirname + '/';
-
+const path = require('path');
 const isDev = require('electron-is-dev');
+
+const __base = path.join(__dirname, '/');
 
 if (isDev) {
 	require('electron-reload')(__dirname);
@@ -12,7 +12,7 @@ Var test = false
 if(process.argv[2]==='-t') { test = true }
 
 console.log(test) */
-const path = require('path');
+
 const url = require('url');
 const fs = require('fs');
 const Config = require('electron-store');
@@ -20,9 +20,8 @@ const Config = require('electron-store');
 const config = new Config();
 // Const scriptsList = new Config({default: })
 const ipc = require('electron').ipcMain;
-const IdLog = require('id.log');
+const id = require('id.log');
 
-const id = new IdLog();
 id.log(config.get('scriptsList'));
 // Reception of an url
 ipc.on('url-reception', function urlReception(event, args) {
