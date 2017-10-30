@@ -18,10 +18,7 @@ function loadList() {
 function addMenuExt() {
 	return (`<div class="ui floating dropdown search icon button black basic compact">
   <span class="text">Format</span>
-  <div class="menu">
-  <div class="item">png</div>
-  <div class="item">jpg</div>
-  <div class="item">svg</div>
+  <div class="scriptchooser menu">
   </div>
   </div>`);
 }
@@ -36,7 +33,7 @@ function addItem(element) {
 	const html = `
   <tr data-content="${element.path}">
   <td>
-    <i class="circular notched circle loading icon"></i>
+    <i id="stateicon" class="circular notched circle loading icon"></i>
   </td>
   <td><div class="name"><span class="innerName" data-filetype="${element.name.split('.').pop()}">${element.name}</sapn></div><span class="icon icon-search"></span></td>
   <td class="iconButtonCell">

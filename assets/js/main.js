@@ -1,15 +1,17 @@
 /* eslint no-eval: 0 */
 const ipc = require('electron').ipcRenderer;
-resolve = require('path').resolve
-var rv = require('assets/js/view');
+const path = require('path');
+const {app} = require('electron').remote;
+
+const rv = require(path.join(app.getAppPath(), 'assets/js/view'));
 
 let list = 0;
+
 /*
  * SetImgOpacity(bool) change class of each element affected by dragover
  * statment
  * bool: Boolean with tue if element is dragged over
  */
-
 function setImgOpacity(value) {
 	try {
 		if (value === true) {
@@ -28,7 +30,6 @@ function setImgOpacity(value) {
  * Detect new elements added to the main view and add them
  * to the list if we recognized
  */
-
 (function () {
 	const holder = document.getElementById('content');
 
@@ -97,8 +98,34 @@ ipc.on('process-err', (event, args) => {
   .removeClass('notched circle loading');
 });
 
+/*
+ * If autolaunch = false
+ * This add to Menu to choose script to launch
+ */
+ipc.on('add-scripts', (event, args) => {
+	// Pause the icon
+	$('tr[data-content="' + args.file + '"]')
+  .find('i.icon.loading')
+  .addClass('inverted blue pause')
+  .removeClass('notched circle loading');
+
+	// Add scripts to list
+	args.scripts.forEach(s => {
+		console.log(s);
+		$('tr[data-content="' + args.file + '"]')
+    .find('.scriptchooser')
+		.append(`<div id="${s.scriptId}" class="item">${s.name}</div>`);
+	});
+});
+
 ipc.on('eval-browser', (event, args) => {
 	eval(args);
+});
+
+ipc.on('open-shell', (event, args) => {
+	const term = $('.termView[data-term="' + args.file + '"]');
+	$('.termView').hide();
+	$(term).show();
 });
 
 ipc.on('add-process-out', (event, args) => {
@@ -111,7 +138,7 @@ ipc.on('add-process-out', (event, args) => {
 	$(termView).scrollTop($(termView)[0].scrollHeight);
 });
 
-//document on click
+// Document on click
 $(document).on('click', '.showItemInFolder', function () {
 	const {shell} = require('electron');
 	shell.showItemInFolder($(this).closest('tr').attr('data-content'));
@@ -120,6 +147,7 @@ $(document).on('click', '.showItemInFolder', function () {
 $(document).on('click', '.showTerminal', function () {
 	const file = $(this).closest('tr').attr('data-content');
 	const term = $('.termView[data-term="' + file + '"]');
+	$('.termView').not(term).hide();
 	$(term).toggle();
 	const termPre = $(term).find('pre');
 	$(termPre).scrollTop($(termPre)[0].scrollHeight);

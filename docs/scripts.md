@@ -63,3 +63,19 @@ cmd:
 after:
   eval: alert('Really annoying and useless string.')
 ```
+## Tags
+
+You can use some tag to insert in your commands :
+
+### &lt;file&gt;
+
+Represent the full path & file from your file, edited to use it as a parameter in a shell.
+
+```yaml
+trigger:
+  fileExtension: .js
+cmd:
+  exec: node <file>
+```
+
+This example launch node if you drag a js file on the app.

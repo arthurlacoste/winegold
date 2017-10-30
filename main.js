@@ -1,28 +1,26 @@
 const {app, BrowserWindow} = require('electron');
+const ipc = require('electron').ipcMain;
 const path = require('path');
-const isDev = require('electron-is-dev');
 
 const __base = path.join(__dirname, '/');
-
-if (isDev) {
-	require('electron-reload')(__dirname);
-}
-/*
-Var test = false
-if(process.argv[2]==='-t') { test = true }
-
-console.log(test) */
-
 const url = require('url');
 const fs = require('fs');
 const Config = require('electron-store');
+const isDev = require('electron-is-dev');
 
 const config = new Config();
-// Const scriptsList = new Config({default: })
-const ipc = require('electron').ipcMain;
 const id = require('id.log');
 
+const test = /-t/.test(process.argv[2]);
+console.log(test);
+
+// If isDev
+id.isDev(isDev);
+if (isDev) {
+	require('electron-reload')(__dirname);
+}
 id.log(config.get('scriptsList'));
+
 // Reception of an url
 ipc.on('url-reception', function urlReception(event, args) {
 	console.log(args.path);
@@ -106,7 +104,7 @@ app.on('ready', () => {
 	win.once('ready-to-show', win.show);
 	win.setMinimumSize(320, 300);
 
-	if (isDev) {
+	if (isDev || test) {
 		win.webContents.openDevTools();
 	}
   // Save window size and position

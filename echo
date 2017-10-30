@@ -8,7 +8,7 @@ trigger :
 output: <filename>
 
 cmd:
-  exec: echo $PATH && ebook-convert <file> <file>.mobi --verbose
+  exec: ebook-convert <input> <output>.mobi --verbose
 
 execInWindow: true
 autolaunch: true
