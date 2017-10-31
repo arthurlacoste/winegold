@@ -1,0 +1,6 @@
+name: git push
+trigger:
+  fileExtension: add.git
+cmd:
+  exec: cd /Users/art/Dropbox/dev/nodejs/electron/winegold && git add . && git commit -m "{{inside}}" && git push
+autolaunch: true

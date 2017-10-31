@@ -38,16 +38,19 @@ function setImgOpacity(value) {
 	const holder = document.getElementById('content');
 
 	holder.ondragover = () => {
+		console.log('dragover');
 		setImgOpacity(true);
 		return false;
 	};
 
 	holder.ondragleave = () => {
+		console.log('dragleave');
 		setImgOpacity(false);
 		return false;
 	};
 
 	holder.ondragend = () => {
+		console.log('dragend');
 		setImgOpacity(false);
 		return false;
 	};
@@ -57,7 +60,7 @@ function setImgOpacity(value) {
 		if (list === 0) {
 			rv.loadList();
 		}
-    // Console.log(e.dataTransfer.files[0]);
+		console.log(e.dataTransfer.files[0]);
 		for (const f of e.dataTransfer.files) {
 			console.log(f);
 
@@ -68,7 +71,7 @@ function setImgOpacity(value) {
 			};
       // Console.log(JSON.stringify(file))
 
-      // sending to main.js
+      // Sending to main.js
 			ipc.send('url-reception', file);
 		}
 
