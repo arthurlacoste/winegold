@@ -7,12 +7,15 @@ const url = require('url');
 const fs = require('fs');
 const Config = require('electron-store');
 const isDev = require('electron-is-dev');
-
+// Const isDev = global.isDev;
 const config = new Config();
 const id = require('id.log');
 
-const test = /-t/.test(process.argv[2]);
-console.log(test);
+const sp = require(__base + 'lib/script-processer.js');
+
+// Testing argument -t
+global.test = /-t/.test(process.argv[2]);
+console.log(global.test);
 
 // If isDev
 id.isDev(isDev);
@@ -26,7 +29,6 @@ ipc.on('url-reception', function urlReception(event, args) {
 	console.log(args.path);
 
   // Console.log(scripts);
-
 	const recognizedExtention = true;
 
   // Get informations about the file
@@ -61,15 +63,12 @@ ipc.on('url-reception', function urlReception(event, args) {
 			event.sender.send('element-ok', list);
 		} else {
       // Element pas ok
-
-      // deja dans la liste, etc
 		}
 	});
 });
 
 ipc.on('start-script', (event, args) => {
   // Test if element is allowed
-	const sp = require(__base + 'lib/script-processer.js');
 	sp.init(event);
 	sp.parseAllScripts(args.path);
 });
@@ -87,13 +86,15 @@ app.on('ready', () => {
 	const optsInit = {
 		minHeight: 340,
 		minWidth: 300,
-		show: false,
-		icon: 'icons/mac/icon.icns'
+		icon: 'icons/mac/icon.icns',
+		show: false
 	};
 	const opts = {};
 	Object.assign(opts, config.get('winBounds'), optsInit);
 	console.log(opts);
-	win = new BrowserWindow(config.get('winBounds'));
+
+	win = new BrowserWindow(opts);
+
 	win.loadURL(url.format({
 		pathname: path.join(__dirname, 'index.html'), //
     // pathname: path.join(__dirname, 'assets/list.html'),
@@ -101,10 +102,16 @@ app.on('ready', () => {
 		slashes: true
 	}));
 
-	win.once('ready-to-show', win.show);
+	win.once('ready-to-show', () => {
+		win.show();
+		if (global.test) {
+			win.webContents.send('test-run');
+		}
+	});
+
 	win.setMinimumSize(320, 300);
 
-	if (isDev || test) {
+	if (isDev || global.test) {
 		win.webContents.openDevTools();
 	}
   // Save window size and position

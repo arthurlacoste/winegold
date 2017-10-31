@@ -49,6 +49,7 @@ function addItem(element) {
       </th>
   </tr>`;
 	$('#list').append(html);
+	console.log($('#list').html());
 	$('.ui.dropdown').dropdown();
   // Console.log("element added")
   // console.log($('tr[data-content="' + element.path + '"]').length);

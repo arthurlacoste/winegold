@@ -3,9 +3,13 @@ const ipc = require('electron').ipcRenderer;
 const path = require('path');
 const {app} = require('electron').remote;
 
+// Const test = remote.getGlobal('test');
+
 const rv = require(path.join(app.getAppPath(), 'assets/js/view'));
 
+let id = 0;
 let list = 0;
+const filesToProcess = {};
 
 /*
  * SetImgOpacity(bool) change class of each element affected by dragover
@@ -74,9 +78,32 @@ function setImgOpacity(value) {
 	};
 })();
 
+ipc.on('test-run', () => {
+	rv.loadList();
+	console.log('test run');
+	const file = {
+		path: '/Users/art/Downloads/Downloads/Framasoft - Community.epub',
+		type: 'file/txt',
+		name: 'Framasoft - Community.epub'
+	};
+
+	$(document).ready(() => {
+		ipc.send('url-reception', file);
+	});
+});
+
 ipc.on('element-ok', (event, args) => {
+	console.log('element ok');
+	// Display item in
 	rv.addItem(args);
+
+	// Adding file info in object
+	Object.assign(args, {id});
+	Object.assign(filesToProcess, {[id]: args});
+
+	console.log(filesToProcess);
 	event.sender.send('start-script', args);
+	id += 1;
 	list += 1;
 
   // Const message = `Asynchronous message reply: ${arg}`;
@@ -151,4 +178,8 @@ $(document).on('click', '.showTerminal', function () {
 	$(term).toggle();
 	const termPre = $(term).find('pre');
 	$(termPre).scrollTop($(termPre)[0].scrollHeight);
+});
+
+$(document).on('click', '#processButton', () => {
+	ipc.send('start-process-all-files');
 });
