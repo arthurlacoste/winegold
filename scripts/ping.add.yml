@@ -2,4 +2,4 @@ name: Ping
 trigger:
   fileExtension: ping.txt
 cmd:
-  exec: ping -c 4 google.com > <file>
+  exec: ping -c 4 google.com > {{file}}

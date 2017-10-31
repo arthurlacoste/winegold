@@ -5,10 +5,8 @@ trigger :
    - pdf
    - epub
 
-output: <filename>
-
 cmd:
-  exec: echo $PATH && ebook-convert <file> <file>.mobi --verbose
+  exec: echo $PATH && ebook-convert {{file}} {{file}}.mobi --verbose
 
 execInWindow: true
 autolaunch: true

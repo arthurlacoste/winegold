@@ -5,9 +5,9 @@
 
 To add a file to winegold, simply drop a file called `"myscript.add.yml"`.
 
-### name 
+### name
 
-{string} **optional** The name of the script, display in the Process column. 
+{string} **optional** The name of the script, display in the Process column.
 
 Example:
 
@@ -42,7 +42,7 @@ before:
 
 ### cmd
 
-{Object} **required** Main command, return a green validation if everything 
+{Object} **required** Main command, return a green validation if everything
 
 * `exec` {string} execute a command in a shell.
 * `eval` {string} Execute javascript in a node child process.
@@ -54,7 +54,7 @@ cmd:
 
 ### after
 
-{Object} **optional** 
+{Object} **optional**
 
 * `exec` {string} execute a command in a shell.
 * `eval` {string} Execute javascript in window, with an `eval()` function. You can edit interface if you want/need.
@@ -67,7 +67,7 @@ after:
 
 You can use some tag to insert in your commands :
 
-### &lt;file&gt;
+### {{file}}
 
 Represent the full path & file from your file, edited to use it as a parameter in a shell.
 

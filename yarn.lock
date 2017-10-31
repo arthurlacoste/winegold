@@ -137,12 +137,12 @@ anymatch@^1.3.0:
     micromatch "^2.1.5"
     normalize-path "^2.0.0"
 
-app-package-builder@1.3.2:
-  version "1.3.2"
-  resolved "https://registry.yarnpkg.com/app-package-builder/-/app-package-builder-1.3.2.tgz#5de716c102d987d5caefa285f345ef2804e5c03f"
+app-package-builder@1.3.3:
+  version "1.3.3"
+  resolved "https://registry.yarnpkg.com/app-package-builder/-/app-package-builder-1.3.3.tgz#252489ebd9e99fded822d01c7d6042d37aa6d844"
   dependencies:
     bluebird-lst "^1.0.5"
-    builder-util "^3.1.2"
+    builder-util "^3.2.0"
     builder-util-runtime "^2.5.0"
     fs-extra-p "^4.4.4"
     int64-buffer "^0.1.9"
@@ -549,9 +549,9 @@ builder-util-runtime@2.5.0, builder-util-runtime@^2.5.0:
     fs-extra-p "^4.4.4"
     sax "^1.2.4"
 
-builder-util@3.1.2, builder-util@^3.1.1, builder-util@^3.1.2:
-  version "3.1.2"
-  resolved "https://registry.yarnpkg.com/builder-util/-/builder-util-3.1.2.tgz#0427580dcf180b2d80b8be3f6eec5dd3df25136e"
+builder-util@3.2.0, builder-util@^3.2.0:
+  version "3.2.0"
+  resolved "https://registry.yarnpkg.com/builder-util/-/builder-util-3.2.0.tgz#08900f046c6b09c22a1f235f18644ae9eb963bc4"
   dependencies:
     "7zip-bin" "^2.2.7"
     bluebird-lst "^1.0.5"
@@ -860,10 +860,6 @@ cssom@0.3.x, "cssom@>= 0.3.2 < 0.4.0":
   dependencies:
     cssom "0.3.x"
 
-cuint@^0.2.2:
-  version "0.2.2"
-  resolved "https://registry.yarnpkg.com/cuint/-/cuint-0.2.2.tgz#408086d409550c2631155619e9fa7bcadc3b991b"
-
 currently-unhandled@^0.4.1:
   version "0.4.1"
   resolved "https://registry.yarnpkg.com/currently-unhandled/-/currently-unhandled-0.4.1.tgz#988df33feab191ef799a61369dd76c17adf957ea"
@@ -964,12 +960,12 @@ diff@^3.2.0:
   version "3.4.0"
   resolved "https://registry.yarnpkg.com/diff/-/diff-3.4.0.tgz#b1d85507daf3964828de54b37d0d73ba67dda56c"
 
-dmg-builder@2.1.4:
-  version "2.1.4"
-  resolved "https://registry.yarnpkg.com/dmg-builder/-/dmg-builder-2.1.4.tgz#5789b5e3dbff3b4ea7a9db139e8d292af45832ed"
+dmg-builder@2.1.5:
+  version "2.1.5"
+  resolved "https://registry.yarnpkg.com/dmg-builder/-/dmg-builder-2.1.5.tgz#f1f7d68d75cfb834e793c0681c7f50ced0a3038d"
   dependencies:
     bluebird-lst "^1.0.5"
-    builder-util "^3.1.2"
+    builder-util "^3.2.0"
     debug "^3.1.0"
     fs-extra-p "^4.4.4"
     iconv-lite "^0.4.19"
@@ -1022,26 +1018,25 @@ ejs@^2.5.7:
   version "2.5.7"
   resolved "https://registry.yarnpkg.com/ejs/-/ejs-2.5.7.tgz#cc872c168880ae3c7189762fd5ffc00896c9518a"
 
-electron-builder@^19.42.2:
-  version "19.42.2"
-  resolved "https://registry.yarnpkg.com/electron-builder/-/electron-builder-19.42.2.tgz#202210fb0c202c34ef81f626a59c8260a18a4b9c"
+electron-builder@^19.41.0:
+  version "19.43.3"
+  resolved "https://registry.yarnpkg.com/electron-builder/-/electron-builder-19.43.3.tgz#87b1d39a50456a989b273a7effc04498dd9c4b6a"
   dependencies:
     "7zip-bin" "^2.2.7"
-    app-package-builder "1.3.2"
+    app-package-builder "1.3.3"
     asar-integrity "0.2.3"
     async-exit-hook "^2.0.1"
     bluebird-lst "^1.0.5"
-    builder-util "3.1.2"
+    builder-util "3.2.0"
     builder-util-runtime "2.5.0"
     chalk "^2.3.0"
     chromium-pickle-js "^0.2.0"
-    cuint "^0.2.2"
     debug "^3.1.0"
-    dmg-builder "2.1.4"
+    dmg-builder "2.1.5"
     ejs "^2.5.7"
     electron-download-tf "4.3.4"
     electron-osx-sign "0.4.7"
-    electron-publish "19.42.0"
+    electron-publish "19.43.0"
     fs-extra-p "^4.4.4"
     hosted-git-info "^2.5.0"
     is-ci "^1.0.10"
@@ -1113,12 +1108,12 @@ electron-osx-sign@0.4.7:
     minimist "^1.2.0"
     plist "^2.1.0"
 
-electron-publish@19.42.0:
-  version "19.42.0"
-  resolved "https://registry.yarnpkg.com/electron-publish/-/electron-publish-19.42.0.tgz#d8744d20626d6c7b237547508f332b2999cecda5"
+electron-publish@19.43.0:
+  version "19.43.0"
+  resolved "https://registry.yarnpkg.com/electron-publish/-/electron-publish-19.43.0.tgz#3a5b8f6317a2a83faa008c26594220ffb4006664"
   dependencies:
     bluebird-lst "^1.0.5"
-    builder-util "^3.1.1"
+    builder-util "^3.2.0"
     builder-util-runtime "^2.5.0"
     chalk "^2.3.0"
     fs-extra-p "^4.4.4"
@@ -1136,7 +1131,7 @@ electron-store@^1.3.0:
   dependencies:
     conf "^1.3.0"
 
-electron@~1.7.9:
+electron@~1.7.8:
   version "1.7.9"
   resolved "https://registry.yarnpkg.com/electron/-/electron-1.7.9.tgz#add54e9f8f83ed02f6519ec10135f698b19336cf"
   dependencies:
@@ -1998,9 +1993,9 @@ iconv-lite@^0.4.19:
   version "0.4.19"
   resolved "https://registry.yarnpkg.com/iconv-lite/-/iconv-lite-0.4.19.tgz#f7468f60135f5e5dad3399c0a81be9a1603a082b"
 
-id.log@^2.0.3:
-  version "2.0.3"
-  resolved "https://registry.yarnpkg.com/id.log/-/id.log-2.0.3.tgz#e1666648575da67ce76365d51b7d588ba26faacb"
+id.log@~2.0.0:
+  version "2.0.6"
+  resolved "https://registry.yarnpkg.com/id.log/-/id.log-2.0.6.tgz#648d1d74818d02c315bb054dad11f411eab79c33"
 
 ignore@^3.2.0, ignore@^3.2.6:
   version "3.3.7"
@@ -3837,9 +3832,9 @@ sax@>=0.6.0, sax@^1.2.1, sax@^1.2.4:
   version "1.2.4"
   resolved "https://registry.yarnpkg.com/sax/-/sax-1.2.4.tgz#2816234e2378bddc4e5354fab5caa895df7100d9"
 
-semantic-ui-css@^2.2.12:
-  version "2.2.12"
-  resolved "https://registry.yarnpkg.com/semantic-ui-css/-/semantic-ui-css-2.2.12.tgz#afc462e5bb4f8a0dcfe3dca11274499a997490dd"
+semantic-ui-offline@^2.2.13:
+  version "2.2.13"
+  resolved "https://registry.yarnpkg.com/semantic-ui-offline/-/semantic-ui-offline-2.2.13.tgz#b5882e7449de90866895034929f65e5a9472302e"
   dependencies:
     jquery x.*
 
@@ -4139,6 +4134,10 @@ table@^3.7.8:
     lodash "^4.0.0"
     slice-ansi "0.0.4"
     string-width "^2.0.0"
+
+tampax@^0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/tampax/-/tampax-0.1.0.tgz#66bf315c083307f077a941f0342684b7818df295"
 
 tar-fs@^1.13.0:
   version "1.16.0"

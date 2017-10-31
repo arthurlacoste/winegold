@@ -1,14 +1,9 @@
 name: Convert to mobi
 
-trigger :
-  fileExtension:
-   - pdf
-   - epub
-
-output: <filename>
-
+trigger:
+  fileExtension: js
 cmd:
-  exec: ebook-convert <input> <output>.mobi --verbose
+  exec: node {{file}}
 
 execInWindow: true
 autolaunch: true

@@ -4,7 +4,7 @@
   "description": "A file processor & converter",
   "main": "main.js",
   "scripts": {
-    "rm":  "rm -r ~/Library/Application\\ Support/winegold/scripts",
+    "rm": "rm -r ~/Library/Application\\ Support/winegold/scripts",
     "start": "electron .",
     "test": "xo --fix && electron . -t",
     "t": "electron . -t",
@@ -24,19 +24,19 @@
       }
     ],
     "dmg": {
-       "contents": [
-         {
-           "x": 130,
-           "y": 220
-         },
-         {
-           "x": 410,
-           "y": 220,
-           "type": "link",
-           "path": "/Applications"
-         }
-       ]
-     },
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.productivity",
@@ -74,9 +74,16 @@
     "id.log": "~2.0.0",
     "jquery": "^3.2.1",
     "js-yaml": "^3.10.0",
-    "semantic-ui-css": "^2.2.12"
+    "semantic-ui-offline": "^2.2.13",
+    "tampax": "^0.1.0"
   },
   "xo": {
-    "global": ["$","document","window","loadList","addItem"]
+    "global": [
+      "$",
+      "document",
+      "window",
+      "loadList",
+      "addItem"
+    ]
   }
 }
