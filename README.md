@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/assets/logo/logo.svg" height="130">
+  <img src="src/assets/img/logo.svg" height="130">
   <h3 align="center">winegold</h3>
   <p align="center">An open-source drag and drop tool built with web technology<p>
   <p align="center"><a href="https://github.com/sindresorhus/xo"><img src="https://img.shields.io/badge/code_style-XO-5ed9c7.svg" alt="XO code style"></a></p>
@@ -9,7 +9,7 @@
 
 ## Use winegold
 
-![demo of winegold app](test/demo.gif)
+![demo of winegold app](src/assets/img/demo.gif)
 
 Yes, I expected to be simple as this example.
 
@@ -32,6 +32,16 @@ One drag and drop, detecting what to do with this file. Or asking what you want 
 Does anything possible and create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need.
 
 If you want to convert a kind of file, dependencies are downloaded if you need, and your file is processed.
+
+Other todo:
+
+- Working UI for processing files
+- Handle queue:
+  - Add 3 times queue (before, cmd, after)
+  - Add multiples files queue (and set it with "queue")
+- Menu: see all scripts (go to `path.join(app.getPath('userData'), 'script')` folder)
+- Display "process all files" when there is files to proces (better).
+
 
 ### Everything is scripting
 

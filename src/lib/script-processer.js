@@ -112,9 +112,20 @@ module.exports.getAllscripts = function () {
 		// Read files in userData dir
 		if (!path.isAbsolute(f)) {
 			if (isDev) {
-				f = path.join(app.getAppPath(), f);
+				// If file not exists in script folder, search in userData,
+				// WHERE IS STORED
+				fs.exists(path.join(app.getAppPath(), f), exists => {
+					if (exists) {
+						f = path.join(app.getAppPath(), f);
+						console.log('trying to open ', f);
+					} else {
+						f = path.join(app.getPath('userData'), f);
+						console.log('trying to open ', f);
+					}
+				});
 			} else {
 				f = path.join(app.getPath('userData'), f);
+				console.log('trying to open ', f);
 			}
 		}
 
