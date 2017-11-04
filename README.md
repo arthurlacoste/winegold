@@ -5,6 +5,8 @@
   <p align="center"><a href="https://github.com/sindresorhus/xo"><img src="https://img.shields.io/badge/code_style-XO-5ed9c7.svg" alt="XO code style"></a></p>
 </p>
 
+**This tool is a WIP, he is not really usable right now.**
+
 ## Use winegold
 
 ![demo of winegold app](test/demo.gif)
@@ -42,6 +44,8 @@ This script auto launch the command when file is dragged.
 As you can see, we using YAML to provide a **human readable  kind of file**.
 
 You can add your own script by dragging a script called `"myscript.add.yml"`. This action adds a trigger and a command for your own needs.
+
+[Read the script documentation](docs/script.md)
 
 ## Get winegold
 
