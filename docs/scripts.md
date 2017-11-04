@@ -65,7 +65,21 @@ after:
 ```
 ## Tags
 
-You can use some tag to insert in your commands :
+You can use some tag to insert in your commands. Here is an example of tag you can access from your script :
+
+```js
+{
+  file: '\'/Users/art/Downloads/Downloads/Framasoft-Community.epub\'',
+  dir: '/Users/art/Downloads/Downloads',
+  name: 'Framasoft-Community',
+  ext: '.epub',
+  namebase: 'Framasoft-Community',
+  inside: 'Content of your file',
+  path: '/Users/art/Downloads/Downloads/Framasoft-Community.epub'
+ }
+```
+
+**If you use the same keywords inside your YAML, your values will be replaced.**
 
 ### {{file}}
 
