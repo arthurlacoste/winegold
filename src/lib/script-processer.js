@@ -112,6 +112,9 @@ module.exports.getAllscripts = function () {
 		// Read files in userData dir
 		if (!path.isAbsolute(f)) {
 			if (isDev) {
+				/* Change here
+				 * if absolute, copy file to script folder
+				*/
 				// If file not exists in script folder, search in userData,
 				// WHERE IS STORED
 				const ft = path.join(app.getPath('userData'), f);

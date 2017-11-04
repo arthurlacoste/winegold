@@ -85,7 +85,7 @@ ipc.on('test-run', () => {
 	rv.loadList();
 	console.log('test run');
 	const file = {
-		path: 'test/testbook.epub',
+		path: 'src/test/testbook.epub',
 		type: 'file/txt',
 		name: 'testbook.epub'
 	};

@@ -11,7 +11,7 @@ const isDev = require('electron-is-dev');
 const config = new Config();
 const id = require('id.log');
 
-const sp = require(__base + 'lib/script-processer.js');
+const sp = require(path.join(__base, 'lib/script-processer.js'));
 
 // Testing argument -t
 global.test = /-t/.test(process.argv[2]);
@@ -129,6 +129,8 @@ app.on('ready', () => {
 	win.on('closed', () => {
 		win = null;
 	});
+
+	require(path.join(__base, 'lib/mainmenu'));
 });
 
 // Quit when all windows are closed.
