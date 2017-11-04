@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon/logo.svg" height="64">
+  <img src="icon/logo.svg" height="130">
   <h3 align="center">winegold</h3>
   <p align="center">An open-source drag and drop tool built with web technology<p>
   <p align="center"><a href="https://github.com/sindresorhus/xo"><img src="https://img.shields.io/badge/code_style-XO-5ed9c7.svg" alt="XO code style"></a></p>
@@ -25,13 +25,13 @@ One drag and drop, detecting what to do with this file. Or asking what you want 
 - Use JavaScript or bash (equal everything!), what is your favorite flavor ?
 - [Create your own scripts](docs/scripts.md) to use you drag and drop box
 
-### What we want to do 
+### What we want to do
 
 **This is a wanted feature**
 
-Does anything possible and create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need. 
+Does anything possible and create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need.
 
-If you want to convert a kind of file, dependencies are downloaded if you need, and your file is processed. 
+If you want to convert a kind of file, dependencies are downloaded if you need, and your file is processed.
 
 ### Everything is scripting
 
@@ -87,12 +87,12 @@ It is strongly recommended to use yarn instead of npm to build the app, [electro
 
 ### Run the app
 - [Fork](https://help.github.com/articles/fork-a-repo/) this repository to your own GitHub account and then [clone](https://help.github.com/articles/cloning-a-repository/) it to your local device
-- Install the dependencies: 
+- Install the dependencies:
 
 ```
-yarn 
+yarn
 ```
-- Build the code and watch for changes: 
+- Build the code and watch for changes:
 
 ```
 yarn test
@@ -106,5 +106,3 @@ yarn dist
 ```
 
 After that, you'll see the binary in the `dist` folder :smile:
-
-

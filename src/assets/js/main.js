@@ -5,7 +5,7 @@ const {app} = require('electron').remote;
 
 // Const test = remote.getGlobal('test');
 
-const rv = require(path.join(app.getAppPath(), 'assets/js/view'));
+const rv = require(path.join(app.getAppPath(), 'src/assets/js/view'));
 
 let id = 0;
 let list = 0;
@@ -85,9 +85,9 @@ ipc.on('test-run', () => {
 	rv.loadList();
 	console.log('test run');
 	const file = {
-		path: '/Users/art/Downloads/Downloads/Framasoft - Community.epub',
+		path: 'test/testbook.epub',
 		type: 'file/txt',
-		name: 'Framasoft - Community.epub'
+		name: 'testbook.epub'
 	};
 
 	$(document).ready(() => {

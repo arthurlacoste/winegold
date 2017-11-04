@@ -1,7 +1,7 @@
 const bytes = require('bytes');
 
 function loadList() {
-  // Document.getElementById("content").innerHTML='<object type="text/html" data="assets/list.html" ></object>';
+	// From index.html
 	$.ajax({
 		url: 'assets/list.html',
 		async: false,

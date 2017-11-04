@@ -2,7 +2,7 @@
   "name": "winegold",
   "version": "0.0.1",
   "description": "A file processor & converter",
-  "main": "main.js",
+  "main": "src/main.js",
   "scripts": {
     "rm": "rm -r ~/Library/Application\\ Support/winegold/scripts",
     "start": "electron .",

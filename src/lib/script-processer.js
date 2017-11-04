@@ -1,4 +1,3 @@
-/* eslint curly: ["error", "multi-line"] */
 
 const {app} = require('electron');
 const path = require('path');
@@ -39,8 +38,12 @@ const outShell = function (s, data, args) {
 	console.log(data);
 	Object.assign(s, {data: `${data}\n`});
 	ipcEvent.sender.send('add-process-out', s);
-	if (args.err) ipcEvent.sender.send('process-err', s);
-	if (args.finished) ipcEvent.sender.send('process-finished', s);
+	if (args.err) {
+		ipcEvent.sender.send('process-err', s);
+	}
+	if (args.finished) {
+		ipcEvent.sender.send('process-finished', s);
+	}
 };
 
 const outData = function (cmd, s) {
@@ -58,7 +61,9 @@ const execute = function (cmd, s, type, ending) {
 	ending = ending || false;
 	// Cmd = cmd.replace(/<file>/g, s.fileFormated);
 	words(cmd, s, (err, data) => {
-		if (err) outShell(s, `${err}`);
+		if (err) {
+			outShell(s, `${err}`);
+		}
 
 		cmd = data;
 		outShell(s, `Starting script ${cmd}`);
@@ -188,20 +193,34 @@ const launchScript = function (file, s) {
 
 	try {
 		if (s.before) {
-			if (s.before.exec) execute(s.before.exec, s, 'shell');
-			if (s.before.eval) outData('eval-browser', s.before.eval);
+			if (s.before.exec) {
+				execute(s.before.exec, s, 'shell');
+			}
+			if (s.before.eval) {
+				outData('eval-browser', s.before.eval);
+			}
 		}
 
 		// True = send ending process
-		if (s.cmd.exec) execute(s.cmd.exec, s, 'shell', true);
-		if (s.cmd.eval) execute(s.cmd.eval, s, 'js');
+		if (s.cmd.exec) {
+			execute(s.cmd.exec, s, 'shell', true);
+		}
+		if (s.cmd.eval) {
+			execute(s.cmd.eval, s, 'js');
+		}
 
 		// Internal command
-		if (s.cmd.internal === 'addScript') addScript(s.file);
+		if (s.cmd.internal === 'addScript') {
+			addScript(s.file);
+		}
 
 		if (s.after) {
-			if (s.after.exec) execute(s.after.exec, s);
-			if (s.after.eval) outData('eval-browser', s.after.eval);
+			if (s.after.exec) {
+				execute(s.after.exec, s);
+			}
+			if (s.after.eval) {
+				outData('eval-browser', s.after.eval);
+			}
 		}
 	} catch (err) {
 		outShell(s, err, true);
