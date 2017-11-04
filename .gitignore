@@ -8,3 +8,4 @@ dist/
 .routine.md
 
 *.lock
+*.log
