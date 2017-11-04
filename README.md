@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon/logo.svg" height="130">
+  <img src="src/assets/logo/logo.svg" height="130">
   <h3 align="center">winegold</h3>
   <p align="center">An open-source drag and drop tool built with web technology<p>
   <p align="center"><a href="https://github.com/sindresorhus/xo"><img src="https://img.shields.io/badge/code_style-XO-5ed9c7.svg" alt="XO code style"></a></p>
