@@ -6,6 +6,7 @@ const fs = require('fs-extra');
 const isDev = require('electron-is-dev');
 const id = require('id.log');
 const tampax = require('tampax');
+const async = require('async');
 const words = require('./words-to-replace');
 
 id.isDev(isDev);
@@ -59,8 +60,12 @@ const outData = function (cmd, s) {
  * type: js or shell
  * ending: false by default
  */
-const execute = function (cmd, s, type, ending) {
-	ending = ending || false;
+const execute = async.queue((args, callback) => {
+	console.log(args);
+	let cmd = args.cmd;
+	const s = args.s;
+	const ending = args.ending;
+
 	// Cmd = cmd.replace(/<file>/g, s.fileFormated);
 	words(cmd, s, (err, data) => {
 		if (err) {
@@ -70,7 +75,7 @@ const execute = function (cmd, s, type, ending) {
 		cmd = data;
 		outShell(s, `Starting script ${cmd}`);
 		let exec;
-		if (type === 'js') {
+		if (args.type === 'js') {
 			const {forkString} = require('child-process-fork-string');
 			exec = forkString(cmd, {silent: true});
 			console.log('js detected');
@@ -95,8 +100,9 @@ const execute = function (cmd, s, type, ending) {
 			console.log('command END ' + code);
 			if (code === 0 || ending)			{
 				outData('process-finished', s);
+				callback();
 			}		else {
-				// OutData('process-err', script);
+				callback('Error !');
 			}
 
 			// If cmd is after, launch this on background
@@ -105,7 +111,7 @@ const execute = function (cmd, s, type, ending) {
 			}
 		});
 	});
-};
+});
 
 // Parse all yml scripts, return object with all scripts
 module.exports.getAllscripts = function () {
@@ -210,11 +216,17 @@ const launchScript = function (file, s) {
 	const fileFormated = `'${file.replace(/'/g, `'\\''`)}'`;
 	Object.assign(s, {file, fileFormated});
   // Console.log(s)
+	const queueArgs = {
+		cmd: '',
+		s,
+		type: 'shell',
+		ending: false
+	};
 
 	try {
 		if (s.before) {
 			if (s.before.exec) {
-				execute(s.before.exec, s, 'shell');
+				execute.push({cmd: s.before.exec, s, type: 'shell', ending: false});
 			}
 			if (s.before.eval) {
 				outData('eval-browser', s.before.eval);
@@ -223,10 +235,10 @@ const launchScript = function (file, s) {
 
 		// True = send ending process
 		if (s.cmd.exec) {
-			execute(s.cmd.exec, s, 'shell', true);
+			execute.push({cmd: s.cmd.exec, s, type: 'shell', ending: true});
 		}
 		if (s.cmd.eval) {
-			execute(s.cmd.eval, s, 'js');
+			execute.push({cmd: s.cmd.eval, s, type: 'js', ending: true});
 		}
 
 		// Internal command
@@ -236,7 +248,8 @@ const launchScript = function (file, s) {
 
 		if (s.after) {
 			if (s.after.exec) {
-				execute(s.after.exec, s);
+				queueArgs.cmd = s.after.exec;
+				execute.push({cmd: s.after.exec, s, type: 'shell', ending: false});
 			}
 			if (s.after.eval) {
 				outData('eval-browser', s.after.eval);

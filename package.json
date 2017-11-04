@@ -64,6 +64,7 @@
     "xo": "^0.18.2"
   },
   "dependencies": {
+    "async": "^2.5.0",
     "bytes": "^3.0.0",
     "child-process-fork-string": "^1.0.0",
     "classes": "^0.3.0",
@@ -76,7 +77,7 @@
     "js-yaml": "^3.10.0",
     "parse-filepath": "^1.0.1",
     "semantic-ui-offline": "^2.2.13",
-    "tampax": ""
+    "tampax": "*"
   },
   "xo": {
     "global": [

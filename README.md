@@ -36,9 +36,7 @@ If you want to convert a kind of file, dependencies are downloaded if you need, 
 Other todo:
 
 - Working UI for processing files
-- Handle queue:
-  - Add 3 times queue (before, cmd, after)
-  - Add multiples files queue (and set it with "queue")
+- Handle queue: add multiples files queue (and set it with "queue")
 - Display "process all files" when there is files to proces (better).
 - Add npm dependencies checker in before
 - scan scripts folder
