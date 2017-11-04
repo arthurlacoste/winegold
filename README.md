@@ -5,7 +5,7 @@
   <p align="center"><a href="https://github.com/sindresorhus/xo"><img src="https://img.shields.io/badge/code_style-XO-5ed9c7.svg" alt="XO code style"></a></p>
 </p>
 
-**This tool is a WIP, he is not really usable right now.**
+**This tool is a WIP, there is still some bugs.**
 
 ## Use winegold
 

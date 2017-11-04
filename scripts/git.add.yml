@@ -3,7 +3,7 @@ trigger:
   fileExtension: add.git.txt
 cmd:
   exec: |
-    cd /Users/art/Dropbox/dev/nodejs/electron/winegold &&
+    cd ~/Documents/GitHub/winegold/ &&
     git add . &&
     git commit -m "{{inside}}" &&
     git push --porcelain

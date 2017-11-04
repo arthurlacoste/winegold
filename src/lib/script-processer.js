@@ -5,8 +5,10 @@ const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const isDev = require('electron-is-dev');
 const id = require('id.log');
+const tampax = require('tampax');
 const words = require('./words-to-replace');
 
+id.isDev(isDev);
 let ipcEvent;
 const data = new Data();
 let allScripts = {};
@@ -71,6 +73,7 @@ const execute = function (cmd, s, type, ending) {
 		if (type === 'js') {
 			const {forkString} = require('child-process-fork-string');
 			exec = forkString(cmd, {silent: true});
+			console.log('js detected');
 		} else {
 			const {spawn} = require('child_process');
 			exec = spawn(cmd, [], {shell: true});
@@ -110,11 +113,12 @@ module.exports.getAllscripts = function () {
 	let scriptId = 0;
 	list.forEach(f => {
 		// Read files in userData dir
+		/*
 		if (!path.isAbsolute(f)) {
 			if (isDev) {
 				/* Change here
 				 * if absolute, copy file to script folder
-				*/
+
 				// If file not exists in script folder, search in userData,
 				// WHERE IS STORED
 				const ft = path.join(app.getPath('userData'), f);
@@ -131,11 +135,12 @@ module.exports.getAllscripts = function () {
 				f = path.join(app.getPath('userData'), f);
 				console.log('trying to open ', f);
 			}
-		}
+		} */
+		f = path.join(app.getPath('userData'), f);
 
 		// Console.log(f);
 		try {
-			const doc = yaml.safeLoad(fs.readFileSync(f, 'utf8'));
+			const doc = tampax.yamlParseString(fs.readFileSync(f, 'utf8'));
 
 			if (!doc.name) {
 				if (doc.cmd.exec) {

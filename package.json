@@ -5,7 +5,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "electron src/test/purge.js && xo --fix && electron . -t",
+    "test": "xo --fix && electron . -t",
     "t": "electron . -t",
     "dist": "electron-builder",
     "purge": "electron src/test/purge.js"
@@ -74,8 +74,9 @@
     "id.log": "^2.0.6",
     "jquery": "^3.2.1",
     "js-yaml": "^3.10.0",
+    "parse-filepath": "^1.0.1",
     "semantic-ui-offline": "^2.2.13",
-    "tampax": "^0.1.0"
+    "tampax": ""
   },
   "xo": {
     "global": [
