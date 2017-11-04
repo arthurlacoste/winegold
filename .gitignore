@@ -7,5 +7,4 @@ dist/
 .DS_Store
 .routine.md
 
-package-lock.json
 *.lock
