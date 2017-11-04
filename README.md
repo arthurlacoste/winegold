@@ -15,7 +15,25 @@ Yes, I expected to be simple as this example.
 
 One drag and drop, detecting what to do with this file. Or asking what you want to do with the files you've just dragged.
 
-## Everything is script
+### What you can do with winegold
+
+- Convert a file in multiple formats
+- Process multiple files
+- Use autolaunch feature to make a "one move drag and drop" easier than ever
+- Convert your old shell script to a nice trigger who writes output in a file.
+- Read content of a file and use it to do evil :see_no_evil:
+- Use JavaScript or bash (equal everything!), what is your favorite flavor ?
+- [Create your own scripts](docs/scripts.md) to use you drag and drop box
+
+### What we want to do 
+
+**This is a wanted feature**
+
+Does anything possible and create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need. 
+
+If you want to convert a kind of file, dependencies are downloaded if you need, and your file is processed. 
+
+### Everything is scripting
 
 We want to put file into the center of everything. 
 
@@ -37,7 +55,7 @@ autolaunch: true
 
 ```
 
-To understand, this script executes the shell command ebook-convert when a PDF or EPUB is found, and convert it to mobi.
+To understand, this script executes the shell command ebook-convert when a PDF or EPUB is found, and convert it to mobi. **You need to have ebook-convert on your computer to use this script.**
 
 This script auto launch the command when file is dragged.
 
@@ -64,25 +82,27 @@ Use Eslint/XO syntax (xo --fix is used when you make `yarn test`. You can instal
 npm install xo -g
 ```
 
-It is strongly reccommanded to use yarn instead of npm to build the app, [electron-builder](https://github.com/electron-userland/electron-builder) is nicer with him. [You can install it by following this link](https://yarnpkg.com/lang/en/docs/install/).
+It is strongly recommended to use yarn instead of npm to build the app, [electron-builder](https://github.com/electron-userland/electron-builder) is nicer with him. [You can install it by following this link](https://yarnpkg.com/lang/en/docs/install/).
 
 
 ### Run the app
-1. [Fork](https://help.github.com/articles/fork-a-repo/) this repository to your own GitHub account and then [clone](https://help.github.com/articles/cloning-a-repository/) it to your local device
-2. Install the dependencies: 
+- [Fork](https://help.github.com/articles/fork-a-repo/) this repository to your own GitHub account and then [clone](https://help.github.com/articles/cloning-a-repository/) it to your local device
+- Install the dependencies: 
 
 ```
 yarn 
 ```
-3. Build the code and watch for changes: 
+- Build the code and watch for changes: 
 
 ```
 yarn test
 ```
+### Build the app
+
 To make sure that your code works in the finished app, you can generate the binary:
 
 ```
-$ yarn dist
+yarn dist
 ```
 
 After that, you'll see the binary in the `dist` folder :smile:
