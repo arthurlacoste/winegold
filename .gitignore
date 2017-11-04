@@ -8,3 +8,4 @@ dist/
 .routine.md
 
 package-lock.json
+*.lock

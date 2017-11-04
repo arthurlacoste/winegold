@@ -4,11 +4,11 @@
   "description": "A file processor & converter",
   "main": "src/main.js",
   "scripts": {
-    "rm": "rm -r ~/Library/Application\\ Support/winegold/scripts",
     "start": "electron .",
-    "test": "xo --fix && electron . -t",
+    "test": "electron src/test/purge.js && xo --fix && electron . -t",
     "t": "electron . -t",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "purge": "electron src/test/purge.js"
   },
   "repository": "https://github.com/arthurlacoste/winegold",
   "keywords": [
@@ -71,7 +71,7 @@
     "electron-is-dev": "^0.3.0",
     "electron-store": "^1.3.0",
     "fs-extra": "^4.0.2",
-    "id.log": "~2.0.0",
+    "id.log": "^2.0.6",
     "jquery": "^3.2.1",
     "js-yaml": "^3.10.0",
     "semantic-ui-offline": "^2.2.13",

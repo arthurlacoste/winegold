@@ -41,7 +41,8 @@ Other todo:
   - Add multiples files queue (and set it with "queue")
 - Menu: see all scripts (go to `path.join(app.getPath('userData'), 'script')` folder)
 - Display "process all files" when there is files to proces (better).
-
+- Add npm dependencies checker in before
+- scan scripts folder
 
 ### Everything is scripting
 

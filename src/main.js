@@ -22,7 +22,7 @@ id.isDev(isDev);
 if (isDev) {
 	require('electron-reload')(__dirname);
 }
-id.log(config.get('scriptsList'));
+id.log(config.get('list'));
 
 // Reception of an url
 ipc.on('url-reception', function urlReception(event, args) {

@@ -1993,7 +1993,7 @@ iconv-lite@^0.4.19:
   version "0.4.19"
   resolved "https://registry.yarnpkg.com/iconv-lite/-/iconv-lite-0.4.19.tgz#f7468f60135f5e5dad3399c0a81be9a1603a082b"
 
-id.log@~2.0.0:
+id.log@^2.0.6:
   version "2.0.6"
   resolved "https://registry.yarnpkg.com/id.log/-/id.log-2.0.6.tgz#648d1d74818d02c315bb054dad11f411eab79c33"
 

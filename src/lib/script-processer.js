@@ -1,10 +1,10 @@
-
 const {app} = require('electron');
 const path = require('path');
 const Data = require('electron-store');
 const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const isDev = require('electron-is-dev');
+const id = require('id.log');
 const words = require('./words-to-replace');
 
 let ipcEvent;
@@ -114,12 +114,13 @@ module.exports.getAllscripts = function () {
 			if (isDev) {
 				// If file not exists in script folder, search in userData,
 				// WHERE IS STORED
-				fs.exists(path.join(app.getAppPath(), f), exists => {
+				const ft = path.join(app.getPath('userData'), f);
+				fs.exists(ft, exists => {
 					if (exists) {
-						f = path.join(app.getAppPath(), f);
+						f = ft;
 						console.log('trying to open ', f);
 					} else {
-						f = path.join(app.getPath('userData'), f);
+						f = path.join(app.getAppPath(), 'src/', f);
 						console.log('trying to open ', f);
 					}
 				});
@@ -302,19 +303,22 @@ module.exports.init = function (ipcMain) {
 
 	list = data.get('list');
 
+	id({id: 'goodid'});
+	id.log(data.get('list'));
   // Import ipcMain object
 	ipcEvent = ipcMain;
 
 	// Copy all files stored in a library userData
 	list.forEach(f => {
-		console.log('trying : ' + app.getPath('userData') + '/' + f);
-		fs.exists(app.getPath('userData') + '/' + f, exists => {
+		const p = path.join(app.getPath('userData'), f);
+		console.log(p);
+		fs.exists(p, exists => {
 			if (!exists) {
-				fs.copy(app.getAppPath() + '/' + f, app.getPath('userData') + '/' + f, err => {
+				fs.copy(path.join(app.getAppPath(), f), p, err => {
 					if (err) {
 						console.error(err);
 					} else {
-						console.log('success: ' + app.getPath('userData') + '/' + f);
+						console.log('success: ' + p);
 					}
 				});
 			}

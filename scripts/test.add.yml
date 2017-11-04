@@ -1,9 +1,0 @@
-name: Convert to mobi
-
-trigger:
-  fileExtension: js
-cmd:
-  exec: node {{file}}
-
-execInWindow: true
-autolaunch: true
