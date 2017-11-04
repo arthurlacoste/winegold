@@ -63,8 +63,8 @@ As you can see, we using YAML to provide a **human readable  kind of file**.
 
 You can add your own script by dragging a script called `"myscript.add.yml"`. This action adds a trigger and a command for your own needs.
 
-[Read the script documentation](docs/script.md)
-
+- [Read the script documentation](docs/scripts.md)
+- [Know more about who YAML works](https://yaml.irz.fr)
 ## Get winegold
 
 **This tool is a WIP, he is not really usable right now.**
