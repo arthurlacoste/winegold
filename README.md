@@ -49,16 +49,36 @@ You can add your own script by dragging a script called `"myscript.add.yml"`. Th
 
 ## Get winegold
 
-**[Download the latest release](https://winegold.com/download)** (macOS only)
+**This tool is a WIP, he is not really usable right now.**
+
+The app work on macOS, but drag and drop doesn't work on Windows after few test. If someone want to fix that :smile:
 
 
 ## Contribute
 
-1. [Fork](https://help.github.com/articles/fork-a-repo/) this repository to your own GitHub account and then [clone](https://help.github.com/articles/cloning-a-repository/) it to your local device
-2. Install the dependencies: `npm install`
-3. Build the code and watch for changes: `npm run dev`
-4. Run the app: `npm start`
+### Requirement
 
+Use Eslint/XO syntax (xo --fix is used when you make `yarn test`. You can install it like this:
+
+```
+npm install xo -g
+```
+
+It is strongly reccommanded to use yarn instead of npm to build the app, [electron-builder](https://github.com/electron-userland/electron-builder) is nicer with him. [You can install it by following this link](https://yarnpkg.com/lang/en/docs/install/).
+
+
+### Run the app
+1. [Fork](https://help.github.com/articles/fork-a-repo/) this repository to your own GitHub account and then [clone](https://help.github.com/articles/cloning-a-repository/) it to your local device
+2. Install the dependencies: 
+
+```
+yarn 
+```
+3. Build the code and watch for changes: 
+
+```
+yarn test
+```
 To make sure that your code works in the finished app, you can generate the binary:
 
 ```
