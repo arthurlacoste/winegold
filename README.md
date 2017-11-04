@@ -35,7 +35,7 @@ If you want to convert a kind of file, dependencies are downloaded if you need, 
 
 ### Everything is scripting
 
-We want to put file into the center of everything. 
+We want to put file into the center of everything.
 
 For this example, here is the script you describing how everthing works :
 
@@ -49,13 +49,13 @@ trigger :
    - epub
 
 cmd:
-  exec: ebook-convert <input> <output>.mobi --verbose
+  exec: ebook-convert {{file}} {{file}}.mobi --verbose
 
 autolaunch: true
 
 ```
 
-To understand, this script executes the shell command ebook-convert when a PDF or EPUB is found, and convert it to mobi. **You need to have ebook-convert on your computer to use this script.**
+To understand, this script executes the shell command ebook-convert when a PDF or EPUB is found, and convert it to mobi. **You need to have ebook-convert** on your computer to use this script, but we work on another way to do this.
 
 This script auto launch the command when file is dragged.
 
