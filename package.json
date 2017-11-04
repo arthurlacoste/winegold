@@ -40,10 +40,10 @@
     "mac": {
       "target": "dmg",
       "category": "public.app-category.productivity",
-      "icon": "icons/mac/icon.icns"
+      "icon": "src/icons/mac/icon.icns"
     },
     "win": {
-      "icon": "icons/win/icon.ico",
+      "icon": "src/icons/win/icon.ico",
       "target": "nsis"
     },
     "linux": {

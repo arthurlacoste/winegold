@@ -65,7 +65,9 @@ after:
 ```
 ## Tags
 
-You can use some tag to insert in your commands. Here is an example of tag you can access from your script :
+You can use some tag to insert in your commands. Each key need to be surround by two curly brackets, like `{{dir}}`,`{{namebase}}` or `{{file}}`.
+
+Here is an example of tag you can access from your script  :
 
 ```js
 {
