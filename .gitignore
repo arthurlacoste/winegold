@@ -10,3 +10,5 @@ build/
 *.lock
 *.log
 package-lock.json
+src/test/testbook.epub.mobi
+src/test/testbook.epub.txt
