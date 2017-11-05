@@ -1,7 +1,7 @@
 language: node_js
 node_js:
   - 'node'
-install: |
+install: >
   npm install standard depcheck walk-sync &&
   npm install xo -g
   && npm install --no-optional
