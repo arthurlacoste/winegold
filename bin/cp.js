@@ -8,7 +8,10 @@ const BUILD_PATH = path.join(config.ROOT_PATH, 'build');
 const SRC_PATH = path.join(config.ROOT_PATH, 'src');
 
 console.log('Build: copying src/ to build/...');
-fs.copySync(SRC_PATH, BUILD_PATH);
-console.log('Done.');
 
-process.exit();
+fs.copy(SRC_PATH, BUILD_PATH)
+  .then(() => {
+	console.log('Done!');
+	process.exit();
+})
+  .catch(err => console.log(err));
