@@ -1,5 +1,3 @@
-/*eslint global-require: 0*/
-
 /**
  * Builds app binaries for Mac, Windows, and Linux.
  * Wine need to be installed by:
@@ -330,7 +328,7 @@ function buildDarwin(cb) {
 		function packageDmg(cb) {
 			console.log('Mac: Creating dmg...');
 
-			const appDmg = require('appdmg');
+			const appDmg = require('appdmg'); // eslint-disable-line global-require
 
 			const targetPath = path.join(DIST_PATH, BUILD_NAME + '.dmg');
 			rimraf.sync(targetPath);
