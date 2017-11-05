@@ -85,7 +85,7 @@ The app work on macOS, but drag and drop doesn't work on Windows after few test.
 
 ### Requirement
 
-Use Eslint/XO syntax (xo --fix is used when you make `yarn test`. You can install it like this:
+Use Eslint/XO syntax (xo --fix is used when you make `yarn test`. Install here:
 
 ```
 npm install xo -g
@@ -110,7 +110,7 @@ npm start
 Restart the app automatically every time code changes. Useful during development.
 
 ```
-$ npm run watch
+npm run watch
 ```
 ### Build the app
 
