@@ -19,57 +19,9 @@
     "electron",
     "file processing"
   ],
-  "build": {
-    "extraResources": [
-      {
-        "from": "scripts",
-        "to": "scripts"
-      }
-    ],
-    "dmg": {
-      "contents": [
-        {
-          "x": 130,
-          "y": 220
-        },
-        {
-          "x": 410,
-          "y": 220,
-          "type": "link",
-          "path": "/Applications"
-        }
-      ]
-    },
-    "mac": {
-      "target": "dmg",
-      "category": "public.app-category.productivity",
-      "icon": "src/icons/icon.icns"
-    },
-    "win": {
-      "icon": "src/icons/icon.ico",
-      "target": "nsis"
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb"
-      ]
-    },
-    "fileAssociations": {
-      "ext": [
-        ".wgml"
-      ],
-      "description": "Winegold files",
-      "role": "none"
-    }
-  },
   "author": "Arthur Lacoste",
   "license": "CC-BY-SA-4.0",
   "devDependencies": {
-    "appdmg": {
-      "version": "^0.5.1",
-      "no-optional": "true"
-    },
     "electron": "~1.7.8",
     "electron-icon-maker": "0.0.4",
     "electron-reload": "^1.2.2",
@@ -114,5 +66,8 @@
       "loadList",
       "addItem"
     ]
+  },
+  "optionalDependencies": {
+    "appdmg": "^0.5.1"
   }
 }
