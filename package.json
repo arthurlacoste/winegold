@@ -66,7 +66,10 @@
   "author": "Arthur Lacoste",
   "license": "CC-BY-SA-4.0",
   "devDependencies": {
-    "appdmg": "^0.5.1",
+    "appdmg": {
+      "version": "^0.5.1",
+      "no-optional": "true"
+    },
     "electron": "~1.7.8",
     "electron-icon-maker": "0.0.4",
     "electron-reload": "^1.2.2",
