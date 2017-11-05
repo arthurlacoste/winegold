@@ -59,10 +59,19 @@ cmd:
 * `exec` {string} execute a command in a shell.
 * `eval` {string} Execute javascript in window, with an `eval()` function. You can edit interface if you want/need.
 
+This example open the link to [termbin.com](http://termbin.com) when you have done your process:
+
 ```yaml
+name: Ping to termbin
+trigger:
+  fileExtension: ping.txt
+cmd:
+  exec: ping -c 4 google.com | nc termbin.com 9999 > {{file}}
 after:
-  eval: alert('Really annoying and useless string.')
+  eval: require('electron').shell.openExternal(`{{inside}}`);
+autolaunch: true
 ```
+
 ## Tags
 
 You can use some tag to insert in your commands. Each key need to be surround by two curly brackets, like `{{dir}}`,`{{namebase}}` or `{{file}}`.

@@ -251,10 +251,20 @@ const launchScript = function (file, s) {
 				queueArgs.cmd = s.after.exec;
 				execute.push({cmd: s.after.exec, s, type: 'shell', ending: false});
 			}
-			if (s.after.eval) {
-				outData('eval-browser', s.after.eval);
-			}
 		}
+
+		execute.drain = function() {
+			if (s.after.eval) {
+				let cmd = s.after.eval;
+				words(cmd, s, (err, data) => {
+					if (err) {
+						outShell(s, `${err}`);
+					}
+					outData('eval-browser', data);
+				});
+			};
+		}
+
 	} catch (err) {
 		outShell(s, err, true);
 	}

@@ -30,7 +30,8 @@ const getContent = function (text, s, callback) {
 			if (err) {
 				callback(err);
 			} else {
-				result = data.toString();
+				result = data.toString().replace(/[\n\r]/g, '').trim();
+				console.log(result);
 				callback(null, tampaxParse(text, s));
 			}
 		}
