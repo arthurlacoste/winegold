@@ -5,7 +5,7 @@
   "main": "build/main.js",
   "scripts": {
     "start": "npm run cp && electron .",
-    "test": "xo --fix && npm run cp && electron . -t",
+    "test": "xo --fix && npm run cp",
     "t": "electron . -t",
     "dist": "electron-builder",
     "purge": "electron src/test/purge.js",
