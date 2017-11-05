@@ -328,7 +328,7 @@ function buildDarwin(cb) {
 		function packageDmg(cb) {
 			console.log('Mac: Creating dmg...');
 
-			// eslint-disable-next-line no-unresolved
+			// eslint-disable-next-line import/no-unresolved
 			const appDmg = require('appdmg');
 
 			const targetPath = path.join(DIST_PATH, BUILD_NAME + '.dmg');
