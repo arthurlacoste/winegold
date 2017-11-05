@@ -1,6 +1,4 @@
-#!/usr/bin/env node
-
-/* eslint global-require: 0 */
+/*eslint global-require: 0*/
 
 /**
  * Builds app binaries for Mac, Windows, and Linux.
