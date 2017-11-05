@@ -2,6 +2,7 @@
 const ipc = require('electron').ipcRenderer;
 const path = require('path');
 const {app} = require('electron').remote;
+const dragDrop = require('drag-drop');
 const id = require('id.log');
 
 // Const test = remote.getGlobal('test');
@@ -35,35 +36,9 @@ function setImgOpacity(value) {
  * Detect new elements added to the main view and add them
  * to the list if we recognized
  */
-(function () {
-	const holder = document.getElementById('content');
-
-	holder.ondragover = e => {
-		console.log(e);
-		e.preventDefault();
-		setImgOpacity(true);
-		return false;
-	};
-
-	holder.ondragleave = () => {
-		console.log('dragleave');
-		setImgOpacity(false);
-		return false;
-	};
-
-	holder.ondragend = () => {
-		console.log('dragend');
-		setImgOpacity(false);
-		return false;
-	};
-
-	holder.ondrop = e => {
-		e.preventDefault();
-
-		console.log(e.dataTransfer.files[0]);
-		for (const f of e.dataTransfer.files) {
-			console.log(f);
-
+dragDrop('#content', {
+	onDrop(files) {
+		files.forEach(f => {
 			const file = {
 				path: f.path,
 				type: f.type,
@@ -72,13 +47,19 @@ function setImgOpacity(value) {
 
       // Sending to main.js
 			ipc.send('url-reception', file);
-		}
-
+			setImgOpacity(false);
+		});
+	},
+	onDragEnd() {
+		setImgOpacity(true);
+	},
+	onDragOver() {
+		setImgOpacity(true);
+	},
+	onDragLeave() {
 		setImgOpacity(false);
-
-		return false;
-	};
-})();
+	}
+});
 
 ipc.on('test-run', () => {
 	rv.loadList();
