@@ -1,11 +1,12 @@
 node_modules/
 dist/
+build/
 
 # Local development
 *.env
 *.dev
 .DS_Store
-.routine.md
 
 *.lock
 *.log
+package-lock.json

@@ -91,27 +91,33 @@ Use Eslint/XO syntax (xo --fix is used when you make `yarn test`. You can instal
 npm install xo -g
 ```
 
-It is strongly recommended to use yarn instead of npm to build the app, [electron-builder](https://github.com/electron-userland/electron-builder) is nicer with him. [You can install it by following this link](https://yarnpkg.com/lang/en/docs/install/).
+### Get the code
 
+```
+git clone https://github.com/arthurlacoste/winegold.git
+cd winegold
+npm install
+```
 
 ### Run the app
-- [Fork](https://help.github.com/articles/fork-a-repo/) this repository to your own GitHub account and then [clone](https://help.github.com/articles/cloning-a-repository/) it to your local device
-- Install the dependencies:
 
 ```
-yarn
+npm start
 ```
-- Build the code and watch for changes:
+
+### Watch the code
+
+Restart the app automatically every time code changes. Useful during development.
 
 ```
-yarn test
+$ npm run watch
 ```
 ### Build the app
 
-To make sure that your code works in the finished app, you can generate the binary:
+Builds app binaries for Mac, Linux, and Windows.
 
 ```
-yarn dist
+npm run build
 ```
 
-After that, you'll see the binary in the `dist` folder :smile:
+After that, you'll see the binaries in the `dist` folder :smile:

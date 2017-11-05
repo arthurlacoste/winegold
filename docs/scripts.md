@@ -93,9 +93,10 @@ You can use your own tags inside of you YAML file, like this :
 var: beautiful
 trigger :
   fileExtension:
-   - pdf
+   - txt
 cmd:
-  eval: console.log('{{var}}')
+  eval: "console.log(`{{var}}`)"
+autolaunch: true
 ```
 **If you use the same keywords inside your YAML, your values will be replaced.**
 

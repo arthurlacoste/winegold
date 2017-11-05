@@ -133,7 +133,7 @@ module.exports.getAllscripts = function () {
 						f = ft;
 						console.log('trying to open ', f);
 					} else {
-						f = path.join(app.getAppPath(), 'src/', f);
+						f = path.join(app.getAppPath(), 'build/', f);
 						console.log('trying to open ', f);
 					}
 				});

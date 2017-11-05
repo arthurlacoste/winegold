@@ -1,17 +1,16 @@
 const {app, BrowserWindow} = require('electron');
 const ipc = require('electron').ipcMain;
 const path = require('path');
-
-const __base = path.join(__dirname, '/');
 const url = require('url');
 const fs = require('fs');
 const Config = require('electron-store');
 const isDev = require('electron-is-dev');
-// Const isDev = global.isDev;
-const config = new Config();
 const id = require('id.log');
 
+const config = new Config();
+const __base = path.join(__dirname, '/');
 const sp = require(path.join(__base, 'lib/script-processer.js'));
+const argv = sliceArgv(process.argv);
 
 // Testing argument -t
 global.test = /-t/.test(process.argv[2]);
@@ -86,14 +85,19 @@ app.on('ready', () => {
 	const optsInit = {
 		minHeight: 340,
 		minWidth: 300,
-		icon: 'icons/mac/icon.icns',
+		icon: 'icons/icon.icns',
 		show: false
 	};
 	const opts = {};
 	Object.assign(opts, config.get('winBounds'), optsInit);
 	console.log(opts);
 
+	app.on('open-file', onOpen);
+	app.on('open-url', onOpen);
+
 	win = new BrowserWindow(opts);
+
+	console.log(__dirname);
 
 	win.loadURL(url.format({
 		pathname: path.join(__dirname, 'index.html'), //
@@ -144,3 +148,26 @@ app.on('activate', () => {
 		app.createWindow();
 	}
 });
+
+function onOpen(e, id) {
+	e.preventDefault();
+	win.webContents.send('log', id);
+	win.webContents.send('log', argv);
+
+	if (app.ipcReady) {
+		setTimeout(() => win.main.show(), 100);
+		win.webContents.send('log', 'app ready <3');
+	} else {
+		// Argv.push(id);
+	}
+}
+
+// Remove leading args.
+// Production: 1 arg, eg: /Applications/winegold.app/Contents/MacOS/winegold
+// Development: 2 args, eg: electron .
+// Test: 4 args, eg: electron -r .../mocks.js .
+function sliceArgv(argv) {
+	return argv.slice(config.IS_PRODUCTION ? 1 :
+    config.IS_TEST ? 4 :
+    2);
+}

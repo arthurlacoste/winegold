@@ -2,12 +2,13 @@
 const ipc = require('electron').ipcRenderer;
 const path = require('path');
 const {app} = require('electron').remote;
+const id = require('id.log');
 
 // Const test = remote.getGlobal('test');
 
-const rv = require(path.join(app.getAppPath(), 'src/assets/js/view'));
+const rv = require(path.join(app.getAppPath(), 'build/assets/js/view'));
 
-let id = 0;
+let idFile = 0;
 let list = 0;
 const filesToProcess = {};
 
@@ -37,8 +38,9 @@ function setImgOpacity(value) {
 (function () {
 	const holder = document.getElementById('content');
 
-	holder.ondragover = () => {
-		console.log('dragover');
+	holder.ondragover = e => {
+		console.log(e);
+		e.preventDefault();
 		setImgOpacity(true);
 		return false;
 	};
@@ -69,7 +71,6 @@ function setImgOpacity(value) {
 				type: f.type,
 				name: f.name
 			};
-      // Console.log(JSON.stringify(file))
 
       // Sending to main.js
 			ipc.send('url-reception', file);
@@ -85,7 +86,7 @@ ipc.on('test-run', () => {
 	rv.loadList();
 	console.log('test run');
 	const file = {
-		path: 'src/test/testbook.epub',
+		path: 'build/test/testbook.epub',
 		type: 'file/txt',
 		name: 'testbook.epub'
 	};
@@ -101,12 +102,12 @@ ipc.on('element-ok', (event, args) => {
 	rv.addItem(args);
 
 	// Adding file info in object
-	Object.assign(args, {id});
-	Object.assign(filesToProcess, {[id]: args});
+	Object.assign(args, {idFile});
+	Object.assign(filesToProcess, {[idFile]: args});
 
 	console.log(filesToProcess);
 	event.sender.send('start-script', args);
-	id += 1;
+	idFile += 1;
 	list += 1;
 
   // Const message = `Asynchronous message reply: ${arg}`;
@@ -150,6 +151,10 @@ ipc.on('add-scripts', (event, args) => {
 
 ipc.on('eval-browser', (event, args) => {
 	eval(args);
+});
+
+ipc.on('log', (event, args) => {
+	id.log(args);
 });
 
 ipc.on('open-shell', (event, args) => {
