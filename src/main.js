@@ -6,6 +6,7 @@ const fs = require('fs');
 const Config = require('electron-store');
 const isDev = require('electron-is-dev');
 const id = require('id.log');
+const parsePath = require('parse-filepath');
 
 const config = new Config();
 const __base = path.join(__dirname, '/');
@@ -13,7 +14,7 @@ const sp = require(path.join(__base, 'lib/script-processer.js'));
 const argv = sliceArgv(process.argv);
 
 // Testing argument -t
-global.test = /-t/.test(process.argv[2]);
+global.test = /-t/.test(argv[2]);
 console.log(global.test);
 
 // If isDev
@@ -23,9 +24,15 @@ if (isDev) {
 }
 id.log(config.get('list'));
 
+let win;
+
 // Reception of an url
-ipc.on('url-reception', function urlReception(event, args) {
-	console.log(args.path);
+ipc.on('url-reception', (event, args) => {
+	urlReception(event, args);
+});
+
+function urlReception(event, args) {
+	// A console.log(args.path);
 
   // Console.log(scripts);
 	const recognizedExtention = true;
@@ -59,23 +66,18 @@ ipc.on('url-reception', function urlReception(event, args) {
 			Object.assign(list, stats, args);
 
       // Sending element to main list
-			event.sender.send('element-ok', list);
+			win.webContents.send('element-ok', list);
 		} else {
       // Element pas ok
 		}
 	});
-});
+}
 
 ipc.on('start-script', (event, args) => {
   // Test if element is allowed
 	sp.init(event);
 	sp.parseAllScripts(args.path);
 });
-
-// Keep a global reference of the window object, if you don't, the window will
-// be closed automatically when the JavaScript object is garbage collected.
-
-let win;
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
@@ -149,10 +151,16 @@ app.on('activate', () => {
 	}
 });
 
-function onOpen(e, id) {
+function onOpen(e, path) {
 	e.preventDefault();
-	win.webContents.send('log', id);
-	win.webContents.send('log', argv);
+	const p = parsePath(path);
+	win.webContents.send('log', path);
+	const file = {
+		path,
+		type: p.ext,
+		name: p.basename
+	};
+	urlReception(win.webContents, file);
 
 	if (app.ipcReady) {
 		setTimeout(() => win.main.show(), 100);

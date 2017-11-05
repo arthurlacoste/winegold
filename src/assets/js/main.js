@@ -59,9 +59,7 @@ function setImgOpacity(value) {
 
 	holder.ondrop = e => {
 		e.preventDefault();
-		if (list === 0) {
-			rv.loadList();
-		}
+
 		console.log(e.dataTransfer.files[0]);
 		for (const f of e.dataTransfer.files) {
 			console.log(f);
@@ -97,6 +95,10 @@ ipc.on('test-run', () => {
 });
 
 ipc.on('element-ok', (event, args) => {
+	if (list === 0) {
+		rv.loadList();
+	}
+
 	console.log('element ok');
 	// Display item in
 	rv.addItem(args);
