@@ -66,6 +66,7 @@
   "author": "Arthur Lacoste",
   "license": "CC-BY-SA-4.0",
   "devDependencies": {
+    "appdmg": "^0.5.1",
     "electron": "~1.7.8",
     "electron-icon-maker": "0.0.4",
     "electron-reload": "^1.2.2",
@@ -78,7 +79,6 @@
     "nodemon": "^1.10.2"
   },
   "dependencies": {
-    "appdmg": "^0.5.1",
     "application-config": "^1.0.1",
     "arch": "^2.1.0",
     "async": "^2.5.0",
