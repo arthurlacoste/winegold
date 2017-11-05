@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 /**
  * Builds app binaries for Mac, Windows, and Linux.
  * Wine need to be installed by:
