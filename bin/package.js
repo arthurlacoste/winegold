@@ -328,7 +328,8 @@ function buildDarwin(cb) {
 		function packageDmg(cb) {
 			console.log('Mac: Creating dmg...');
 
-			const appDmg = require('appdmg'); // eslint-disable-line global-require
+			// eslint-disable-next-line no-unresolved
+			const appDmg = require('appdmg');
 
 			const targetPath = path.join(DIST_PATH, BUILD_NAME + '.dmg');
 			rimraf.sync(targetPath);
