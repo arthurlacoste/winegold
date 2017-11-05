@@ -158,6 +158,7 @@ module.exports.getAllscripts = function () {
 
 			Object.assign(doc, {scriptFile: f, scriptId});
 			allScripts.push(doc);
+			console.log(doc);
 			scriptId += 1;
 		} catch (err) {
 			console.log(err);
@@ -276,13 +277,16 @@ const launchScript = function (file, s) {
  * file: a file
  * start: when autolaunch=false, select your script and click to process
  */
-module.exports.parseAllScripts = function (file) {
+module.exports.parseAllScripts = function (args) {
+	const idFile = args.idFile;
+	const file = args.path;
 	const scriptsforThisFile = [];
 	this.getAllscripts();
 
 	console.log(allScripts);
 
 	allScripts.forEach(s => {
+		s.idFile = idFile;
     // Console.log(typeof(s.trigger.fileExtension))
 		if (typeof (s.trigger.fileExtension) === 'string' &&
 		file.indexOf(s.trigger.fileExtension) !== -1) {
@@ -313,7 +317,8 @@ module.exports.parseAllScripts = function (file) {
 		if (!autolaunch || autolaunch === false) {
 			const scriptsAndFile = {
 				scripts: scriptsforThisFile,
-				file
+				file,
+				idFile
 			};
 			outShell(scriptsAndFile, 'Waiting for a script to choose (process column).');
 			outData('add-scripts', scriptsAndFile);

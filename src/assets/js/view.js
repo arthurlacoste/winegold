@@ -28,10 +28,10 @@ function addMenuExt() {
 * element: object with size, name, and other information
 */
 function addItem(element) {
-  // Console.log($('#list').length);
+	console.log(`Add on renderer ${element.idFile} : "${element.name}"`);
 	const size = bytes(element.size, {unitSeparator: ' '});
 	const html = `
-  <tr data-content="${element.path}">
+  <tr data-content="${element.idFile}">
   <td>
     <i id="stateicon" class="circular notched circle loading icon"></i>
   </td>
@@ -43,18 +43,37 @@ function addItem(element) {
   <td>${addMenuExt()}</td>
   <td>${size}</td>
   </tr>
-  <tr class="termView" data-term="${element.path}">
+  <tr class="termView" data-term="${element.idFile}">
       <th colspan="5">
       <pre></pre>
       </th>
   </tr>`;
 	$('#list').append(html);
-	console.log($('#list').html());
 	$('.ui.dropdown').dropdown();
   // Console.log("element added")
   // console.log($('tr[data-content="' + element.path + '"]').length);
 }
 
+/*
+ * SetImgOpacity(bool) change class of each element affected by dragover
+ * statment
+ * bool: Boolean with tue if element is dragged over
+ */
+function setImgOpacity(value) {
+	try {
+		if (value === true) {
+			document.getElementById('picDrop').setAttribute('class', 'svgDragover');
+			document.getElementById('droptarget').className = 'droptargetDragover';
+		} else {
+			document.getElementById('picDrop').setAttribute('class', 'svgNotDragged');
+			document.getElementById('droptarget').className = 'droptargetNotDragged';
+		}
+	} catch (err) {
+		console.log('Always in list vue, no render here');
+	}
+}
+
 module.exports.addItem = addItem;
 module.exports.addMenuExt = addMenuExt;
 module.exports.loadList = loadList;
+module.exports.setImgOpacity = setImgOpacity;

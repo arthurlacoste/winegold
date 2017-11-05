@@ -1,36 +1,14 @@
-/* eslint no-eval: 0 */
+/* eslint no-eval: 0, import/no-unresolved: [2, { ignore: ['\.assets$'] }] */
+
 const ipc = require('electron').ipcRenderer;
-const path = require('path');
-const {app} = require('electron').remote;
 const dragDrop = require('drag-drop');
 const id = require('id.log');
 
-// Const test = remote.getGlobal('test');
-
-const rv = require(path.join(app.getAppPath(), 'build/assets/js/view'));
+const rv = require('./assets/js/view');
 
 let idFile = 0;
 let list = 0;
 const filesToProcess = {};
-
-/*
- * SetImgOpacity(bool) change class of each element affected by dragover
- * statment
- * bool: Boolean with tue if element is dragged over
- */
-function setImgOpacity(value) {
-	try {
-		if (value === true) {
-			document.getElementById('picDrop').setAttribute('class', 'svgDragover');
-			document.getElementById('droptarget').className = 'droptargetDragover';
-		} else {
-			document.getElementById('picDrop').setAttribute('class', 'svgNotDragged');
-			document.getElementById('droptarget').className = 'droptargetNotDragged';
-		}
-	} catch (err) {
-		console.log('Always in list vue, no render here');
-	}
-}
 
 /*
  * Detect new elements added to the main view and add them
@@ -47,17 +25,17 @@ dragDrop('#content', {
 
       // Sending to main.js
 			ipc.send('url-reception', file);
-			setImgOpacity(false);
+			rv.setImgOpacity(false);
 		});
 	},
 	onDragEnd() {
-		setImgOpacity(true);
+		rv.setImgOpacity(true);
 	},
 	onDragOver() {
-		setImgOpacity(true);
+		rv.setImgOpacity(true);
 	},
 	onDragLeave() {
-		setImgOpacity(false);
+		rv.setImgOpacity(false);
 	}
 });
 
@@ -80,13 +58,12 @@ ipc.on('element-ok', (event, args) => {
 		rv.loadList();
 	}
 
-	console.log('element ok');
-	// Display item in
-	rv.addItem(args);
-
 	// Adding file info in object
 	Object.assign(args, {idFile});
 	Object.assign(filesToProcess, {[idFile]: args});
+
+  // Display item in
+	rv.addItem(args);
 
 	console.log(filesToProcess);
 	event.sender.send('start-script', args);
@@ -99,14 +76,14 @@ ipc.on('element-ok', (event, args) => {
 });
 
 ipc.on('process-finished', (event, args) => {
-	$('tr[data-content="' + args.file + '"]')
+	$('tr[data-content="' + args.idFile + '"]')
   .find('i.icon.loading')
   .addClass('inverted green checkmark validate')
   .removeClass('notched circle loading');
 });
 
 ipc.on('process-err', (event, args) => {
-	$('tr[data-content="' + args.file + '"]')
+	$('tr[data-content="' + args.idFile + '"]')
   .find('i.icon.loading')
   .addClass('inverted red warning sign')
   .removeClass('notched circle loading');
@@ -118,7 +95,7 @@ ipc.on('process-err', (event, args) => {
  */
 ipc.on('add-scripts', (event, args) => {
 	// Pause the icon
-	$('tr[data-content="' + args.file + '"]')
+	$('tr[data-content="' + args.idFile + '"]')
   .find('i.icon.loading')
   .addClass('inverted blue pause')
   .removeClass('notched circle loading');
@@ -126,7 +103,7 @@ ipc.on('add-scripts', (event, args) => {
 	// Add scripts to list
 	args.scripts.forEach(s => {
 		console.log(s);
-		$('tr[data-content="' + args.file + '"]')
+		$('tr[data-content="' + args.idFile + '"]')
     .find('.scriptchooser')
 		.append(`<div id="${s.scriptId}" class="item">${s.name}</div>`);
 	});
@@ -141,18 +118,20 @@ ipc.on('log', (event, args) => {
 });
 
 ipc.on('open-shell', (event, args) => {
-	const term = $('.termView[data-term="' + args.file + '"]');
+	const term = $('.termView[data-term="' + args.idFile + '"]');
 	$('.termView').hide();
 	$(term).show();
 });
 
+// Args: script used & data
 ipc.on('add-process-out', (event, args) => {
+	console.log(args);
 	console.log(`${args.data}`);
-	console.log($('tr[data-term="' + args.file + '"]').find('pre').html());
-	$('tr[data-term="' + args.file + '"]')
+	console.log($('tr[data-term="' + args.idFile + '"]').find('pre').html());
+	$('tr[data-term="' + args.idFile + '"]')
   .find('pre').append(`${args.data}`);
 
-	const termView = $('tr[data-term="' + args.file + '"]').find('pre');
+	const termView = $('tr[data-term="' + args.idFile + '"]').find('pre');
 	$(termView).scrollTop($(termView)[0].scrollHeight);
 });
 

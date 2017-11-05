@@ -7,10 +7,10 @@ const Config = require('electron-store');
 const isDev = require('electron-is-dev');
 const id = require('id.log');
 const parsePath = require('parse-filepath');
+const sp = require('./lib/script-processer');
 
 const config = new Config();
 const __base = path.join(__dirname, '/');
-const sp = require(path.join(__base, 'lib/script-processer.js'));
 const argv = sliceArgv(process.argv);
 
 // Testing argument -t
@@ -76,7 +76,7 @@ function urlReception(event, args) {
 ipc.on('start-script', (event, args) => {
   // Test if element is allowed
 	sp.init(event);
-	sp.parseAllScripts(args.path);
+	sp.parseAllScripts(args);
 });
 
 // This method will be called when Electron has finished
