@@ -253,18 +253,17 @@ const launchScript = function (file, s) {
 			}
 		}
 
-		execute.drain = function() {
+		execute.drain = function () {
 			if (s.after.eval) {
-				let cmd = s.after.eval;
+				const cmd = s.after.eval;
 				words(cmd, s, (err, data) => {
 					if (err) {
 						outShell(s, `${err}`);
 					}
 					outData('eval-browser', data);
 				});
-			};
-		}
-
+			}
+		};
 	} catch (err) {
 		outShell(s, err, true);
 	}

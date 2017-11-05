@@ -23,7 +23,7 @@ const BUILD_NAME = config.APP_NAME + '-v' + config.APP_VERSION;
 const BUILD_PATH = path.join(config.ROOT_PATH, 'build');
 const DIST_PATH = path.join(config.ROOT_PATH, 'dist');
 const SRC_PATH = path.join(config.ROOT_PATH, 'src');
-const NODE_MODULES_PATH = path.join(config.ROOT_PATH, 'node_modules');
+// Const NODE_MODULES_PATH = path.join(config.ROOT_PATH, 'node_modules');
 
 const argv = minimist(process.argv.slice(2), {
 	boolean: [
@@ -39,10 +39,13 @@ const argv = minimist(process.argv.slice(2), {
 });
 
 function build() {
-	console.log('Simplifying node_modules structure...');
+	/*
+	NO PREINSTALL!
 	rimraf.sync(NODE_MODULES_PATH);
-	// console.log(NODE_MODULES_PATH);
-	// cp.execSync('npm install', {stdio: 'inherit'});
+	cp.execSync('npm install', {stdio: 'inherit'});
+	*/
+
+	console.log('Simplifying node_modules structure...');
 	cp.execSync('npm dedupe', {stdio: 'inherit'});
 
 	console.log('Nuking dist/ and build/...');
@@ -57,9 +60,6 @@ function build() {
 	// Console.log('Build: Transpiling to ES5...');
 	// cp.execSync('npm run buble', {NODE_ENV: 'production', stdio: 'inherit'});
   // console.log('Build: Transpiled to ES5.');
-
-  // Console.log('Copy src/ to build/...');
-  // fs.copySync(SRC_PATH, BUILD_PATH);
 
 	const platform = argv._[0];
 	if (platform === 'darwin') {
@@ -433,7 +433,7 @@ function buildWin32(cb) {
 				authors: config.APP_TEAM,
 				description: config.APP_NAME,
 				exe: config.APP_NAME + '.exe',
-				iconUrl: config.GITHUB_URL_RAW + '/static/' + config.APP_NAME + '.ico',
+				iconUrl: config.GITHUB_URL_RAW + '/src/assets/icons/icon.ico',
 				loadingGif: path.join(config.STATIC_PATH, 'loading.gif'),
 				name: config.APP_NAME,
 				noMsi: true,
