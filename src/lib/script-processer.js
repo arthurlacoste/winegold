@@ -118,30 +118,6 @@ module.exports.getAllscripts = function () {
 	allScripts = [];
 	let scriptId = 0;
 	list.forEach(f => {
-		// Read files in userData dir
-		/*
-		if (!path.isAbsolute(f)) {
-			if (isDev) {
-				/* Change here
-				 * if absolute, copy file to script folder
-
-				// If file not exists in script folder, search in userData,
-				// WHERE IS STORED
-				const ft = path.join(app.getPath('userData'), f);
-				fs.exists(ft, exists => {
-					if (exists) {
-						f = ft;
-						console.log('trying to open ', f);
-					} else {
-						f = path.join(app.getAppPath(), 'build/', f);
-						console.log('trying to open ', f);
-					}
-				});
-			} else {
-				f = path.join(app.getPath('userData'), f);
-				console.log('trying to open ', f);
-			}
-		} */
 		f = path.join(app.getPath('userData'), f);
 
 		// Console.log(f);
@@ -165,7 +141,6 @@ module.exports.getAllscripts = function () {
 		}
 	});
 
-	// Console.log(allScripts);
 	return allScripts;
 };
 

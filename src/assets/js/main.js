@@ -59,9 +59,9 @@ ipc.on('element-ok', (event, args) => {
 	}
 
 	// Adding file info in object
-	Object.assign(args, {idFile});
+	Object.assign(args, {idFile, status: 'waiting'});
 	Object.assign(filesToProcess, {[idFile]: args});
-
+	updateProcessButton();
   // Display item in
 	rv.addItem(args);
 
@@ -75,7 +75,36 @@ ipc.on('element-ok', (event, args) => {
   // document.getElementById('async-reply').innerHTML = message;
 });
 
+// Fetch if others files need to be process
+function updateProcessButton() {
+	let toProcess = false;
+	Object.keys(filesToProcess).map(key => {
+		console.log(key + ' ' + filesToProcess[key].path);
+		console.log(key + ' ' + filesToProcess[key].status);
+		if (filesToProcess[key].status !== 'err' &&
+        filesToProcess[key].status !== 'finished' &&
+        filesToProcess[key].status !== 'waiting') {
+			toProcess = true;
+			return true;
+		}
+		return true;
+	});
+	console.log(toProcess);
+	if (toProcess === true) {
+		$('#processButton').show();
+	} else {
+		$('#processButton').hide();
+	}
+}
+
 ipc.on('process-finished', (event, args) => {
+	if (filesToProcess.status !== 'err') {
+		filesToProcess[args.idFile].status = 'finished';
+	}
+
+	updateProcessButton();
+
+  // Edit icon
 	$('tr[data-content="' + args.idFile + '"]')
   .find('i.icon.loading')
   .addClass('inverted green checkmark validate')
@@ -83,6 +112,8 @@ ipc.on('process-finished', (event, args) => {
 });
 
 ipc.on('process-err', (event, args) => {
+	filesToProcess[args.idFile].status = 'err';
+	updateProcessButton();
 	$('tr[data-content="' + args.idFile + '"]')
   .find('i.icon.loading')
   .addClass('inverted red warning sign')
@@ -95,6 +126,8 @@ ipc.on('process-err', (event, args) => {
  */
 ipc.on('add-scripts', (event, args) => {
 	// Pause the icon
+	filesToProcess[args.idFile].status = 'pause';
+	updateProcessButton();
 	$('tr[data-content="' + args.idFile + '"]')
   .find('i.icon.loading')
   .addClass('inverted blue pause')
@@ -117,6 +150,7 @@ ipc.on('log', (event, args) => {
 	id.log(args);
 });
 
+// Force to open shellview
 ipc.on('open-shell', (event, args) => {
 	const term = $('.termView[data-term="' + args.idFile + '"]');
 	$('.termView').hide();
