@@ -1,5 +1,3 @@
-/* eslint no-eval: 0, import/no-unresolved: [2, { ignore: ['\.assets$','electron'] }] */
-
 const ipc = require('electron').ipcRenderer;
 const dragDrop = require('drag-drop');
 const id = require('id.log');
@@ -200,9 +198,11 @@ $(document).on('click', '#scriptchooserinner', function () {
 	console.log(`Start script ${script.name}`);
 	Object.assign(script, filesToProcess[fileid]);
 
-	$('tr[data-content="' + fileid + '"]')
-	.find('i.icon.pause')
-	.addClass('notched circle loading')
-	.removeClass('inverted blue pause');
+	// Edit icon
+	$('i[data-icon="' + fileid + '"]')
+	.removeClass('inverted blue pause')
+  .removeClass('inverted green checkmark validate')
+	.addClass('notched circle loading');
+
 	ipc.send('start-one-script', script);
 });

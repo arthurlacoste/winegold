@@ -1,7 +1,7 @@
 <p align="center">
   <img src="src/assets/img/logo.svg" height="130">
-  <h3 align="center">winegold</h3>
-  <p align="center">An open-source drag and drop tool built with web technology<p>
+  <h1 align="center">winegold</h1>
+  <p align="center">A hackable drag and drop tool built with web technology<p>
   <p align="center"><a href="https://github.com/sindresorhus/xo"><img src="https://img.shields.io/badge/code_style-XO-5ed9c7.svg" alt="XO code style"></a></p>
 </p>
 
@@ -24,6 +24,10 @@ One drag and drop, detecting what to do with this file. Or asking what you want 
 - Read content of a file and use it to do evil :see_no_evil:
 - Use JavaScript or bash (equal everything!), what is your favorite flavor ?
 - [Create your own scripts](docs/scripts.md) to use you drag and drop box
+
+### Wait, I can do everything with CLI tools without your app !
+
+Yes.
 
 ### What we want to do
 

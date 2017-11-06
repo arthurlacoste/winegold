@@ -33,7 +33,7 @@ function addItem(element) {
 	const html = `
   <tr data-content="${element.idFile}">
   <td>
-    <i id="stateicon" class="circular notched circle loading icon"></i>
+    <i data-icon="${element.idFile}" class="stateicon circular notched circle loading icon"></i>
   </td>
   <td><div class="name"><span class="innerName" data-filetype="${element.name.split('.').pop()}">${element.name}</sapn></div><span class="icon icon-search"></span></td>
   <td class="iconButtonCell">
