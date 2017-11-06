@@ -20,7 +20,7 @@
     "file processing"
   ],
   "author": "Arthur Lacoste",
-  "license": "CC-BY-SA-4.0",
+  "license": "CC-BY-4.0",
   "devDependencies": {
     "electron": "~1.7.8",
     "electron-icon-maker": "0.0.4",
