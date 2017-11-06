@@ -17,7 +17,7 @@ function loadList() {
 // Add menu with all possible extensions
 function addMenuExt() {
 	return (`<div class="ui floating dropdown search icon button black basic compact">
-  <span class="text">Format</span>
+  <span class="selectscript text">Format</span>
   <div class="scriptchooser menu">
   </div>
   </div>`);

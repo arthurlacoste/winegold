@@ -23,7 +23,13 @@ html, body
   overflow: hidden;
   white-space: nowrap;
   /* width: calc(100vw - 225px); */
+}
 
+.selectscript {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 51px;
 }
 
 .iconCell{

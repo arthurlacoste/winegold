@@ -88,6 +88,11 @@ ipc.on('start-script', (event, args) => {
 	sp.parseAllScripts(args);
 });
 
+ipc.on('start-one-script', (event, args) => {
+  // Start script from user selection (renderer onClick)
+	sp.launchScript(args.path, args);
+});
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.

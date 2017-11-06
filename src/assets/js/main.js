@@ -1,9 +1,8 @@
-/* eslint no-eval: 0, import/no-unresolved: [2, { ignore: ['\.assets$'] }] */
+/* eslint no-eval: 0, import/no-unresolved: [2, { ignore: ['\.assets$','electron'] }] */
 
 const ipc = require('electron').ipcRenderer;
 const dragDrop = require('drag-drop');
 const id = require('id.log');
-
 const rv = require('./assets/js/view');
 
 let idFile = 0;
@@ -133,12 +132,14 @@ ipc.on('add-scripts', (event, args) => {
   .addClass('inverted blue pause')
   .removeClass('notched circle loading');
 
+	filesToProcess[args.idFile].scripts = {};
 	// Add scripts to list
 	args.scripts.forEach(s => {
+		filesToProcess[args.idFile].scripts[s.scriptId] = s;
 		console.log(s);
 		$('tr[data-content="' + args.idFile + '"]')
     .find('.scriptchooser')
-		.append(`<div id="${s.scriptId}" class="item">${s.name}</div>`);
+		.append(`<div id="scriptchooserinner" data-fileid="${s.idFile}" data-scriptid="${s.scriptId}" class="item">${s.name}</div>`);
 	});
 });
 
@@ -190,4 +191,18 @@ $(document).on('click', '#processButton', () => {
 
 $(document).on('click', '#cancel', () => {
 	ipc.send('cancel', 'all');
+});
+
+$(document).on('click', '#scriptchooserinner', function () {
+	const scriptid = $(this).attr('data-scriptid');
+	const fileid = $(this).attr('data-fileid');
+	const script = filesToProcess[fileid].scripts[scriptid];
+	console.log(`Start script ${script.name}`);
+	Object.assign(script, filesToProcess[fileid]);
+
+	$('tr[data-content="' + fileid + '"]')
+	.find('i.icon.pause')
+	.addClass('notched circle loading')
+	.removeClass('inverted blue pause');
+	ipc.send('start-one-script', script);
 });

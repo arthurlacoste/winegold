@@ -319,12 +319,10 @@ module.exports.parseAllScripts = function (args) {
 
 // Construct
 module.exports.init = function (ipcMain) {
-	const configFiles = ['scripts/config.add.yml', 'scripts/pdf.add.yml'];
+	const configFiles = ['scripts/config.add.yml'];
 	if (data.get('list') === undefined)	{
 		data.set('list', configFiles);
 	}
-
-	// If (isDev) data.set('list', configFiles);
 
 	list = data.get('list');
 

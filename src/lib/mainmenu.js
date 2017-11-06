@@ -112,10 +112,17 @@ const template = [
 		role: 'help',
 		submenu: [
 			{
-				label: 'Learn More Dude',
+				label: 'Report an issue',
 				click() {
 					console.log('test');
-					require('electron').shell.openExternal('http://electron.atom.io');
+					require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold/issues');
+				}
+			},
+			{
+				label: 'Contribute on GitHub',
+				click() {
+					console.log('test');
+					require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold');
 				}
 			}
 		]

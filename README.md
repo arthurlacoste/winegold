@@ -29,11 +29,11 @@ One drag and drop, detecting what to do with this file. Or asking what you want 
 
 **This is a wanted feature**
 
-Does anything possible and create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need.
+Detect the kind of file you have added, and give you a way to process it. So, I need create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need.
 
 If you want to convert a kind of file, dependencies are downloaded if you need, and your file is processed.
 
-Other todo:
+Other (& simpler) todo:
 
 - [See the todo page](docs/todo.md).
 
