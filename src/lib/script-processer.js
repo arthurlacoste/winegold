@@ -286,7 +286,7 @@ module.exports.parseAllScripts = function (args) {
 	});
 
 	if (scriptsforThisFile.length === 0) {
-		outShell({file}, 'No scripts found for this file. Create you own !', {err: true});
+		outShell(args, 'No scripts found for this file. Create you own !', {err: true});
 	} else {
 		const autolaunch = scriptsforThisFile[0].autolaunch;
 		if (!autolaunch || autolaunch === false) {
