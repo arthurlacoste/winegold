@@ -4,6 +4,7 @@
  * Builds app binaries for Mac, Windows, and Linux.
  * Wine need to be installed by:
  * brew install wine
+ * arg (opt): darwin, win32, linux
  */
 
 const cp = require('child_process');
@@ -434,9 +435,9 @@ function buildWin32(cb) {
 				description: config.APP_NAME,
 				exe: config.APP_NAME + '.exe',
 				iconUrl: config.GITHUB_URL_RAW + '/src/assets/icons/icon.ico',
-				loadingGif: path.join(config.STATIC_PATH, 'loading.gif'),
+				loadingGif: path.join(config.STATIC_PATH, 'assets/img/load.gif'),
 				name: config.APP_NAME,
-				noMsi: true,
+				// NoMsi: true,
 				outputDirectory: DIST_PATH,
 				productName: config.APP_NAME,
         /**

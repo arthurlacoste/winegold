@@ -1,4 +1,8 @@
 const {app, BrowserWindow} = require('electron');
+if (require('electron-squirrel-startup')) {
+	app.quit();
+	process.exit(0);
+}
 const ipc = require('electron').ipcMain;
 const path = require('path');
 const url = require('url');
@@ -179,7 +183,7 @@ function onOpen(e, path) {
 		setTimeout(() => win.main.show(), 100);
 		win.webContents.send('log', 'app ready <3');
 	} else {
-		// Argv.push(id);
+			// Argv.push(id);
 	}
 }
 

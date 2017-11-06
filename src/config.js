@@ -43,7 +43,7 @@ module.exports = {
 
 	POSTER_PATH: path.join(getConfigPath(), 'Posters'),
 	ROOT_PATH: path.join(__dirname, '..'),
-	STATIC_PATH: path.join(__dirname, '..', 'static')
+	STATIC_PATH: path.join(__dirname, '..', 'src/')
 };
 
 function getConfigPath() {
