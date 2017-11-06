@@ -32,6 +32,14 @@ ipc.on('url-reception', (event, args) => {
 	urlReception(event, args);
 });
 
+ipc.on('cancel', (event, args) => {
+	if (args === 'all') {
+		console.log('Cancel !!!');
+		sp.execute.pause();
+		sp.execute.kill();
+	}
+});
+
 function urlReception(event, args) {
 	// A console.log(args.path);
 

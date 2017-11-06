@@ -1,5 +1,8 @@
-name: Ping
+name: Ping to termbin
 trigger:
   fileExtension: ping.txt
 cmd:
-  exec: ping -c 4 google.com > {{file}}
+  exec: ping -c 4 google.com | nc termbin.com 9999 > {{file}}
+after:
+  eval: require('electron').shell.openExternal(`{{inside}}`);
+autolaunch: true

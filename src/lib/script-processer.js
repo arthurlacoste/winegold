@@ -1,4 +1,4 @@
-const {app} = require('electron');
+const {app, ipcMain} = require('electron');
 const path = require('path');
 const Data = require('electron-store');
 const yaml = require('js-yaml');
@@ -7,6 +7,8 @@ const isDev = require('electron-is-dev');
 const id = require('id.log');
 const tampax = require('tampax');
 const async = require('async');
+
+const kill = require('tree-kill');
 const words = require('./words-to-replace');
 
 id.isDev(isDev);
@@ -81,14 +83,27 @@ const execute = async.queue((args, callback) => {
 			console.log('js detected');
 		} else {
 			const {spawn} = require('child_process');
-			exec = spawn(cmd, [], {shell: true});
+			exec = spawn(cmd, [], {shell: true, encoding: 'ucs2'});
 		}
+
+		ipcMain.on('cancel', () => {
+			console.log(`Terminate ${exec.pid}`);
+			kill(exec.pid, 'SIGKILL', err => {
+				if (err) {
+					outShell(s, `${err}`);
+					return;
+				}
+				outShell(s, `${exec.pid} over.`);
+			});
+		});
 
 		if (s.execInWindow === true) {
 			outData('open-shell', s);
 		}
 
 		exec.stdout.on('data', data => {
+			console.log(data);
+
 			outShell(s, `✅  ${data}`);
 		});
 
@@ -227,19 +242,19 @@ const launchScript = function (file, s) {
 				queueArgs.cmd = s.after.exec;
 				execute.push({cmd: s.after.exec, s, type: 'shell', ending: false});
 			}
-		}
 
-		execute.drain = function () {
-			if (s.after.eval) {
-				const cmd = s.after.eval;
-				words(cmd, s, (err, data) => {
-					if (err) {
-						outShell(s, `${err}`);
-					}
-					outData('eval-browser', data);
-				});
-			}
-		};
+			execute.drain = function () {
+				if (s.after.eval) {
+					const cmd = s.after.eval;
+					words(cmd, s, (err, data) => {
+						if (err) {
+							outShell(s, `${err}`);
+						}
+						outData('eval-browser', data);
+					});
+				}
+			};
+		}
 	} catch (err) {
 		outShell(s, err, true);
 	}
@@ -337,3 +352,4 @@ module.exports.init = function (ipcMain) {
 };
 
 module.exports.launchScript = launchScript;
+module.exports.execute = execute;

@@ -187,3 +187,7 @@ $(document).on('click', '.showTerminal', function () {
 $(document).on('click', '#processButton', () => {
 	ipc.send('start-process-all-files');
 });
+
+$(document).on('click', '#cancel', () => {
+	ipc.send('cancel', 'all');
+});
