@@ -12,6 +12,7 @@ const sp = require('./lib/script-processer');
 const config = new Config();
 const __base = path.join(__dirname, '/');
 const argv = sliceArgv(process.argv);
+let winBounds = '';
 
 // Testing argument -t
 global.test = /-t/.test(argv[2]);
@@ -123,12 +124,11 @@ app.on('ready', () => {
   // Save window size and position
 	win.on('close', () => {
 		console.log(win.getBounds());
-		config.set('winBounds', win.getBounds());
+		config.set('winBounds', winBounds);
 	});
 
 	win.on('move', () => {
-		console.log(win.getBounds());
-		config.set('winBounds', win.getBounds());
+		winBounds = win.getBounds();
 	});
 
   // Emitted when the window is closed.
@@ -139,7 +139,7 @@ app.on('ready', () => {
 	require(path.join(__base, 'lib/mainmenu'));
 });
 
-// Quit when all windows are closed.
+// Quit when all windows are closed. I'm note sure to keep this
 app.on('window-all-closed', () => {
 	app.quit();
 });
