@@ -71,9 +71,10 @@ You can add your own script by dragging a script called `"myscript.add.yml"`. Th
 - [Know more about who YAML works](https://yaml.irz.fr)
 ## Get winegold
 
-**This tool is a WIP, there is still some bugs.**
+**This tool is a WIP, he is not really usable right now.**
 
-Winegold is multi-platform, but under active development. Stay tuned !
+The app work on macOS, but drag and drop doesn't work on Windows after few test. If someone want to fix that :smile:
+
 
 ## Contribute
 
