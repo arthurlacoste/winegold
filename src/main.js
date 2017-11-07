@@ -133,7 +133,7 @@ app.on('ready', () => {
 		}
 	});
 
-	win.setMinimumSize(320, 300);
+	win.setMinimumSize(350, 300);
 
 	if (isDev || global.test) {
 		win.webContents.openDevTools();
