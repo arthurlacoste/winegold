@@ -14,11 +14,12 @@ const template = [
 				}
 			},
 			{
-				label: 'Toggle Developer Tools',
-				accelerator: process.platform === 'darwin' ? 'Alt+Command+I' : 'Ctrl+Shift+I',
+				label: 'See script documentation',
+				role: 'seeScriptDocs'
+				accelerator: 'CmdOrCtrl+D',
 				click(item, focusedWindow) {
 					if (focusedWindow) {
-						focusedWindow.webContents.toggleDevTools();
+						require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold');
 					}
 				}
 			}
