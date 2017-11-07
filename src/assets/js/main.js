@@ -189,6 +189,13 @@ $(document).on('click', '#processButton', () => {
 
 $(document).on('click', '#cancel', () => {
 	ipc.send('cancel', 'all');
+
+	// Add warning icon on loading scripts
+	$('i.icon.loading').each(function () {
+		$(this)
+		.addClass('inverted red warning sign')
+		.removeClass('notched circle loading');
+	});
 });
 
 $(document).on('click', '#scriptchooserinner', function () {
