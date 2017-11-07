@@ -15,11 +15,11 @@ const template = [
 			},
 			{
 				label: 'See script documentation',
-				role: 'seeScriptDocs'
+				role: 'seeScriptDocs',
 				accelerator: 'CmdOrCtrl+D',
 				click(item, focusedWindow) {
 					if (focusedWindow) {
-						require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold');
+						require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold/blob/master/docs/scripts.md');
 					}
 				}
 			}

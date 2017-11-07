@@ -247,7 +247,7 @@ function buildDarwin(cb) {
 				UTTypeDescription: 'Winegold Script',
 				UTTypeIconFile: path.basename(config.APP_FILE_ICON) + '.icns',
 				UTTypeIdentifier: 'io.winegold.wgml',
-				UTTypeReferenceURL: 'http://github.com/arthurlacoste/winegold',
+				UTTypeReferenceURL: 'https://github.com/arthurlacoste/winegold',
 				UTTypeTagSpecification: {
 					'com.apple.ostype': 'TORR',
 					'public.filename-extension': ['wgml'],
