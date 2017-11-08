@@ -18,5 +18,6 @@ When I use script 1, it save it in
 - Prompt support
 - choose what
 - scan and add YAML 'inception' on a second YAML to accept cross parameters.
+-  edit default splashscreen gif ([like this one](https://github.com/BoostIO/Boostnote/blob/master/resources/boostnote-install.gif))
 
 [^1]: Autolaunch
