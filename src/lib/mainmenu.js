@@ -19,7 +19,7 @@ const template = [
 				accelerator: 'CmdOrCtrl+D',
 				click(item, focusedWindow) {
 					if (focusedWindow) {
-						require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold/blob/master/docs/scripts.md');
+						require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold/blob/master/docs/scripts.md#script-documentation');
 					}
 				}
 			}
@@ -70,15 +70,6 @@ const template = [
 				}
 			},
 			{
-				label: 'Toggle Developer Tools',
-				accelerator: process.platform === 'darwin' ? 'Alt+Command+I' : 'Ctrl+Shift+I',
-				click(item, focusedWindow) {
-					if (focusedWindow) {
-						focusedWindow.webContents.toggleDevTools();
-					}
-				}
-			},
-			{
 				type: 'separator'
 			},
 			{
@@ -113,16 +104,27 @@ const template = [
 		role: 'help',
 		submenu: [
 			{
+				label: 'Toggle Developer Tools',
+				accelerator: process.platform === 'darwin' ? 'Alt+Command+I' : 'Ctrl+Shift+I',
+				click(item, focusedWindow) {
+					if (focusedWindow) {
+						focusedWindow.webContents.toggleDevTools();
+					}
+				}
+			},
+			{
+				type: 'separator'
+			},
+			{
 				label: 'Report an issue',
 				click() {
-					console.log('test');
 					require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold/issues');
 				}
 			},
 			{
 				label: 'Contribute on GitHub',
+				accelerator: 'CmdOrCtrl+G',
 				click() {
-					console.log('test');
 					require('electron').shell.openExternal('https://github.com/arthurlacoste/winegold');
 				}
 			}
