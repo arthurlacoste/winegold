@@ -77,7 +77,7 @@ You can add your own script by dragging a script called `"myscript.add.yml"`. Th
 
 **This tool is a WIP, he is not really usable right now.**
 
-The app work on macOS, but drag and drop doesn't work on Windows after few test. If someone want to fix that :smile:
+The app is cross-platform and in active development.
 
 
 ## Contribute

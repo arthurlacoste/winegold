@@ -82,7 +82,7 @@ const execute = async.queue((args, callback) => {
 			exec = forkString(cmd, {silent: true});
 			console.log('js detected');
 		} else {
-			const {spawn} = require('child_process');
+			const {spawn} = require('execa');
 			exec = spawn(cmd, [], {shell: true, encoding: 'ucs2'});
 		}
 
