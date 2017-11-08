@@ -116,8 +116,10 @@ npm run watch
 Builds app binaries for Mac, Linux, and Windows.
 
 ```
-npm run build
+npm run build [platform]
 ```
+
+Where `[platform]` is `darwin`, `linux`, `win32`, or `all` (default).
 
 After that, you'll see the binaries in the `dist` folder :smile:
 

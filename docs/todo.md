@@ -12,3 +12,4 @@
 -  Add npm dependencies checker in before
 -  Multi-platform command
 -  Prompt support
+-  edit default splashscreen gif ([like this one](https://github.com/BoostIO/Boostnote/blob/master/resources/boostnote-install.gif))
