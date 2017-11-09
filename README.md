@@ -9,8 +9,8 @@ Winegold is a swiss army knife for every drag and drop. He is built on [Electron
 
 3 steps to use winegold:
 1. Download the favorite CLI app you love to use
-- [Create a simple trigger for it](docs/scripts.md)
-- And that's it! You can use every terminal/shell/CLI with a simple UI
+2. [Create a simple trigger for it](docs/scripts.md)
+3. And that's it! You can use every terminal/shell/CLI with a simple UI
 
 This project adheres to the Contributor Covenant [code of conduct](code-of-conduct.md).
 By participating, you are expected to uphold this code. Please report unacceptable behavior to arthak@gmail.com.
