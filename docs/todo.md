@@ -32,6 +32,7 @@ When I use script 1, it save it in
 - choose what
 - scan and add YAML 'inception' on a second YAML to accept cross parameters.
 - chaining multiples cmd with array of commands
+- support npm as dependencies packages (for plugins)
 
 ## 3 - Auto-updater
 
