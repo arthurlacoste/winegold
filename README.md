@@ -5,7 +5,7 @@
   <p align="center"><a href="https://github.com/sindresorhus/xo"><img src="https://img.shields.io/badge/code_style-XO-5ed9c7.svg" alt="XO code style"></a></p>
 </p>
 
-Winegold is a swiss army knife for every drag and drop. He is built on [Electron](https://github.com/electron/electron).
+Winegold is a swiss army knife for every drag and drop. It is built on [Electron](https://github.com/electron/electron).
 
 3 steps to use winegold:
 1. Download the favorite CLI app you love to use
@@ -58,7 +58,7 @@ The app haven't been tested on this platform! Every feedbacks are welcomed!
 
 **This is a wanted feature**
 
-Detect the kind of file you have added, and give you a way to process it. So, I need to create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need.
+Detect the kind of file you added, and give you a way to process it. So, I need to create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need.
 
 If you want to convert a kind of file, dependencies are downloaded if you need, and your file is processed.
 
@@ -150,7 +150,7 @@ Yes.
 
 ### Why winegold ?
 
-As Jesus changes water into wine, we change wine into gold.
+As Jesus turns water into wine, we turn wine into gold.
 
 ## Licence
 [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
