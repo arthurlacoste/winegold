@@ -15,20 +15,29 @@ const words = require('./words-to-replace');
 id.isDev(isDev);
 let ipcEvent;
 const data = new Data();
-let allScripts = {};
+let allScripts = [];
+
+// The first script => create config file for core scripts
+const addScriptConfig = {name: 'Add Winegold script',
+	trigger: {fileExtension: 'add.yml'},
+	cmd: {internal: 'addScript'},
+	after: {exec: 'echo "Script ajouté !"'},
+	autolaunch: true,
+	scriptId: 0};
+
 let list;
 let scriptPath;
 let token = Date.now();
 
+/*
+ * Elephant promisify a callback function & memorize
+ * it during 3sec. Powerful but... Tokens are more simple.
+ */
 const elephant = mem(pify, {maxAge: 3000});
 
-const getScriptPath = function (cb) {
-	const sp = data.get('scriptPath');
-	if (sp === undefined) {
-		data.set('scriptPath', path.join(app.getPath('userData'), 'scripts'));
-		return cb(null, path.join(app.getPath('userData'), 'scripts'));
-	}
-	return cb(null, sp);
+const outData = function (cmd, s) {
+	console.log(s);
+	ipcEvent.sender.send(cmd, s);
 };
 
 /*
@@ -53,8 +62,22 @@ const outShell = function (s, data, args) {
 	}
 };
 
-const outData = function (cmd, s) {
-	ipcEvent.sender.send(cmd, s);
+const getScriptPath = function (cb) {
+	const sp = data.get('scriptPath');
+
+  // Create path if he desn't exists
+	fs.exists(sp, exists => {
+		if (!exists) {
+			fs.mkdir(sp, err => {
+				outData('log', err);
+			});
+		}
+		if (sp === undefined) {
+			data.set('scriptPath', path.join(app.getPath('userData'), 'scripts'));
+			return cb(null, path.join(app.getPath('userData'), 'scripts'));
+		}
+		return cb(null, sp);
+	});
 };
 
 /*
@@ -69,6 +92,7 @@ const execute = async.queue((args, callback) => {
 	const s = args.s;
 	const ending = args.ending;
 	const idFile = args.idFile;
+
   /*
    * Replace words in script, and read the content of the file to add {{inside}}
    * More on ./words-to-replace & https://github.com/arthurlacoste/tampax
@@ -119,7 +143,7 @@ const execute = async.queue((args, callback) => {
 				callback('Error !');
 			}
 
-  // If cmd is after, launch this on background
+      // If cmd is after, launch this on background
 			if (ending === true) {
 				outData('process-finished', s);
 			}
@@ -131,9 +155,14 @@ const execute = async.queue((args, callback) => {
 const getAllscripts = function (cb) {
 	if (token <= Date.now())	{
 		allScripts = [];
-		let scriptId = 0;
+		allScripts.push(addScriptConfig);
+		let scriptId = 1;
+		if (list.length === 0) {
+			return cb();
+		}
 		list.forEach((f, index) => {
 			f = path.join(scriptPath, f);
+			console.log('F', f);
 
 			fs.readFile(f, 'utf8', (err, data) => {
 				if (err) return outData('log', err);
@@ -169,6 +198,7 @@ const getAllscripts = function (cb) {
  * Verify and add a script file if he respect format
  * file: complete file with path
  * return: true if script was added
+ * FILE.ADD.YML
  */
 const addScript = function (file) {
   // Test YAML integrity
@@ -213,14 +243,6 @@ const launchScript = function (args, s) {
 
 	const si = Object.assign({}, s, idFile);
 
-  // Console.log(s)
-	const queueArgs = {
-		cmd: '',
-		s,
-		type: 'shell',
-		ending: false
-	};
-
 	try {
 		if (s.before) {
 			if (s.before.exec) {
@@ -246,7 +268,6 @@ const launchScript = function (args, s) {
 
 		if (s.after) {
 			if (s.after.exec) {
-				queueArgs.cmd = s.after.exec;
 				execute.push({cmd: s.after.exec, s, type: 'shell', ending: false, idFile});
 			}
 
@@ -275,29 +296,33 @@ const launchScript = function (args, s) {
  * start: when autolaunch=false, select your script and click to process
  */
 const parseAllScripts = function (args) {
+	console.log('PARSE FOR', args.name);
 	const idFile = args.idFile;
 	const file = args.path;
 	const scriptsforThisFile = [];
-	allScripts.forEach(s => {
-		if (typeof (s.trigger.fileExtension) === 'string' &&
+
+	if (allScripts.length > 0) {
+		allScripts.forEach(s => {
+			if (typeof (s.trigger.fileExtension) === 'string' &&
   file.indexOf(s.trigger.fileExtension) !== -1) {
-			scriptsforThisFile.push(s);
-			if (s.autolaunch === true) {
-				outShell('log', `${args.idFile}: Launching '${s.name}'...`);
-				launchScript({file, idFile}, s);
-			}
-		} else if (typeof (s.trigger.fileExtension) === 'object') {
-			s.trigger.fileExtension.forEach(ext => {
-				if (file.indexOf(ext) !== -1) {
-					scriptsforThisFile.push(s);
-					if (s.autolaunch === true) {
-						outShell('log', `${args.idFile}: Launching '${s.name}'...`);
-						launchScript({file, idFile}, s);
-					}
+				scriptsforThisFile.push(s);
+				if (s.autolaunch === true) {
+					outData('log', `${args.idFile}: Launching '${s.name}'...`);
+					launchScript({file, idFile}, s);
 				}
-			});
-		}
-	});
+			} else if (typeof (s.trigger.fileExtension) === 'object') {
+				s.trigger.fileExtension.forEach(ext => {
+					if (file.indexOf(ext) !== -1) {
+						scriptsforThisFile.push(s);
+						if (s.autolaunch === true) {
+							outData('log', `${args.idFile}: Launching '${s.name}'...`);
+							launchScript({file, idFile}, s);
+						}
+					}
+				});
+			}
+		});
+	}
 
 	if (scriptsforThisFile.length === 0) {
 		outShell(args, `No scripts found for '${args.name}' (id ${args.idFile}). Create you own !`, {err: true});
@@ -322,7 +347,12 @@ const getListScript = function (cb) {
 		list = [];
 		fs.readdir(scriptPath, (err, files) => {
 			if (err) {
-				return cb('duder' + err);
+				outData('log', err);
+				return cb(err);
+			}
+
+			if (files.length === 0) {
+				return cb();
 			}
 			files = files.filter(junk.not);
 
@@ -338,7 +368,8 @@ const getListScript = function (cb) {
 	}
 };
 
-const initExist = function (p, f) {
+/*
+Const initExist = function (p, f) {
 	fs.exists(p, exists => {
 		if (!exists) {
 			fs.copy(path.join(app.getAppPath(), f), p, err => {
@@ -352,20 +383,26 @@ const initExist = function (p, f) {
 		}
 	});
 };
-
+*/
 /*
  * Main processor, launch when a file is dropped
  * he is launch from a main ipc receiver from renderer
  */
 const processScript = function (ipcMain, args) {
 	ipcEvent = ipcMain;
-	ipcEvent.sender.send('log', 'Start process dude');
 
-	elephant(getScriptPath)().then(() => {
-  // List all scripts
-		pify(getListScript)().then(() => {
-    // Then, get all scripts
-			getAllscripts(() => {
+	elephant(getScriptPath)().then(path => {
+		scriptPath = path;
+    // List all scripts
+		getListScript(err => {
+			if (err) {
+				outData('log', `${err}`);
+			}
+      // Then, get all scripts
+			getAllscripts(err => {
+				if (err) {
+					outData('log', `${err}`);
+				}
         // Adding time to memorize all the data for future files (=3sec)
 				if (token <= Date.now())	{
 					token = Date.now() + 3000;
@@ -375,32 +412,15 @@ const processScript = function (ipcMain, args) {
 					parseAllScripts(args);
 				}
 			});
-		}).catch(err => {
-			outShell('log', `${err}`);
 		});
 	}).catch(err => {
-		outShell('log', `${err}`);
+		outData('log', `${err}`);
 	});
 };
 
 // Construct
 const init = function (ipcMain) {
   // Create scripts
-	elephant(getScriptPath)().then(path => {
-		scriptPath = path;
-
-		fs.exists(scriptPath, exists => {
-			if (!exists) {
-      // Copy all files stored in a library userData if he doesn't already exist
-				list.forEach(f => {
-					const p = path.join(app.getPath('userData'), f);
-					initExist(p, f);
-				});
-			}
-		});
-	}).catch(err => {
-		outShell('log', `${err}`);
-	});
 	processScript(ipcMain, {noParseFile: true});
 };
 

@@ -65,7 +65,6 @@ ipc.on('element-ok', (event, args) => {
 	updateProcessButton();
   // Display item in
 	rv.addItem(args);
-
 	console.log(filesToProcess);
 	event.sender.send('start-script', args);
 	idFile += 1;
@@ -172,7 +171,12 @@ ipc.on('add-process-out', (event, args) => {
   .find('pre').append(`${args.data}`);
 
 	const termView = $('tr[data-term="' + args.idFile + '"]').find('pre');
-	$(termView).scrollTop($(termView)[0].scrollHeight);
+
+	try {
+		$(termView).scrollTop($(termView)[0].scrollHeight);
+	} catch (err) {
+		console.log('No scrollTop. Window is closed?');
+	}
 });
 
 // Document on click

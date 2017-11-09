@@ -48,8 +48,7 @@ ipc.on('cancel', (event, args) => {
 });
 
 function urlReception(event, args) {
-	const recognizedExtention = true;
-
+	console.log(args.name);
   // Get informations about the file
 	fs.stat(args.path, (err, stats) => {
 		if (err) {
@@ -72,22 +71,20 @@ function urlReception(event, args) {
 					urlReception(event, fileInfo);
 				});
 			});
-		} else if (recognizedExtention === true) {
+		} else {
 			const list = {};
 
       // Merging data from all sources
 			Object.assign(list, stats, args);
-
       // Sending element to main list
 			win.webContents.send('element-ok', list);
-		} else {
-      // Element pas ok
 		}
 	});
 }
 
 ipc.on('start-script', (event, args) => {
   // Test if element is allowed
+	console.log('file 1');
 	sp.processScript(event, args);
 });
 
@@ -176,9 +173,7 @@ function onOpen(e, path) {
 
 	if (app.ipcReady) {
 		setTimeout(() => win.main.show(), 100);
-		win.webContents.send('log', 'app ready <3');
-	} else {
-			// Argv.push(id);
+		win.webContents.send('log', 'App ready <3');
 	}
 }
 

@@ -20,12 +20,13 @@ When I use script 1, it save it in
 - Add search on script Start selector when we have more than 5 scripts  
 - Display "process all files" when there is files to process (better)
 - Choose default script folder (handling Dropbox/Drive/Etc)
-- Use better icon for non existant script (other than warning)
+- Use better icon for non existing script (other than warning)
 - Handle other thing than files (like text)
 
 ## 2 - Improve core scripting
 
-- split files with ipc
+- Integrate script-processor inside a headleass/worker windows
+- Split files with ipc
 - Add npm dependencies checker/adder in before (easy to do with npm lib)
 - Multi-platform command (before/cmd/after)
 - Prompt support
