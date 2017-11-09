@@ -29,6 +29,10 @@ One drag and drop, detecting what to do with this file. Or asking what you want 
 
 Yes.
 
+### Why winegold ?
+
+As Jesus changes water into wine, we change wine into gold.
+
 ### What we want to do
 
 **This is a wanted feature**
