@@ -1,14 +1,15 @@
 const {app, ipcMain} = require('electron');
 const path = require('path');
 const Data = require('electron-store');
-const yaml = require('js-yaml');
 const fs = require('fs-extra');
 const isDev = require('electron-is-dev');
 const id = require('id.log');
 const tampax = require('tampax');
 const async = require('async');
-
+const mem = require('mem');
+const junk = require('junk');
 const kill = require('tree-kill');
+const pify = require('pify');
 const words = require('./words-to-replace');
 
 id.isDev(isDev);
@@ -16,20 +17,17 @@ let ipcEvent;
 const data = new Data();
 let allScripts = {};
 let list;
+let scriptPath;
 
-/*
- * PushIfNotExist() push an element if is not
- * already exist in the array
- * element: Array object
- * compare: string to add
- * return:  array
- */
-const pushIfNotExist = function (element, compare) {
-	if (element.indexOf(compare) === -1)		{
-		element.push(compare);
+const elephant = mem(pify, {maxAge: 3000});
+
+const getScriptPath = function (cb) {
+	const sp = data.get('scriptPath');
+	if (sp === undefined) {
+		data.set('scriptPath', path.join(app.getPath('userData'), 'scripts'));
+		return cb(null, path.join(app.getPath('userData'), 'scripts'));
 	}
-
-	return element;
+	return cb(null, sp);
 };
 
 /*
@@ -68,7 +66,10 @@ const execute = async.queue((args, callback) => {
 	const s = args.s;
 	const ending = args.ending;
 
-	// Cmd = cmd.replace(/<file>/g, s.fileFormated);
+  /*
+   * Replace words in script, and read the content of the file to add {{inside}}
+   * More on ./words-to-replace & https://github.com/arthurlacoste/tampax
+   */
 	words(cmd, s, (err, data) => {
 		if (err) {
 			outShell(s, `${err}`);
@@ -113,14 +114,14 @@ const execute = async.queue((args, callback) => {
 
 		exec.on('close', code => {
 			console.log('command END ' + code);
-			if (code === 0 || ending)			{
+			if (code === 0 || ending) {
 				outData('process-finished', s);
 				callback();
-			}		else {
+			} else {
 				callback('Error !');
 			}
 
-			// If cmd is after, launch this on background
+  // If cmd is after, launch this on background
 			if (ending === true) {
 				outData('process-finished', s);
 			}
@@ -129,34 +130,37 @@ const execute = async.queue((args, callback) => {
 });
 
 // Parse all yml scripts, return object with all scripts
-module.exports.getAllscripts = function () {
+const getAllscripts = function (cb) {
 	allScripts = [];
 	let scriptId = 0;
-	list.forEach(f => {
-		f = path.join(app.getPath('userData'), f);
+	list.forEach((f, index) => {
+		f = path.join(scriptPath, f);
 
-		// Console.log(f);
-		try {
-			const doc = tampax.yamlParseString(fs.readFileSync(f, 'utf8'));
+		fs.readFile(f, 'utf8', (err, data) => {
+			if (err) console.log(err);
+			tampax.yamlParseString(data, (err, doc) => {
+				if (err) {
+					console.log(err);
+				} else {
+					if (!doc.name) {
+						if (doc.cmd.exec) {
+							doc.name = doc.cmd.exec.substring(0, 8);
+						} else if (doc.cmd.eval) {
+							doc.name = doc.cmd.eval.substring(0, 8);
+						}
+					}
 
-			if (!doc.name) {
-				if (doc.cmd.exec) {
-					doc.name = doc.cmd.exec.substring(0, 8);
-				} else if (doc.cmd.eval) {
-					doc.name = doc.cmd.eval.substring(0, 8);
+					Object.assign(doc, {scriptFile: f, scriptId});
+					allScripts.push(doc);
+
+					scriptId += 1;
 				}
-			}
-
-			Object.assign(doc, {scriptFile: f, scriptId});
-			allScripts.push(doc);
-			console.log(doc);
-			scriptId += 1;
-		} catch (err) {
-			console.log(err);
-		}
+				if (index === list.length - 1) {
+					return cb();
+				}
+			});
+		});
 	});
-
-	return allScripts;
 };
 
 /*
@@ -166,43 +170,42 @@ module.exports.getAllscripts = function () {
  */
 const addScript = function (file) {
   // Test YAML integrity
-	try {
-		const doc = yaml.safeLoad(fs.readFileSync(file, 'utf8'));
+	fs.readFile(file, 'utf8', (err, data) => {
+		if (err) return outShell({file}, err, {err: true});
+		tampax.readYamlString(data, (err, doc) => {
+			if (err) return outShell({file}, err, {err: true});
+      // Test presence of triggers and command
+			if (doc.trigger && doc.cmd) {
+        // Copy file to userData
+				const basename = path.basename(file);
+				const newFile = path.join(app.getPath('userData'), 'scripts', basename);
 
-    // Test presence of triggers and command
-		if (doc.trigger && doc.cmd) {
-			// Copy file to userData
-			const basename = path.basename(file);
-			const newFile = path.join(app.getPath('userData'), 'scripts', basename);
-
-			fs.copy(file, newFile, err => {
-				if (err) {
-					outShell({file}, err, {err: true});
-				} else {
-					const mess = 'File moved to ' + newFile;
-					outShell({file}, mess);
-				}
-			});
-
-			const newfileRelative = path.join('scripts', basename);
-			// Add to config file
-			data.set('list', pushIfNotExist(list, newfileRelative));
-			return true;
-		}
-		const mess = 'Have you a correct trigger & cmd ?';
-		outShell({file}, mess, {err: true});
+				fs.copy(file, newFile, err => {
+					if (err) {
+						outShell({file}, err, {err: true});
+					} else {
+						const mess = 'File moved to ' + newFile;
+						outShell({file}, mess);
+					}
+				});
+				return true;
+			}
+			const mess = 'Have you a correct trigger & cmd ?';
+			outShell({file}, mess, {err: true});
 
     // If correct
-	} catch (err) {
-		outShell({file}, err, {err: true});
-	}
+		});
+	});
 };
 
 /*
  * LaunchScript try to execute all the before, cmd & after commands
+ * file: file path+name
  * s: script Object
  */
 const launchScript = function (file, s) {
+  // Need to refresh script after launch, if he is edited between time ?
+
 	console.log('start LS');
 	const fileFormated = `'${file.replace(/'/g, `'\\''`)}'`;
 	Object.assign(s, {file, fileFormated});
@@ -224,7 +227,7 @@ const launchScript = function (file, s) {
 			}
 		}
 
-		// True = send ending process
+    // True = send ending process
 		if (s.cmd.exec) {
 			execute.push({cmd: s.cmd.exec, s, type: 'shell', ending: true});
 		}
@@ -232,7 +235,7 @@ const launchScript = function (file, s) {
 			execute.push({cmd: s.cmd.eval, s, type: 'js', ending: true});
 		}
 
-		// Internal command
+    // Internal command
 		if (s.cmd.internal === 'addScript') {
 			addScript(s.file);
 		}
@@ -267,19 +270,15 @@ const launchScript = function (file, s) {
  * file: a file
  * start: when autolaunch=false, select your script and click to process
  */
-module.exports.parseAllScripts = function (args) {
+const parseAllScripts = function (args) {
 	const idFile = args.idFile;
 	const file = args.path;
 	const scriptsforThisFile = [];
-	this.getAllscripts();
-
-	console.log(allScripts);
 
 	allScripts.forEach(s => {
 		s.idFile = idFile;
-    // Console.log(typeof(s.trigger.fileExtension))
 		if (typeof (s.trigger.fileExtension) === 'string' &&
-		file.indexOf(s.trigger.fileExtension) !== -1) {
+  file.indexOf(s.trigger.fileExtension) !== -1) {
 			scriptsforThisFile.push(s);
 			if (s.autolaunch === true) {
 				launchScript(file, s);
@@ -314,40 +313,88 @@ module.exports.parseAllScripts = function (args) {
 			outData('add-scripts', scriptsAndFile);
 		}
 	}
-	console.log(scriptsforThisFile);
 };
 
+const getListScript = function (cb) {
+	list = [];
+	fs.readdir(scriptPath, (err, files) => {
+		if (err) {
+			console.log(err);
+			return cb(err);
+		}
+		files = files.filter(junk.not);
+
+		files.forEach(file => {
+			list.push(file);
+			if (list.length === files.length) {
+				return cb();
+			}
+		});
+	});
+};
+
+const initExist = function (p, f) {
+	fs.exists(p, exists => {
+		if (!exists) {
+			fs.copy(path.join(app.getAppPath(), f), p, err => {
+				if (err) {
+					console.error(err);
+				} else {
+					console.log('success: ' + p);
+				}
+			});
+		}
+	});
+};
 // Construct
-module.exports.init = function (ipcMain) {
-	const configFiles = ['scripts/config.add.yml'];
-	if (data.get('list') === undefined)	{
-		data.set('list', configFiles);
-	}
+const init = function () {
+  // Create scripts
+	elephant(getScriptPath)().then(path => {
+		scriptPath = path;
 
-	list = data.get('list');
-
-	id({id: 'goodid'});
-	id.log(data.get('list'));
-  // Import ipcMain object
-	ipcEvent = ipcMain;
-
-	// Copy all files stored in a library userData
-	list.forEach(f => {
-		const p = path.join(app.getPath('userData'), f);
-		console.log(p);
-		fs.exists(p, exists => {
+		fs.exists(scriptPath, exists => {
 			if (!exists) {
-				fs.copy(path.join(app.getAppPath(), f), p, err => {
-					if (err) {
-						console.error(err);
-					} else {
-						console.log('success: ' + p);
-					}
+      // Copy all files stored in a library userData if he doesn't already exist
+				list.forEach(f => {
+					const p = path.join(app.getPath('userData'), f);
+					console.log(p);
+					initExist(p, f);
 				});
 			}
 		});
 	});
 };
 
+/*
+ * If we process lot of files, value of theses
+ * functions are the same (3 secondes)
+ */
+// const memListScript = mem(getListScript, {maxAge: 3000});
+// const memGetAllscripts = mem(getAllscripts, {maxAge: 3000});
+
+/*
+ * Main processor, launch when a file is dropped
+ * he is launch from a main ipc receiver from renderer
+ */
+const processScript = function (ipcMain, args) {
+	console.log('ARGS', args.name);
+	ipcEvent = ipcMain;
+	ipcEvent.sender.send('log', 'Start process dude');
+	getScriptPath(() => {
+  // List all scripts
+		getListScript(() => {
+    // Then, get all scripts
+			getAllscripts(() => {
+      // Finally, add script to renderer or process
+				parseAllScripts(args);
+			});
+		});
+	});
+};
+
+module.exports = init;
+module.exports.processScript = processScript;
+module.exports.parseAllScripts = parseAllScripts;
 module.exports.launchScript = launchScript;
+module.exports.getAllscripts = getAllscripts;
 module.exports.execute = execute;

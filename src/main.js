@@ -17,6 +17,7 @@ const config = new Config();
 const __base = path.join(__dirname, '/');
 const argv = sliceArgv(process.argv);
 let winBounds = '';
+sp(); // Init script-processer
 
 // Testing argument -t
 global.test = /-t/.test(argv[2]);
@@ -45,9 +46,6 @@ ipc.on('cancel', (event, args) => {
 });
 
 function urlReception(event, args) {
-	// A console.log(args.path);
-
-  // Console.log(scripts);
 	const recognizedExtention = true;
 
   // Get informations about the file
@@ -88,18 +86,13 @@ function urlReception(event, args) {
 
 ipc.on('start-script', (event, args) => {
   // Test if element is allowed
-	sp.init(event);
-	sp.parseAllScripts(args);
+	sp.processScript(event, args);
 });
 
 ipc.on('start-one-script', (event, args) => {
   // Start script from user selection (renderer onClick)
 	sp.launchScript(args.path, args);
 });
-
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 
 app.on('ready', () => {
 	const optsInit = {
