@@ -55,8 +55,6 @@ ipc.on('test-run', () => {
 });
 
 ipc.on('element-ok', (event, args) => {
-	console.log('ARGS', args);
-
 	if (list === 0) {
 		rv.loadList();
 	}

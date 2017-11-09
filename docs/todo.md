@@ -2,11 +2,12 @@
 
 ## Top 1
 
-- Add a cooldown when you drag more than 1 file to avoid rescan
+- Handle queue: add multiples files queue (and set it with "queue")
 - Add Menu (right click):
-  - add/desactivate autolaunch support
+  - add/remove autolaunch support of a file
   - save file to display it on startup
   - locate file (already available on zoom icon)
+- Display feature, to display the name of script instead of file 
 
 ## 1 - Make user interface a "killer app"
 
@@ -18,11 +19,11 @@ When I use script 1, it save it in
   - save a state non display but openable
 - Add search on script Start selector when we have more than 5 scripts  
 - Display "process all files" when there is files to process (better)
+- Choose default script folder (handling Dropbox/Drive/Etc)
 
 ## 2 - Improve core scripting
 
 - split files with ipc
-- Handle queue: add multiples files queue (and set it with "queue")
 - Add npm dependencies checker/adder in before (easy to do with npm lib)
 - Multi-platform command (before/cmd/after)
 - Prompt support
@@ -31,6 +32,8 @@ When I use script 1, it save it in
 - chaining multiples cmd with array of commands
 
 ## 3 - Auto-updater
+
+It's better.
 
 ## 4 - Support binary dependencies-packaging
 
