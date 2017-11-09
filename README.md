@@ -5,9 +5,16 @@
   <p align="center"><a href="https://github.com/sindresorhus/xo"><img src="https://img.shields.io/badge/code_style-XO-5ed9c7.svg" alt="XO code style"></a></p>
 </p>
 
-**This tool is a WIP, there is still some bugs.**
+Winegold is a swiss army knife for every drag and drop. He is built on [Electron](https://github.com/electron/electron).
 
-## Use winegold
+- Download your favorites CLI apps
+- [Create a simple trigger for it](docs/scripts.md)
+- And that's it! You can use every terminal/shell/CLI with a simple UI
+
+This project adheres to the Contributor Covenant [code of conduct](code-of-conduct.md).
+By participating, you are expected to uphold this code. Please report unacceptable behavior to arthak@gmail.com.
+
+- [Read the script documentation](docs/scripts.md)
 
 ![demo of winegold app](src/assets/img/demo.gif)
 
@@ -15,7 +22,7 @@ Yes, I expected to be simple as this example.
 
 One drag and drop, detecting what to do with this file. Or asking what you want to do with the files you've just dragged.
 
-### What you can do with winegold
+## What you can do with winegold
 
 - Convert a file in multiple formats
 - Process multiple files
@@ -25,19 +32,32 @@ One drag and drop, detecting what to do with this file. Or asking what you want 
 - Use JavaScript or bash (equal everything!), what is your favorite flavor ?
 - [Create your own scripts](docs/scripts.md) to use you drag and drop box
 
-### Wait, I can do everything with CLI tools without your app !
 
-Yes.
+## Installing
 
-### Why winegold ?
+### macOS
 
-As Jesus changes water into wine, we change wine into gold.
+Download the latest [winegold release](https://github.com/arthurlacoste/winegold/releases).
 
-### What we want to do
+
+### Windows
+
+Download the latest [winegold installer](https://github.com/arthurlacoste/winegold/releases).  
+
+`winegold-win-x32-setup-v0.0.1-alpha.exe` is for 32-bit & `winegold-win-x64-setup-v0.0.1-alpha.exe` 64-bit systems.
+
+
+### GNU/·Linux
+
+Download the latest [winegold release](https://github.com/arthurlacoste/winegold/releases) (x64 & x32).
+
+The app haven't been tested on this platform! Every feedbacks are welcomed!
+
+## What we want to do
 
 **This is a wanted feature**
 
-Detect the kind of file you have added, and give you a way to process it. So, I need create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need.
+Detect the kind of file you have added, and give you a way to process it. So, I need to create a way to handle conversion cli tools (like [Calibre ebook-convert](ebook-convert), [ImageMagick](https://github.com/ImageMagick/ImageMagick)) into a multi-platform downloadable dependency on the need.
 
 If you want to convert a kind of file, dependencies are downloaded if you need, and your file is processed.
 
@@ -45,7 +65,7 @@ Other (& simpler) todo:
 
 - [See the todo page](docs/todo.md).
 
-### Everything is scripting
+## Everything is scripting
 
 We want to put file into the center of everything.
 
@@ -77,12 +97,6 @@ You can add your own script by dragging a script called `"myscript.add.yml"`. Th
 
 - [Read the script documentation](docs/scripts.md)
 - [Know more about who YAML works](https://yaml.irz.fr)
-## Get winegold
-
-**This tool is a WIP, he is not really usable right now.**
-
-The app is cross-platform and in active development.
-
 
 ## Contribute
 
@@ -126,6 +140,16 @@ npm run build [platform]
 Where `[platform]` is `darwin`, `linux`, `win32`, or `all` (default).
 
 After that, you'll see the binaries in the `dist` folder :smile:
+
+## FAQ
+
+### Wait, I can do everything with CLI tools without your app !
+
+Yes.
+
+### Why winegold ?
+
+As Jesus changes water into wine, we change wine into gold.
 
 ## Licence
 [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
