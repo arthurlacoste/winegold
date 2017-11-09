@@ -20,7 +20,8 @@ When I use script 1, it save it in
 - Add search on script Start selector when we have more than 5 scripts  
 - Display "process all files" when there is files to process (better)
 - Choose default script folder (handling Dropbox/Drive/Etc)
-- use better icon for non existant script (other than warning)
+- Use better icon for non existant script (other than warning)
+- Handle other thing than files (like text)
 
 ## 2 - Improve core scripting
 

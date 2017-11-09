@@ -310,7 +310,7 @@ const parseAllScripts = function (args) {
 
 		outData('add-scripts', scriptsAndFile);
 
-		if (autolaunch === false) {
+		if (!autolaunch || autolaunch === false) {
 			outData('icon-pause', {idFile});
 			outShell({idFile}, `Waiting for a script to choose (process column) (id ${args.idFile}).`);
 		}
