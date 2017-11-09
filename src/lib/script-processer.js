@@ -85,7 +85,7 @@ const execute = async.queue((args, callback) => {
 			const {forkString} = require('child-process-fork-string');
 			exec = forkString(cmd, {silent: true});
 		} else {
-			const {spawn} = require('execa');
+			const spawn = require('execa');
 			exec = spawn(cmd, [], {shell: true, encoding: 'ucs2'});
 		}
 
@@ -283,7 +283,7 @@ const parseAllScripts = function (args) {
   file.indexOf(s.trigger.fileExtension) !== -1) {
 			scriptsforThisFile.push(s);
 			if (s.autolaunch === true) {
-				outShell(args, `Launching '${s.name}' (id ${args.idFile})...`, {err: true});
+				outShell('log', `${args.idFile}: Launching '${s.name}'...`);
 				launchScript({file, idFile}, s);
 			}
 		} else if (typeof (s.trigger.fileExtension) === 'object') {
@@ -291,7 +291,7 @@ const parseAllScripts = function (args) {
 				if (file.indexOf(ext) !== -1) {
 					scriptsforThisFile.push(s);
 					if (s.autolaunch === true) {
-						outShell(args, `Launching '${s.name}' (id ${args.idFile})...`, {err: true});
+						outShell('log', `${args.idFile}: Launching '${s.name}'...`);
 						launchScript({file, idFile}, s);
 					}
 				}
@@ -303,14 +303,16 @@ const parseAllScripts = function (args) {
 		outShell(args, `No scripts found for '${args.name}' (id ${args.idFile}). Create you own !`, {err: true});
 	} else {
 		const autolaunch = scriptsforThisFile[0].autolaunch;
-		if (!autolaunch || autolaunch === false) {
-			const scriptsAndFile = {
-				scripts: scriptsforThisFile,
-				file,
-				idFile
-			};
-			outShell(scriptsAndFile, `Waiting for a script to choose (process column) (id ${args.idFile}).`);
-			outData('add-scripts', scriptsAndFile);
+		const scriptsAndFile = {
+			scripts: scriptsforThisFile,
+			file,
+			idFile};
+
+		outData('add-scripts', scriptsAndFile);
+
+		if (autolaunch === false) {
+			outData('icon-pause', {idFile});
+			outShell({idFile}, `Waiting for a script to choose (process column) (id ${args.idFile}).`);
 		}
 	}
 };

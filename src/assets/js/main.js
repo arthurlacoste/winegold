@@ -126,14 +126,6 @@ ipc.on('process-err', (event, args) => {
  * This add to Menu to choose script to launch
  */
 ipc.on('add-scripts', (event, args) => {
-	// Pause the icon
-	filesToProcess[args.idFile].status = 'pause';
-	updateProcessButton();
-	$('tr[data-content="' + args.idFile + '"]')
-  .find('i.icon.loading')
-  .addClass('inverted blue pause')
-  .removeClass('notched circle loading');
-
 	filesToProcess[args.idFile].scripts = {};
 
 	// Add scripts to list
@@ -144,6 +136,16 @@ ipc.on('add-scripts', (event, args) => {
     .find('.scriptchooser')
 		.append(`<div id="scriptchooserinner" data-fileid="${args.idFile}" data-scriptid="${s.scriptId}" class="item">${s.name}</div>`);
 	});
+});
+
+// Pause the icon
+ipc.on('icon-pause', (event, args) => {
+	filesToProcess[args.idFile].status = 'pause';
+	updateProcessButton();
+	$('tr[data-content="' + args.idFile + '"]')
+.find('i.icon.loading')
+.addClass('inverted blue pause')
+.removeClass('notched circle loading');
 });
 
 ipc.on('eval-browser', (event, args) => {
