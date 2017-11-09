@@ -1,0 +1,8 @@
+# autolaunch Javascript in her current direcory
+
+name: Launch JavaScript File
+trigger:
+  fileExtension: .js
+cmd:
+  exec: cd {{dir}} && node {{file}}
+autolaunch: true

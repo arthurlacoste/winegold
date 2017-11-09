@@ -17,8 +17,10 @@ const config = new Config();
 const __base = path.join(__dirname, '/');
 const argv = sliceArgv(process.argv);
 let winBounds = '';
-sp(); // Init script-processer
 
+ipc.on('init-script-processer', event => {
+	sp(event); // Init script-processer
+});
 // Testing argument -t
 global.test = /-t/.test(argv[2]);
 console.log(global.test);
@@ -91,7 +93,7 @@ ipc.on('start-script', (event, args) => {
 
 ipc.on('start-one-script', (event, args) => {
   // Start script from user selection (renderer onClick)
-	sp.launchScript(args.path, args);
+	sp.launchScript({file: args.path, idFile: args.idFile}, args);
 });
 
 app.on('ready', () => {

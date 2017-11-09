@@ -18,6 +18,7 @@ const data = new Data();
 let allScripts = {};
 let list;
 let scriptPath;
+let token = Date.now();
 
 const elephant = mem(pify, {maxAge: 3000});
 
@@ -37,9 +38,12 @@ const getScriptPath = function (cb) {
  * args: object of argument for others ipc events
  */
 const outShell = function (s, data, args) {
+	if (args !== null) {
+		Object.assign(s, args);
+	}
 	args = args || {};
-	console.log(data);
 	Object.assign(s, {data: `${data}\n`});
+
 	ipcEvent.sender.send('add-process-out', s);
 	if (args.err) {
 		ipcEvent.sender.send('process-err', s);
@@ -61,11 +65,10 @@ const outData = function (cmd, s) {
  * ending: false by default
  */
 const execute = async.queue((args, callback) => {
-	console.log(args);
 	let cmd = args.cmd;
 	const s = args.s;
 	const ending = args.ending;
-
+	const idFile = args.idFile;
   /*
    * Replace words in script, and read the content of the file to add {{inside}}
    * More on ./words-to-replace & https://github.com/arthurlacoste/tampax
@@ -81,17 +84,15 @@ const execute = async.queue((args, callback) => {
 		if (args.type === 'js') {
 			const {forkString} = require('child-process-fork-string');
 			exec = forkString(cmd, {silent: true});
-			console.log('js detected');
 		} else {
 			const {spawn} = require('execa');
 			exec = spawn(cmd, [], {shell: true, encoding: 'ucs2'});
 		}
 
 		ipcMain.on('cancel', () => {
-			console.log(`Terminate ${exec.pid}`);
 			kill(exec.pid, 'SIGKILL', err => {
 				if (err) {
-					outShell(s, `${err}`);
+					outShell(s, `${err}`, {idFile});
 					return;
 				}
 				outShell(s, `${exec.pid} over.`);
@@ -103,17 +104,14 @@ const execute = async.queue((args, callback) => {
 		}
 
 		exec.stdout.on('data', data => {
-			console.log(data);
-
-			outShell(s, `✅  ${data}`);
+			outShell(s, `✅  ${data}`, {idFile});
 		});
 
 		exec.stderr.on('data', data => {
-			outShell(s, `⚠️  ${data}`, {err: true});
+			outShell(s, `⚠️  ${data}`, {err: true, idFile});
 		});
 
 		exec.on('close', code => {
-			console.log('command END ' + code);
 			if (code === 0 || ending) {
 				outData('process-finished', s);
 				callback();
@@ -131,36 +129,40 @@ const execute = async.queue((args, callback) => {
 
 // Parse all yml scripts, return object with all scripts
 const getAllscripts = function (cb) {
-	allScripts = [];
-	let scriptId = 0;
-	list.forEach((f, index) => {
-		f = path.join(scriptPath, f);
+	if (token <= Date.now())	{
+		allScripts = [];
+		let scriptId = 0;
+		list.forEach((f, index) => {
+			f = path.join(scriptPath, f);
 
-		fs.readFile(f, 'utf8', (err, data) => {
-			if (err) console.log(err);
-			tampax.yamlParseString(data, (err, doc) => {
-				if (err) {
-					console.log(err);
-				} else {
-					if (!doc.name) {
-						if (doc.cmd.exec) {
-							doc.name = doc.cmd.exec.substring(0, 8);
-						} else if (doc.cmd.eval) {
-							doc.name = doc.cmd.eval.substring(0, 8);
+			fs.readFile(f, 'utf8', (err, data) => {
+				if (err) return outData('log', err);
+				tampax.yamlParseString(data, (err, doc) => {
+					if (err) {
+						outData('log', err);
+					} else {
+						if (!doc.name) {
+							if (doc.cmd.exec) {
+								doc.name = doc.cmd.exec.substring(0, 8);
+							} else if (doc.cmd.eval) {
+								doc.name = doc.cmd.eval.substring(0, 8);
+							}
 						}
+
+						Object.assign(doc, {scriptFile: f, scriptId});
+						allScripts.push(doc);
+
+						scriptId += 1;
 					}
-
-					Object.assign(doc, {scriptFile: f, scriptId});
-					allScripts.push(doc);
-
-					scriptId += 1;
-				}
-				if (index === list.length - 1) {
-					return cb();
-				}
+					if (index === list.length - 1) {
+						return cb();
+					}
+				});
 			});
 		});
-	});
+	} else {
+		return cb();
+	}
 };
 
 /*
@@ -203,12 +205,14 @@ const addScript = function (file) {
  * file: file path+name
  * s: script Object
  */
-const launchScript = function (file, s) {
+const launchScript = function (args, s) {
+	const idFile = args.idFile;
   // Need to refresh script after launch, if he is edited between time ?
+	const fileFormated = `'${args.file.replace(/'/g, `'\\''`)}'`;
+	Object.assign(s, {file: args.file, fileFormated});
 
-	console.log('start LS');
-	const fileFormated = `'${file.replace(/'/g, `'\\''`)}'`;
-	Object.assign(s, {file, fileFormated});
+	const si = Object.assign({}, s, idFile);
+
   // Console.log(s)
 	const queueArgs = {
 		cmd: '',
@@ -220,7 +224,7 @@ const launchScript = function (file, s) {
 	try {
 		if (s.before) {
 			if (s.before.exec) {
-				execute.push({cmd: s.before.exec, s, type: 'shell', ending: false});
+				execute.push({cmd: s.before.exec, s, type: 'shell', ending: false, idFile});
 			}
 			if (s.before.eval) {
 				outData('eval-browser', s.before.eval);
@@ -229,10 +233,10 @@ const launchScript = function (file, s) {
 
     // True = send ending process
 		if (s.cmd.exec) {
-			execute.push({cmd: s.cmd.exec, s, type: 'shell', ending: true});
+			execute.push({cmd: s.cmd.exec, s, type: 'shell', ending: true, idFile});
 		}
 		if (s.cmd.eval) {
-			execute.push({cmd: s.cmd.eval, s, type: 'js', ending: true});
+			execute.push({cmd: s.cmd.eval, s, type: 'js', ending: true, idFile});
 		}
 
     // Internal command
@@ -243,7 +247,7 @@ const launchScript = function (file, s) {
 		if (s.after) {
 			if (s.after.exec) {
 				queueArgs.cmd = s.after.exec;
-				execute.push({cmd: s.after.exec, s, type: 'shell', ending: false});
+				execute.push({cmd: s.after.exec, s, type: 'shell', ending: false, idFile});
 			}
 
 			execute.drain = function () {
@@ -259,7 +263,7 @@ const launchScript = function (file, s) {
 			};
 		}
 	} catch (err) {
-		outShell(s, err, true);
+		outShell(si, err, true);
 	}
 };
 
@@ -274,33 +278,29 @@ const parseAllScripts = function (args) {
 	const idFile = args.idFile;
 	const file = args.path;
 	const scriptsforThisFile = [];
-
 	allScripts.forEach(s => {
-		s.idFile = idFile;
 		if (typeof (s.trigger.fileExtension) === 'string' &&
   file.indexOf(s.trigger.fileExtension) !== -1) {
 			scriptsforThisFile.push(s);
 			if (s.autolaunch === true) {
-				launchScript(file, s);
+				outShell(args, `Launching '${s.name}' (id ${args.idFile})...`, {err: true});
+				launchScript({file, idFile}, s);
 			}
 		} else if (typeof (s.trigger.fileExtension) === 'object') {
 			s.trigger.fileExtension.forEach(ext => {
-				console.log(ext);
 				if (file.indexOf(ext) !== -1) {
 					scriptsforThisFile.push(s);
 					if (s.autolaunch === true) {
-						launchScript(file, s);
+						outShell(args, `Launching '${s.name}' (id ${args.idFile})...`, {err: true});
+						launchScript({file, idFile}, s);
 					}
-
-					return false;
 				}
-				return true;
 			});
 		}
 	});
 
 	if (scriptsforThisFile.length === 0) {
-		outShell(args, 'No scripts found for this file. Create you own !', {err: true});
+		outShell(args, `No scripts found for '${args.name}' (id ${args.idFile}). Create you own !`, {err: true});
 	} else {
 		const autolaunch = scriptsforThisFile[0].autolaunch;
 		if (!autolaunch || autolaunch === false) {
@@ -309,28 +309,31 @@ const parseAllScripts = function (args) {
 				file,
 				idFile
 			};
-			outShell(scriptsAndFile, 'Waiting for a script to choose (process column).');
+			outShell(scriptsAndFile, `Waiting for a script to choose (process column) (id ${args.idFile}).`);
 			outData('add-scripts', scriptsAndFile);
 		}
 	}
 };
 
 const getListScript = function (cb) {
-	list = [];
-	fs.readdir(scriptPath, (err, files) => {
-		if (err) {
-			console.log(err);
-			return cb(err);
-		}
-		files = files.filter(junk.not);
-
-		files.forEach(file => {
-			list.push(file);
-			if (list.length === files.length) {
-				return cb();
+	if (token <= Date.now())	{
+		list = [];
+		fs.readdir(scriptPath, (err, files) => {
+			if (err) {
+				return cb('duder' + err);
 			}
+			files = files.filter(junk.not);
+
+			files.forEach(file => {
+				list.push(file);
+				if (list.length === files.length) {
+					return cb();
+				}
+			});
 		});
-	});
+	} else {
+		return cb();
+	}
 };
 
 const initExist = function (p, f) {
@@ -338,16 +341,48 @@ const initExist = function (p, f) {
 		if (!exists) {
 			fs.copy(path.join(app.getAppPath(), f), p, err => {
 				if (err) {
+					outData('log', err);
 					console.error(err);
 				} else {
-					console.log('success: ' + p);
+					outData('log', 'No err');
 				}
 			});
 		}
 	});
 };
+
+/*
+ * Main processor, launch when a file is dropped
+ * he is launch from a main ipc receiver from renderer
+ */
+const processScript = function (ipcMain, args) {
+	ipcEvent = ipcMain;
+	ipcEvent.sender.send('log', 'Start process dude');
+
+	elephant(getScriptPath)().then(() => {
+  // List all scripts
+		pify(getListScript)().then(() => {
+    // Then, get all scripts
+			getAllscripts(() => {
+        // Adding time to memorize all the data for future files (=3sec)
+				if (token <= Date.now())	{
+					token = Date.now() + 3000;
+				}
+        // Finally, add script to renderer or process
+				if (args.noParseFile !== true) {
+					parseAllScripts(args);
+				}
+			});
+		}).catch(err => {
+			outShell('log', `${err}`);
+		});
+	}).catch(err => {
+		outShell('log', `${err}`);
+	});
+};
+
 // Construct
-const init = function () {
+const init = function (ipcMain) {
   // Create scripts
 	elephant(getScriptPath)().then(path => {
 		scriptPath = path;
@@ -357,39 +392,14 @@ const init = function () {
       // Copy all files stored in a library userData if he doesn't already exist
 				list.forEach(f => {
 					const p = path.join(app.getPath('userData'), f);
-					console.log(p);
 					initExist(p, f);
 				});
 			}
 		});
+	}).catch(err => {
+		outShell('log', `${err}`);
 	});
-};
-
-/*
- * If we process lot of files, value of theses
- * functions are the same (3 secondes)
- */
-// const memListScript = mem(getListScript, {maxAge: 3000});
-// const memGetAllscripts = mem(getAllscripts, {maxAge: 3000});
-
-/*
- * Main processor, launch when a file is dropped
- * he is launch from a main ipc receiver from renderer
- */
-const processScript = function (ipcMain, args) {
-	console.log('ARGS', args.name);
-	ipcEvent = ipcMain;
-	ipcEvent.sender.send('log', 'Start process dude');
-	getScriptPath(() => {
-  // List all scripts
-		getListScript(() => {
-    // Then, get all scripts
-			getAllscripts(() => {
-      // Finally, add script to renderer or process
-				parseAllScripts(args);
-			});
-		});
-	});
+	processScript(ipcMain, {noParseFile: true});
 };
 
 module.exports = init;

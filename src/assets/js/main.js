@@ -7,6 +7,10 @@ let idFile = 0;
 let list = 0;
 const filesToProcess = {};
 
+$(document).ready(() => {
+	ipc.send('init-script-processer');
+});
+
 /*
  * Detect new elements added to the main view and add them
  * to the list if we recognized
@@ -51,6 +55,8 @@ ipc.on('test-run', () => {
 });
 
 ipc.on('element-ok', (event, args) => {
+	console.log('ARGS', args);
+
 	if (list === 0) {
 		rv.loadList();
 	}
@@ -131,13 +137,14 @@ ipc.on('add-scripts', (event, args) => {
   .removeClass('notched circle loading');
 
 	filesToProcess[args.idFile].scripts = {};
+
 	// Add scripts to list
 	args.scripts.forEach(s => {
 		filesToProcess[args.idFile].scripts[s.scriptId] = s;
 		console.log(s);
 		$('tr[data-content="' + args.idFile + '"]')
     .find('.scriptchooser')
-		.append(`<div id="scriptchooserinner" data-fileid="${s.idFile}" data-scriptid="${s.scriptId}" class="item">${s.name}</div>`);
+		.append(`<div id="scriptchooserinner" data-fileid="${args.idFile}" data-scriptid="${s.scriptId}" class="item">${s.name}</div>`);
 	});
 });
 
