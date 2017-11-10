@@ -1,4 +1,5 @@
 const {app, BrowserWindow} = require('electron');
+// Exit the app if we are in the Windows setup case
 if (require('electron-squirrel-startup')) {
 	app.quit();
 	process.exit(0);
@@ -93,15 +94,19 @@ ipc.on('start-one-script', (event, args) => {
 	sp.launchScript({file: args.path, idFile: args.idFile}, args);
 });
 
+const getBounds = config.get('winBounds');
+console.log('GETBOUNDS', getBounds);
+
 app.on('ready', () => {
 	const optsInit = {
-		minHeight: 340,
-		minWidth: 300,
+		minHeight: 300,
+		minWidth: 330,
 		icon: 'icons/icon.icns',
 		show: false
 	};
 	const opts = {};
-	Object.assign(opts, config.get('winBounds'), optsInit);
+
+	Object.assign(opts, getBounds, optsInit);
 	console.log(opts);
 
 	app.on('open-file', onOpen);
@@ -112,8 +117,7 @@ app.on('ready', () => {
 	console.log(__dirname);
 
 	win.loadURL(url.format({
-		pathname: path.join(__dirname, 'index.html'), //
-    // pathname: path.join(__dirname, 'assets/list.html'),
+		pathname: path.join(__dirname, 'index.html'),
 		protocol: 'file:',
 		slashes: true
 	}));
@@ -125,7 +129,9 @@ app.on('ready', () => {
 		}
 	});
 
-	win.setMinimumSize(350, 300);
+	if (!getBounds || !getBounds.width) {
+		win.setSize(350, 300);
+	}
 
 	if (isDev || global.test) {
 		win.webContents.openDevTools();
