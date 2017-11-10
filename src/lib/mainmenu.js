@@ -1,5 +1,7 @@
-const {Menu, app} = require('electron');
-const path = require('path');
+const {Menu, dialog, app} = require('electron');
+const Data = require('electron-store');
+
+const data = new Data();
 
 const template = [
 	{
@@ -10,7 +12,23 @@ const template = [
 				role: 'allScripts',
 				accelerator: process.platform === 'darwin' ? 'Command+S' : 'Ctrl+S',
 				click() {
-					require('electron').shell.showItemInFolder(path.join(app.getPath('userData'), 'scripts'));
+					require('electron').shell.showItemInFolder(data.get('scriptPath'));
+				}
+			},
+
+			{
+				label: 'Edit script directory',
+				role: 'editScript',
+				accelerator: 'CmdOrCtrl+Alt+A',
+
+				click() {
+					dialog.showOpenDialog({
+						properties: ['openDirectory']
+					}, path => {
+						if (path) {
+							data.set('scriptPath', path[0]);
+						}
+					});
 				}
 			},
 			{

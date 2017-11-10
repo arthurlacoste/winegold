@@ -63,20 +63,23 @@ const outShell = function (s, data, args) {
 };
 
 const getScriptPath = function (cb) {
-	const sp = data.get('scriptPath');
+	let sp = data.get('scriptPath');
 
+	if (sp === undefined) {
+		sp = path.join(app.getPath('userData'), 'scripts');
+		data.set('scriptPath', sp);
+	}
   // Create path if he desn't exists
 	fs.exists(sp, exists => {
-		if (!exists) {
-			fs.mkdir(sp, err => {
-				outData('log', err);
-			});
+		if (exists) {
+			return cb(null, sp);
 		}
-		if (sp === undefined) {
-			data.set('scriptPath', path.join(app.getPath('userData'), 'scripts'));
-			return cb(null, path.join(app.getPath('userData'), 'scripts'));
-		}
-		return cb(null, sp);
+		fs.mkdir(sp, err => {
+			if (err)					{
+				return cb(err);
+			}
+			return cb(null, sp);
+		});
 	});
 };
 
@@ -210,7 +213,7 @@ const addScript = function (file) {
 			if (doc.trigger && doc.cmd) {
         // Copy file to userData
 				const basename = path.basename(file);
-				const newFile = path.join(app.getPath('userData'), 'scripts', basename);
+				const newFile = path.join(scriptPath, basename);
 
 				fs.copy(file, newFile, err => {
 					if (err) {
