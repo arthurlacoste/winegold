@@ -38,6 +38,10 @@ let win;
 // Reception of an url
 ipc.on('url-reception', (event, args) => {
 	urlReception(event, args);
+	const bounds = win.getBounds();
+	if (bounds.height < 400 && bounds.width < 360)	{
+		win.setSize(400, 350, true);
+	}
 });
 
 ipc.on('cancel', (event, args) => {
@@ -95,7 +99,6 @@ ipc.on('start-one-script', (event, args) => {
 });
 
 const getBounds = config.get('winBounds');
-console.log('GETBOUNDS', getBounds);
 
 app.on('ready', () => {
 	const optsInit = {
