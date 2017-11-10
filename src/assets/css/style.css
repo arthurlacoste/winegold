@@ -75,6 +75,13 @@ svg#picDrop {
   height: 150px;
 }
 
+@media screen and (min-width: 400px) and (min-height: 400px) {
+  svg#picDrop {
+    height: calc(100% - 200px);
+    max-width: calc(100vw - 200px);
+  }
+}
+
 .svgDragover {
   fill: white;
   opacity: 1;

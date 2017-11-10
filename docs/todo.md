@@ -23,6 +23,7 @@ When I use script 1, it save it in
 - Use better icon for non existing script (other than warning)
 - Handle other thing than files (like text)
 
+
 ## 2 - Improve core scripting
 
 - Integrate script-processor inside a headleass/worker windows
@@ -34,6 +35,8 @@ When I use script 1, it save it in
 - scan and add YAML 'inception' on a second YAML to accept cross parameters.
 - chaining multiples cmd with array of commands
 - support npm as dependencies packages (for plugins)
+- Add a boilerplate support with core rules to fork into another app (for dev)
+- hack css & js by a onStart feature
 
 ## 3 - Auto-updater
 
