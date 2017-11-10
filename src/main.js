@@ -104,7 +104,7 @@ app.on('ready', () => {
 	const optsInit = {
 		minHeight: 300,
 		minWidth: 330,
-		icon: 'icons/icon.icns',
+		icon: path.join('icons/icon.png'),
 		show: false
 	};
 	const opts = {};

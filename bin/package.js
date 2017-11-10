@@ -570,11 +570,7 @@ function buildLinux(cb) {
 			info: {
 				arch: destArch === 'x64' ? 'amd64' : 'i386',
 				targetDir: DIST_PATH,
-				depends: 'gconf2, libgtk2.0-0, libnss3, libxss1',
-				scripts: {
-					postinst: path.join(config.STATIC_PATH, 'linux', 'postinst'),
-					prerm: path.join(config.STATIC_PATH, 'linux', 'prerm')
-				}
+				depends: 'dpkg, gconf2, libgtk2.0-0, libnss3'
 			}
 		}, [{
 			src: ['./**'],
@@ -585,7 +581,7 @@ function buildLinux(cb) {
 			src: ['./**'],
 			dest: path.join('/usr', 'share'),
 			expand: true,
-			cwd: path.join(config.STATIC_PATH, 'linux', 'share')
+			cwd: path.join('../assets/linux')
 		}], err => {
 			if (err) {
 				return cb(err);
