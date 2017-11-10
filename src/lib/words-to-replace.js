@@ -23,20 +23,20 @@ function tampaxParse(text, s) {
 
 // Asynchronous method, if we need to read entire file
 const getContent = function (text, s, callback) {
+	console.log('S', s);
+	console.log('text', text);
 	if (text.indexOf('{{inside}}') === -1) {
-		callback(null, tampaxParse(text, s));
-	} else {
-		fs.readFile(s.file, 'utf-8', (err, data) => {
-			if (err) {
-				callback(err);
-			} else {
-				result = data.toString().replace(/[\n\r]/g, '').trim();
-				console.log(result);
-				callback(null, tampaxParse(text, s));
-			}
-		}
-	);
+		return callback(null, tampaxParse(text, s));
 	}
+	fs.readFile(s.file, 'utf-8', (err, data) => {
+		if (err) {
+			return callback(err);
+		}
+		result = data.toString().replace(/[\n\r]/g, '').trim();
+		console.log(result);
+		return callback(null, tampaxParse(text, s));
+	}
+	);
 };
 
 module.exports = getContent;
