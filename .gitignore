@@ -1,0 +1,41 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode / macOS
+DerivedData/
+*.xcworkspace
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+*.xcuserdata/
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# Build products
+build/
+*.app
+*.dSYM
+*.ipa
+*.pkg
+
+# macOS Finder
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs / temp
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Local runtime data
+winegold.db
+*.sqlite
+*.sqlite3
+
+# Editor
+.vscode/
+.idea/
