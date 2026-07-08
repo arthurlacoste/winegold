@@ -74,6 +74,7 @@ class ActionCardView: NSView {
 
     override func mouseExited(with event: NSEvent) {
         isHovered = false
+        isPressed = false
         applyVisualState(animated: true)
     }
 
@@ -134,6 +135,7 @@ class ActionCardView: NSView {
     override func draggingExited(_ sender: NSDraggingInfo?) {
         logMsg("[ActionCardView] draggingExited for: \(action.name)")
         isHovered = false
+        isPressed = false
         applyVisualState(animated: true)
     }
 
@@ -172,13 +174,11 @@ class ActionCardView: NSView {
             }
         }
 
-        if animated {
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.12
-                ctx.allowsImplicitAnimation = true
-                changes()
-            }
-        } else {
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0
+            ctx.allowsImplicitAnimation = false
+            self.layer?.removeAllAnimations()
+            self.runCard.layer?.removeAllAnimations()
             changes()
         }
     }

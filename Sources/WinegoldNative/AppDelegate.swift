@@ -15,6 +15,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         logMsg("[AppDelegate] app started")
         setupDatabase()
+        setupMainMenu()
         setupMenuBar()
         setupEdgeCatcher()
     }
@@ -74,6 +75,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for action in DefaultActions.all where !existingNames.contains(action.name) {
             try store.createAction(action)
         }
+    }
+
+
+    private func setupMainMenu() {
+        let mainMenu = NSMenu(title: "Winegold")
+
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu(title: "Winegold")
+        appMenu.addItem(NSMenuItem(title: "Quit Winegold", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
+        let redo = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(redo)
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
+        NSApp.mainMenu = mainMenu
     }
 
     private func setupMenuBar() {
@@ -231,6 +259,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 
     private func importScripts(_ files: [URL], using action: Action, runHistoryStore: RunHistoryStore) {
+        actionPanelWindow?.markActionTriggered()
         guard let actionStore else { return }
         Task {
             let importer = LegacyActionImporter()
@@ -276,6 +305,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func runAction(_ action: Action, files: [URL]) {
+        actionPanelWindow?.markActionTriggered()
         guard let runHistoryStore = runHistoryStore else { return }
 
         if action.name == DefaultActions.installAddScriptName {

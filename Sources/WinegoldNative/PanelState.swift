@@ -12,4 +12,5 @@ class PanelState {
     var activeActionId: UUID?
     var runningActionName: String?
     var runningFiles: [URL] = []
+    var isCompact = false
 }

@@ -10,6 +10,7 @@ class ActionPanelViewController: NSViewController {
     private var runGeneration = 0
     private var lastLayoutWidth: CGFloat = 0
     private var lastHadStatusArea = false
+    private var isRefreshing = false
     private var lastFilesSignature = ""
 
     private let padding: CGFloat = 24
@@ -76,11 +77,22 @@ class ActionPanelViewController: NSViewController {
     }
 
     func refresh(animatedStatusInsert: Bool = false) {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
         let hasStatusArea = state.lastResult != nil || state.runningActionName != nil
-        let shouldAnimateStatusInsert = animatedStatusInsert || (!lastHadStatusArea && hasStatusArea)
-        contentView.subviews.forEach { $0.removeFromSuperview() }
-        cardViews.removeAll()
-        buildUI(animateStatusInsert: shouldAnimateStatusInsert)
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0
+            ctx.allowsImplicitAnimation = false
+            contentView.layer?.removeAllAnimations()
+            contentView.subviews.forEach {
+                $0.layer?.removeAllAnimations()
+                $0.removeFromSuperview()
+            }
+            cardViews.removeAll()
+            buildUI()
+        }
         lastHadStatusArea = hasStatusArea
     }
 
@@ -91,19 +103,25 @@ class ActionPanelViewController: NSViewController {
         lastLayoutWidth = panelWidth
         let w: CGFloat = panelWidth - padding * 2
 
+        if state.isCompact {
+            if let result = state.lastResult {
+                y += addResult(result: result, y: y, w: w)
+            } else if let runningActionName = state.runningActionName {
+                y += addLoading(actionName: runningActionName, y: y, w: w)
+            } else {
+                y += addLoading(actionName: "Action en cours", y: y, w: w)
+            }
+            installScrollView(panelWidth: panelWidth, contentHeight: max(y + 10, 98))
+            return
+        }
+
         addHeader(y: &y, w: w)
         addDivider(y: &y, w: w)
 
-        var statusStartY: CGFloat?
-        var statusHeight: CGFloat = 0
         if let result = state.lastResult {
-            statusStartY = y
-            statusHeight = addResult(result: result, y: y, w: w)
-            y += statusHeight
+            y += addResult(result: result, y: y, w: w)
         } else if let runningActionName = state.runningActionName {
-            statusStartY = y
-            statusHeight = addLoading(actionName: runningActionName, y: y, w: w)
-            y += statusHeight
+            y += addLoading(actionName: runningActionName, y: y, w: w)
         }
 
         if state.files.isEmpty {
@@ -123,9 +141,13 @@ class ActionPanelViewController: NSViewController {
             addHistorySection(y: &y, w: w)
         }
 
-        contentView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: max(y + 24, 520))
+        installScrollView(panelWidth: panelWidth, contentHeight: max(y + 24, 520))
+    }
+
+    private func installScrollView(panelWidth: CGFloat, contentHeight: CGFloat) {
+        contentView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: contentHeight)
         scrollView.documentView = contentView
-        scrollView.hasVerticalScroller = true
+        scrollView.hasVerticalScroller = !state.isCompact
         scrollView.autohidesScrollers = true
         scrollView.frame = view.bounds
         scrollView.autoresizingMask = [.width, .height]
@@ -133,37 +155,8 @@ class ActionPanelViewController: NSViewController {
         if scrollView.superview == nil {
             view.addSubview(scrollView)
         }
-
-        if animateStatusInsert, let statusStartY, statusHeight > 0 {
-            animateStatusInsertion(statusStartY: statusStartY, statusHeight: statusHeight)
-        }
     }
 
-
-    private func animateStatusInsertion(statusStartY: CGFloat, statusHeight: CGFloat) {
-        let statusEndY = statusStartY + statusHeight
-        for subview in contentView.subviews {
-            var finalFrame = subview.frame
-            if finalFrame.origin.y >= statusEndY - 1 {
-                subview.frame.origin.y = finalFrame.origin.y - statusHeight
-                NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = 0.18
-                    ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    subview.animator().setFrameOrigin(finalFrame.origin)
-                }
-            } else if finalFrame.origin.y >= statusStartY - 1 {
-                subview.alphaValue = 0
-                finalFrame.origin.y += 8
-                subview.frame.origin.y -= 8
-                NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = 0.16
-                    ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    subview.animator().alphaValue = 1
-                    subview.animator().setFrameOrigin(finalFrame.origin)
-                }
-            }
-        }
-    }
 
     private func setDraggedFiles(_ files: [URL]) {
         guard !files.isEmpty else { return }
@@ -178,6 +171,7 @@ class ActionPanelViewController: NSViewController {
         state.activeActionId = nil
         state.runningActionName = nil
         state.runningFiles = []
+        state.isCompact = false
         refresh()
     }
 
@@ -256,13 +250,14 @@ class ActionPanelViewController: NSViewController {
         state.activeActionId = action.id
         state.runningActionName = nil
         state.runningFiles = files
+        state.isCompact = false
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self else { return }
             guard self.runGeneration == generation else { return }
             guard self.state.lastResult == nil else { return }
             self.state.runningActionName = action.name
-            self.refresh(animatedStatusInsert: true)
+            self.refresh()
         }
 
         onRunAction(action, files)
@@ -398,7 +393,6 @@ class ActionPanelViewController: NSViewController {
             doc.textColor = .systemRed
             doc.isEditable = false
             doc.drawsBackground = false
-            doc.textColor = .labelColor
             scroll.documentView = doc
             scroll.hasVerticalScroller = true
             scroll.autohidesScrollers = true
@@ -427,7 +421,7 @@ class ActionPanelViewController: NSViewController {
             cy += 26
         }
 
-        container.frame.size.height = max(cy + 10, 60)
+        container.frame.size.height = min(max(cy + 10, 60), 190)
         contentView.addSubview(container)
         return container.frame.height + 16
     }
@@ -496,6 +490,7 @@ class ActionPanelViewController: NSViewController {
         state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
         state.lastResult = nil
         state.activeActionId = action.id
+        state.isCompact = false
         refresh()
         startRun(action: action, files: files)
     }
