@@ -147,7 +147,7 @@ public struct ActionStore {
             acceptedExtensions: extsStr.isEmpty ? [] : extsStr.components(separatedBy: ","),
             acceptedUTIs: utisStr.isEmpty ? [] : utisStr.components(separatedBy: ","),
             executablePath: stmt.columnText(at: 7),
-            argumentsTemplate: argsStr.isEmpty ? [] : argsStr.components(separatedBy: "\n"),
+            argumentsTemplate: decodeArgumentsTemplate(argsStr, executablePath: stmt.columnText(at: 7)),
             workingDirectoryTemplate: stmt.columnIsNull(at: 9) ? nil : stmt.columnText(at: 9),
             outputPathTemplate: stmt.columnIsNull(at: 10) ? nil : stmt.columnText(at: 10),
             requiresConfirmation: stmt.columnInt(at: 11) != 0,
@@ -169,6 +169,29 @@ public struct ActionStore {
         stmt.bindText(action.id.uuidString, at: 17)
     }
 
+    private func encodeArgumentsTemplate(_ arguments: [String]) -> String {
+        guard !arguments.isEmpty else { return "" }
+        if let data = try? JSONEncoder().encode(arguments), let json = String(data: data, encoding: .utf8) {
+            return json
+        }
+        return arguments.joined(separator: "\n")
+    }
+
+    private func decodeArgumentsTemplate(_ storedValue: String, executablePath: String) -> [String] {
+        guard !storedValue.isEmpty else { return [] }
+
+        if let data = storedValue.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            return decoded
+        }
+
+        if executablePath == "/bin/zsh", storedValue.hasPrefix("-lc\n") {
+            return ["-lc", String(storedValue.dropFirst(4))]
+        }
+
+        return storedValue.components(separatedBy: "\n")
+    }
+
     private func bindActionFields(_ action: Action, to stmt: Statement, startingAt start: Int32) {
         stmt.bindText(action.name, at: start)
         stmt.bindText(action.description, at: start + 1)
@@ -181,7 +204,7 @@ public struct ActionStore {
         stmt.bindText(action.acceptedExtensions.joined(separator: ","), at: start + 4)
         stmt.bindText(action.acceptedUTIs.joined(separator: ","), at: start + 5)
         stmt.bindText(action.executablePath, at: start + 6)
-        stmt.bindText(action.argumentsTemplate.joined(separator: "\n"), at: start + 7)
+        stmt.bindText(encodeArgumentsTemplate(action.argumentsTemplate), at: start + 7)
         if let wd = action.workingDirectoryTemplate {
             stmt.bindText(wd, at: start + 8)
         } else {

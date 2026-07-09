@@ -90,6 +90,47 @@ final class ActionStoreTests: XCTestCase {
         XCTAssertEqual(loaded.displayOrder, original.displayOrder)
     }
 
+
+    func testRoundTripPreservesMultilineShellCommand() throws {
+        let command = """
+        TMP_WEBP="/tmp/{basename}-{timestamp}.webp"
+        LOG="{desktop}/uploadfile-full.log"
+        echo "{input}"
+        """
+        let original = Action(
+            name: "Upload",
+            executablePath: "/bin/zsh",
+            argumentsTemplate: ["-lc", command]
+        )
+
+        try store.createAction(original)
+
+        let loaded = try XCTUnwrap(store.listActions().first)
+        XCTAssertEqual(loaded.argumentsTemplate, original.argumentsTemplate)
+        XCTAssertEqual(loaded.argumentsTemplate[1], command)
+    }
+
+    func testDecodesLegacyMultilineZshCommandAsSingleArgument() throws {
+        let id = UUID()
+        let command = """
+        first line
+        second line
+        third line
+        """
+        let stmt = try db.prepare("""
+            INSERT INTO actions (id, name, description, icon_name, enabled, accepted_extensions,
+            accepted_utis, executable_path, arguments_template, working_directory_template,
+            output_path_template, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at)
+            VALUES (?, 'Legacy multiline', '', NULL, 1, 'txt', '', '/bin/zsh', ?, NULL, NULL, 0, 120, 0, 0, '2026-01-01T00:00:00+0000', '2026-01-01T00:00:00+0000')
+        """)
+        stmt.bindText(id.uuidString, at: 1)
+        stmt.bindText("-lc\n" + command, at: 2)
+        _ = stmt.step()
+
+        let loaded = try XCTUnwrap(store.listActions().first)
+        XCTAssertEqual(loaded.argumentsTemplate, ["-lc", command])
+    }
+
     func testFavoriteActionsSortFirst() throws {
         let normal = Action(name: "A", executablePath: "/bin/echo", displayOrder: 0)
         let favorite = Action(name: "B", executablePath: "/bin/echo", isFavorite: true, displayOrder: 1)
