@@ -402,26 +402,16 @@ class SettingsViewController: NSViewController {
         return slug.isEmpty ? "winegold-action" : slug
     }
 
-    private func promptURL(for action: Action) -> URL? {
-        let prompt = """
-        Help me improve this Winegold Native script.
+    private func helpPrompt(for action: Action) -> String {
+        ScriptingHelpPrompt.make(
+            scriptName: action.name,
+            extensions: action.acceptedExtensions,
+            command: shellCommand(for: action)
+        )
+    }
 
-        Use this documentation as the single source of truth.
-
-        \(ScriptingGuide.text)
-
-        Current script:
-        Script name: \(action.name)
-        Extensions: \(action.acceptedExtensions.joined(separator: ", "))
-        Command:
-        \(shellCommand(for: action))
-
-        Return a corrected .add.yml script and explain briefly what changed.
-        Use only placeholders documented above.
-        """
-        var components = URLComponents(string: "https://chatgpt.com/")
-        components?.queryItems = [URLQueryItem(name: "prompt", value: prompt)]
-        return components?.url
+    private func chatGPTURL() -> URL? {
+        URL(string: "https://chatgpt.com/")
     }
 
     private func testCurrentAction(with files: [URL]) {
@@ -559,11 +549,15 @@ class SettingsViewController: NSViewController {
             showMessage("Name, extensions and command are required before opening the prompt.")
             return
         }
-        guard let url = promptURL(for: action) else {
-            showMessage("Could not build ChatGPT prompt URL.")
-            return
+
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(helpPrompt(for: action), forType: .string)
+
+        if let url = chatGPTURL() {
+            NSWorkspace.shared.open(url)
         }
-        NSWorkspace.shared.open(url)
+        showMessage("Help prompt copied to clipboard. Paste it into ChatGPT.")
     }
 
     @objc private func launchAtLoginChanged() {
