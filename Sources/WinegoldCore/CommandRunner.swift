@@ -8,9 +8,9 @@ public enum CommandRunnerError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .executableNotFound(let path): return "Exécutable introuvable : \(path)"
-        case .notExecutable(let path): return "Non exécutable : \(path)"
-        case .timeout(let seconds): return "Timeout après \(seconds)s"
+        case .executableNotFound(let path): return "Executable not found: \(path)"
+        case .notExecutable(let path): return "Not executable: \(path)"
+        case .timeout(let seconds): return "Timeout after \(seconds)s"
         case .processError(let msg): return msg
         }
     }

@@ -120,7 +120,7 @@ class SettingsViewController: NSViewController {
         scriptTitle.frame = NSRect(x: padding, y: y, width: 220, height: 24)
         view.addSubview(scriptTitle)
 
-        let hint = NSTextField(labelWithString: "Edit shell actions. Legacy .add.yml files can be imported from here, or by dragging them into Winegold.")
+        let hint = NSTextField(labelWithString: "Edit shell actions. .add.yml files can be imported from here, or by dragging them into Winegold.")
         hint.font = .systemFont(ofSize: 12)
         hint.textColor = .secondaryLabelColor
         hint.frame = NSRect(x: padding + 170, y: y + 3, width: w - 170, height: 20)
@@ -197,7 +197,7 @@ class SettingsViewController: NSViewController {
         view.addSubview(scroll)
         y += 186
 
-        let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}. Legacy {{file}} style is converted on YAML import.")
+        let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}. {{file}} style placeholders are converted on YAML import.")
         placeholderHelp.font = .systemFont(ofSize: 11)
         placeholderHelp.textColor = .tertiaryLabelColor
         placeholderHelp.lineBreakMode = .byWordWrapping

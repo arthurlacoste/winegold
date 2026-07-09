@@ -15,7 +15,7 @@ public struct DefaultActions {
             outputPathTemplate: nil
         ),
         Action(
-            name: "Ouvrir dossier",
+            name: "Open Folder",
             description: "Open parent folder in Finder",
             iconName: "folder",
             acceptedExtensions: ["*"],
@@ -25,7 +25,7 @@ public struct DefaultActions {
         ),
         Action(
             name: installAddScriptName,
-            description: "Import a legacy Winegold .add.yml script as an action",
+            description: "Import a Winegold .add.yml script as an action",
             iconName: "plus.square.dashed",
             acceptedExtensions: ["yml", "yaml"],
             executablePath: "/bin/echo",

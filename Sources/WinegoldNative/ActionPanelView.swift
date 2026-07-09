@@ -310,13 +310,13 @@ class ActionPanelViewController: NSViewController {
         spinner.startAnimation(nil)
         container.addSubview(spinner)
 
-        let title = NSTextField(labelWithString: "En mouvement…")
+        let title = NSTextField(labelWithString: "Running…")
         title.font = .systemFont(ofSize: 13, weight: .bold)
         title.textColor = .controlTextColor
         title.frame = NSRect(x: 54, y: 15, width: w - 70, height: 20)
         container.addSubview(title)
 
-        let subtitle = NSTextField(labelWithString: "Action en cours: \(actionName)")
+        let subtitle = NSTextField(labelWithString: "Running action: \(actionName)")
         subtitle.font = .systemFont(ofSize: 11)
         subtitle.textColor = .secondaryLabelColor
         subtitle.lineBreakMode = .byTruncatingTail
