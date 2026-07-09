@@ -73,6 +73,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             try store.updateAction(updated)
         }
 
+        let afterPrintRename = try store.listActions()
+        if let oldOpenFolder = afterPrintRename.first(where: { $0.name == "Ouvrir dossier" }) {
+            let updated = Action(
+                id: oldOpenFolder.id,
+                name: "Open Folder",
+                description: "Open parent folder in Finder",
+                iconName: "folder",
+                enabled: oldOpenFolder.enabled,
+                acceptedExtensions: oldOpenFolder.acceptedExtensions,
+                acceptedUTIs: oldOpenFolder.acceptedUTIs,
+                executablePath: oldOpenFolder.executablePath,
+                argumentsTemplate: oldOpenFolder.argumentsTemplate,
+                workingDirectoryTemplate: oldOpenFolder.workingDirectoryTemplate,
+                outputPathTemplate: oldOpenFolder.outputPathTemplate,
+                requiresConfirmation: oldOpenFolder.requiresConfirmation,
+                timeoutSeconds: oldOpenFolder.timeoutSeconds,
+                isFavorite: oldOpenFolder.isFavorite,
+                displayOrder: oldOpenFolder.displayOrder,
+                createdAt: oldOpenFolder.createdAt,
+                updatedAt: Date()
+            )
+            try store.updateAction(updated)
+            try store.deleteDuplicateActionsByName(keeping: "Open Folder")
+        }
+
         let existingNames = Set(try store.listActions().map { $0.name })
         for action in DefaultActions.all where !existingNames.contains(action.name) {
             try store.createAction(action)
