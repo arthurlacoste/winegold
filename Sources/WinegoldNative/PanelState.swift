@@ -13,5 +13,24 @@ class PanelState {
     var activeActionId: UUID?
     var runningActionName: String?
     var runningFiles: [URL] = []
+    var runningCurrentFile: URL?
+    var runningFileIndex: Int?
+    var runningFileCount = 0
+    var runningCommand: String?
+    var runningWorkingDirectory: String?
+    var runningStdout = ""
+    var runningStderr = ""
     var isCompact = false
+
+    func clearRunningDetails() {
+        runningActionName = nil
+        runningFiles = []
+        runningCurrentFile = nil
+        runningFileIndex = nil
+        runningFileCount = 0
+        runningCommand = nil
+        runningWorkingDirectory = nil
+        runningStdout = ""
+        runningStderr = ""
+    }
 }

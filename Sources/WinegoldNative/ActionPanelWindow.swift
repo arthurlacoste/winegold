@@ -112,8 +112,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.lastResult = nil
         panelState.batchResults = []
         panelState.activeActionId = nil
-        panelState.runningActionName = nil
-        panelState.runningFiles = []
+        panelState.clearRunningDetails()
         panelState.isCompact = false
         actionTriggeredSinceShow = false
         cancelHideAfterSuccess()
@@ -437,14 +436,38 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     func beginRun(actionName: String, files: [URL]) {
         panelState.batchResults = []
         panelState.lastResult = nil
+        panelState.clearRunningDetails()
         panelState.runningActionName = actionName
         panelState.runningFiles = files
         panelVC.refresh()
     }
 
+    func updateRunningProgress(
+        actionName: String,
+        file: URL,
+        fileIndex: Int,
+        fileCount: Int,
+        request: CommandExecutionRequest,
+        stdout: String = "",
+        stderr: String = ""
+    ) {
+        panelState.lastResult = nil
+        panelState.runningActionName = actionName
+        panelState.runningCurrentFile = file
+        panelState.runningFileIndex = fileIndex
+        panelState.runningFileCount = fileCount
+        panelState.runningCommand = request.displayCommand
+        panelState.runningWorkingDirectory = request.workingDirectory
+        panelState.runningStdout = stdout
+        panelState.runningStderr = stderr
+        panelVC.refresh()
+    }
+
     func showRunningResult(result: CommandResult) {
-        panelState.lastResult = result
+        panelState.lastResult = nil
         panelState.runningActionName = result.actionName
+        panelState.runningStdout = result.stdout
+        panelState.runningStderr = result.stderr
         panelVC.refresh()
     }
 
@@ -456,8 +479,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
 
     func showRunResult(result: CommandResult) {
         let wasCompact = panelState.isCompact
-        panelState.runningActionName = nil
-        panelState.runningFiles = []
+        panelState.clearRunningDetails()
         panelState.lastResult = result
 
         switch result.status {

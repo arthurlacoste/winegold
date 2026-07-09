@@ -20,4 +20,21 @@ public struct CommandExecutionRequest {
         self.timeoutSeconds = timeoutSeconds
         self.environment = environment
     }
+
+    public var displayCommand: String {
+        ([executablePath] + arguments)
+            .map(Self.shellQuote)
+            .joined(separator: " ")
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        guard !value.isEmpty else { return "''" }
+
+        let safe = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-./:=@,%")
+        if value.unicodeScalars.allSatisfy({ safe.contains($0) }) {
+            return value
+        }
+
+        return "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
 }

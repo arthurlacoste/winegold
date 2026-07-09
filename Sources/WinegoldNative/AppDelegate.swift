@@ -450,7 +450,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             var batchHadFailure = false
-            for file in files {
+            for (offset, file) in files.enumerated() {
                 let args = resolver.resolve(argumentsTemplate: action.argumentsTemplate, for: file)
                 let wd = resolver.resolve(workingDirectoryTemplate: action.workingDirectoryTemplate, for: file)
 
@@ -460,21 +460,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     workingDirectory: wd,
                     timeoutSeconds: action.timeoutSeconds
                 )
+                let fileIndex = offset + 1
+
+                await MainActor.run {
+                    self.actionPanelWindow?.updateRunningProgress(
+                        actionName: action.name,
+                        file: file,
+                        fileIndex: fileIndex,
+                        fileCount: files.count,
+                        request: request
+                    )
+                }
 
                 let startedAt = Date()
                 var result = await runner.run(request: request, onOutput: { [weak self] stdout, stderr in
                     guard Date().timeIntervalSince(startedAt) >= 0.3 else { return }
-                    let running = CommandResult(
-                        actionId: action.id,
-                        actionName: action.name,
-                        inputFiles: [file.path],
-                        status: .running,
-                        stdout: stdout,
-                        stderr: stderr,
-                        startedAt: startedAt
-                    )
                     Task { @MainActor in
-                        self?.actionPanelWindow?.showRunningResult(result: running)
+                        self?.actionPanelWindow?.updateRunningProgress(
+                            actionName: action.name,
+                            file: file,
+                            fileIndex: fileIndex,
+                            fileCount: files.count,
+                            request: request,
+                            stdout: stdout,
+                            stderr: stderr
+                        )
                     }
                 })
                 result.actionId = action.id

@@ -180,8 +180,7 @@ class ActionPanelViewController: NSViewController {
         state.lastResult = nil
         state.batchResults = []
         state.activeActionId = nil
-        state.runningActionName = nil
-        state.runningFiles = []
+        state.clearRunningDetails()
         state.isCompact = false
         refresh()
     }
@@ -260,7 +259,7 @@ class ActionPanelViewController: NSViewController {
         state.lastResult = nil
         state.batchResults = []
         state.activeActionId = action.id
-        state.runningActionName = nil
+        state.clearRunningDetails()
         state.runningFiles = files
         state.isCompact = false
 
@@ -268,6 +267,7 @@ class ActionPanelViewController: NSViewController {
             guard let self else { return }
             guard self.runGeneration == generation else { return }
             guard self.state.lastResult == nil else { return }
+            guard self.state.runningActionName == nil else { return }
             self.state.runningActionName = action.name
             self.refresh()
         }
@@ -326,7 +326,7 @@ class ActionPanelViewController: NSViewController {
         container.layer?.borderWidth = 1
         container.layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor
 
-        let spinner = NSProgressIndicator(frame: NSRect(x: 14, y: 20, width: 28, height: 28))
+        let spinner = NSProgressIndicator(frame: NSRect(x: 14, y: 18, width: 28, height: 28))
         spinner.style = .spinning
         spinner.controlSize = .regular
         spinner.isIndeterminate = true
@@ -336,18 +336,121 @@ class ActionPanelViewController: NSViewController {
         let title = NSTextField(labelWithString: "Running…")
         title.font = .systemFont(ofSize: 13, weight: .bold)
         title.textColor = .controlTextColor
-        title.frame = NSRect(x: 54, y: 15, width: w - 70, height: 20)
+        title.frame = NSRect(x: 54, y: 13, width: w - 70, height: 20)
         container.addSubview(title)
 
         let subtitle = NSTextField(labelWithString: "Running action: \(actionName)")
         subtitle.font = .systemFont(ofSize: 11)
         subtitle.textColor = .secondaryLabelColor
         subtitle.lineBreakMode = .byTruncatingTail
-        subtitle.frame = NSRect(x: 54, y: 37, width: w - 70, height: 18)
+        subtitle.frame = NSRect(x: 54, y: 34, width: w - 70, height: 18)
         container.addSubview(subtitle)
 
+        var cy: CGFloat = 62
+        let detailX: CGFloat = 54
+        let detailW: CGFloat = w - 68
+
+        if state.isCompact {
+            if let fileText = runningFileText() {
+                addCompactRunningLine(fileText, x: detailX, y: cy, w: detailW, to: container)
+                cy += 18
+            }
+            if let output = latestRunningOutputLine() {
+                addCompactRunningLine(output, x: detailX, y: cy, w: detailW, to: container)
+                cy += 18
+            } else if let command = state.runningCommand {
+                addCompactRunningLine("Command: \(command)", x: detailX, y: cy, w: detailW, to: container)
+                cy += 18
+            }
+
+            container.frame.size.height = max(cy + 10, 86)
+            contentView.addSubview(container)
+            return container.frame.height + 16
+        }
+
+        if let fileText = runningFileText() {
+            addRunningLabel("File", value: fileText, y: &cy, w: w, to: container)
+        }
+
+        if let workingDirectory = state.runningWorkingDirectory, !workingDirectory.isEmpty {
+            addRunningLabel("Working directory", value: workingDirectory, y: &cy, w: w, to: container)
+        }
+
+        if let command = state.runningCommand, !command.isEmpty {
+            addRunningTextBlock(title: "Command", text: command, color: .labelColor, height: 44, y: &cy, w: w, to: container)
+        }
+
+        if !state.runningStdout.isEmpty {
+            addRunningTextBlock(title: "Live output", text: state.runningStdout, color: .labelColor, height: 62, y: &cy, w: w, to: container)
+        }
+
+        if !state.runningStderr.isEmpty {
+            addRunningTextBlock(title: "Live error", text: state.runningStderr, color: .systemRed, height: 48, y: &cy, w: w, to: container)
+        }
+
+        container.frame.size.height = min(max(cy + 12, 74), 280)
         contentView.addSubview(container)
-        return 90
+        return container.frame.height + 16
+    }
+
+    private func runningFileText() -> String? {
+        guard let file = state.runningCurrentFile else { return nil }
+        let name = file.lastPathComponent
+        guard let index = state.runningFileIndex, state.runningFileCount > 1 else { return name }
+        return "\(name) (\(index)/\(state.runningFileCount))"
+    }
+
+    private func latestRunningOutputLine() -> String? {
+        let combined = [state.runningStderr, state.runningStdout]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        let lines = combined
+            .split(whereSeparator: { $0.isNewline })
+            .map(String.init)
+        guard let last = lines.last, !last.isEmpty else { return nil }
+        return last
+    }
+
+    private func addCompactRunningLine(_ text: String, x: CGFloat, y: CGFloat, w: CGFloat, to container: NSView) {
+        let label = NSTextField(labelWithString: text)
+        label.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingMiddle
+        label.frame = NSRect(x: x, y: y, width: w, height: 16)
+        container.addSubview(label)
+    }
+
+    private func addRunningLabel(_ title: String, value: String, y: inout CGFloat, w: CGFloat, to container: NSView) {
+        let label = NSTextField(labelWithString: "\(title): \(value)")
+        label.font = .systemFont(ofSize: 11)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingMiddle
+        label.frame = NSRect(x: 54, y: y, width: w - 68, height: 18)
+        container.addSubview(label)
+        y += 20
+    }
+
+    private func addRunningTextBlock(title: String, text: String, color: NSColor, height: CGFloat, y: inout CGFloat, w: CGFloat, to container: NSView) {
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.font = .systemFont(ofSize: 10)
+        titleLabel.textColor = .secondaryLabelColor
+        titleLabel.frame = NSRect(x: 54, y: y, width: w - 68, height: 14)
+        container.addSubview(titleLabel)
+        y += 16
+
+        let scroll = NSScrollView(frame: NSRect(x: 54, y: y, width: w - 68, height: height))
+        let doc = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 68, height: height))
+        doc.string = text
+        doc.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        doc.isEditable = false
+        doc.drawsBackground = false
+        doc.textColor = color
+        scroll.documentView = doc
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        container.addSubview(scroll)
+        y += height + 10
     }
 
     private func addResult(result: CommandResult, y: CGFloat, w: CGFloat) -> CGFloat {
@@ -522,8 +625,7 @@ class ActionPanelViewController: NSViewController {
             startedAt: item.startedAt,
             endedAt: item.endedAt
         )
-        state.runningActionName = nil
-        state.runningFiles = []
+        state.clearRunningDetails()
         state.isCompact = false
         refresh()
     }
@@ -547,6 +649,7 @@ class ActionPanelViewController: NSViewController {
         state.lastResult = nil
         state.batchResults = []
         state.activeActionId = action.id
+        state.clearRunningDetails()
         state.isCompact = false
         refresh()
         startRun(action: action, files: files)
