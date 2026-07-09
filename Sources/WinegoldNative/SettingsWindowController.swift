@@ -18,7 +18,7 @@ class SettingsWindowController: NSWindowController {
             defer: false
         )
         window.title = "Winegold Settings"
-        window.level = .screenSaver
+        window.level = .normal
         window.isReleasedWhenClosed = false
         window.center()
 
@@ -36,7 +36,7 @@ class SettingsWindowController: NSWindowController {
 
     func show() {
         refreshActions()
-        window?.level = .screenSaver
+        window?.level = .normal
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
         window?.orderFrontRegardless()
@@ -402,11 +402,18 @@ class SettingsViewController: NSViewController {
         return slug.isEmpty ? "winegold-action" : slug
     }
 
-    private func helpPrompt(for action: Action) -> String {
+    private func currentExtensions() -> [String] {
+        extensionsField.stringValue
+            .components(separatedBy: CharacterSet(charactersIn: ", \n\t"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+    }
+
+    private func helpPromptFromForm() -> String {
         ScriptingHelpPrompt.make(
-            scriptName: action.name,
-            extensions: action.acceptedExtensions,
-            command: shellCommand(for: action)
+            scriptName: nameField.stringValue,
+            extensions: currentExtensions(),
+            command: commandTextView.string
         )
     }
 
@@ -545,19 +552,15 @@ class SettingsViewController: NSViewController {
     }
 
     @objc private func openHelpPrompt() {
-        guard let action = currentEditedAction() else {
-            showMessage("Name, extensions and command are required before opening the prompt.")
-            return
-        }
-
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(helpPrompt(for: action), forType: .string)
+        pasteboard.setString(helpPromptFromForm(), forType: .string)
 
         if let url = chatGPTURL() {
+            view.window?.orderBack(nil)
             NSWorkspace.shared.open(url)
         }
-        showMessage("Help prompt copied to clipboard. Paste it into ChatGPT.")
+        testResultTextView.string = "Help prompt copied to clipboard. Paste it into ChatGPT."
     }
 
     @objc private func launchAtLoginChanged() {

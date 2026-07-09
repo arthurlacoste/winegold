@@ -18,6 +18,21 @@ final class ScriptingHelpPromptTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Extensions: txt, js, php"))
     }
 
+
+    func testPromptAllowsEmptyCurrentScriptFields() {
+        let prompt = ScriptingHelpPrompt.make(
+            scriptName: "",
+            extensions: [],
+            command: "",
+            documentation: "Doc with {input}"
+        )
+
+        XCTAssertTrue(prompt.contains("Some current script fields may be empty"))
+        XCTAssertTrue(prompt.contains("Script name: (not provided)"))
+        XCTAssertTrue(prompt.contains("Extensions: (not provided)"))
+        XCTAssertTrue(prompt.contains("Command:\n(not provided)"))
+    }
+
     func testPromptDoesNotContainOldHardcodedHelp() {
         let prompt = ScriptingHelpPrompt.make(
             scriptName: "Test",
