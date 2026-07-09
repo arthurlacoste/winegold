@@ -290,6 +290,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onOpenSettings: { [weak self] in
                     self?.openSettings()
+                },
+                onToggleFavorite: { [weak self] action in
+                    self?.toggleActionFavorite(action)
+                },
+                onMoveAction: { [weak self] source, target in
+                    self?.moveAction(source, before: target)
                 }
             )
             actionPanelWindow = panel
@@ -298,6 +304,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.show()
     }
 
+
+    private func refreshPanelActions() {
+        guard let actionStore else { return }
+        let actions = (try? actionStore.listEnabledActions()) ?? []
+        let matched = ActionMatcher().matchingActions(for: actionPanelWindow?.currentFiles ?? [], actions: actions)
+        actionPanelWindow?.replaceActions(allActions: actions, actions: matched)
+    }
+
+    private func toggleActionFavorite(_ action: Action) {
+        guard let actionStore else { return }
+        do {
+            try actionStore.setFavorite(id: action.id, isFavorite: !action.isFavorite)
+            refreshPanelActions()
+        } catch {
+            logMsg("[AppDelegate] favorite failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func moveAction(_ source: Action, before target: Action) {
+        guard let actionStore else { return }
+        do {
+            try actionStore.moveAction(sourceID: source.id, before: target.id)
+            refreshPanelActions()
+        } catch {
+            logMsg("[AppDelegate] move action failed: \(error.localizedDescription)")
+        }
+    }
 
     private func toggleSavedRun(_ item: RunHistoryItem) {
         if savedRunStore.isSaved(item) {

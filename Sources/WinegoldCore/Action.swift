@@ -18,6 +18,8 @@ public struct Action: Identifiable, Codable, Equatable {
 
     public var requiresConfirmation: Bool
     public var timeoutSeconds: Int
+    public var isFavorite: Bool
+    public var displayOrder: Int
 
     public var createdAt: Date
     public var updatedAt: Date
@@ -36,6 +38,8 @@ public struct Action: Identifiable, Codable, Equatable {
         outputPathTemplate: String? = nil,
         requiresConfirmation: Bool = false,
         timeoutSeconds: Int = 30,
+        isFavorite: Bool = false,
+        displayOrder: Int = 0,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -52,6 +56,8 @@ public struct Action: Identifiable, Codable, Equatable {
         self.outputPathTemplate = outputPathTemplate
         self.requiresConfirmation = requiresConfirmation
         self.timeoutSeconds = timeoutSeconds
+        self.isFavorite = isFavorite
+        self.displayOrder = displayOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

@@ -11,8 +11,12 @@ public struct ActionStore {
         dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
     }
 
+    private var actionColumns: String {
+        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, executable_path, arguments_template, working_directory_template, output_path_template, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at"
+    }
+
     public func listActions() throws -> [Action] {
-        let stmt = try db.prepare("SELECT * FROM actions ORDER BY name")
+        let stmt = try db.prepare("SELECT \(actionColumns) FROM actions ORDER BY is_favorite DESC, display_order ASC, name ASC")
         var actions: [Action] = []
         while stmt.step() {
             actions.append(try rowToAction(stmt))
@@ -21,7 +25,7 @@ public struct ActionStore {
     }
 
     public func listEnabledActions() throws -> [Action] {
-        let stmt = try db.prepare("SELECT * FROM actions WHERE enabled = 1 ORDER BY name")
+        let stmt = try db.prepare("SELECT \(actionColumns) FROM actions WHERE enabled = 1 ORDER BY is_favorite DESC, display_order ASC, name ASC")
         var actions: [Action] = []
         while stmt.step() {
             actions.append(try rowToAction(stmt))
@@ -33,8 +37,8 @@ public struct ActionStore {
         let stmt = try db.prepare("""
             INSERT INTO actions (id, name, description, icon_name, enabled, accepted_extensions,
             accepted_utis, executable_path, arguments_template, working_directory_template,
-            output_path_template, requires_confirmation, timeout_seconds, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            output_path_template, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """)
         bindAction(action, to: stmt)
         _ = stmt.step()
@@ -58,6 +62,8 @@ public struct ActionStore {
                 outputPathTemplate: action.outputPathTemplate,
                 requiresConfirmation: action.requiresConfirmation,
                 timeoutSeconds: action.timeoutSeconds,
+                isFavorite: existing.isFavorite,
+                displayOrder: existing.displayOrder,
                 createdAt: existing.createdAt,
                 updatedAt: Date()
             )
@@ -81,8 +87,8 @@ public struct ActionStore {
         let stmt = try db.prepare("""
             UPDATE actions SET name=?, description=?, icon_name=?, enabled=?, accepted_extensions=?,
             accepted_utis=?, executable_path=?, arguments_template=?, working_directory_template=?,
-            output_path_template=?, requires_confirmation=?, timeout_seconds=?, created_at=?,
-            updated_at=? WHERE id=?
+            output_path_template=?, requires_confirmation=?, timeout_seconds=?, is_favorite=?,
+            display_order=?, created_at=?, updated_at=? WHERE id=?
         """)
         bindActionForUpdate(action, to: stmt)
         _ = stmt.step()
@@ -92,6 +98,31 @@ public struct ActionStore {
         let stmt = try db.prepare("DELETE FROM actions WHERE id = ?")
         stmt.bindText(id.uuidString, at: 1)
         _ = stmt.step()
+    }
+
+    public func setFavorite(id: UUID, isFavorite: Bool) throws {
+        let stmt = try db.prepare("UPDATE actions SET is_favorite=?, updated_at=? WHERE id=?")
+        stmt.bindInt(isFavorite ? 1 : 0, at: 1)
+        stmt.bindText(dateFormatter.string(from: Date()), at: 2)
+        stmt.bindText(id.uuidString, at: 3)
+        _ = stmt.step()
+    }
+
+    public func moveAction(sourceID: UUID, before targetID: UUID) throws {
+        var ordered = try listActions()
+        guard let sourceIndex = ordered.firstIndex(where: { $0.id == sourceID }),
+              let targetIndex = ordered.firstIndex(where: { $0.id == targetID }),
+              sourceID != targetID else { return }
+        let source = ordered.remove(at: sourceIndex)
+        let adjustedTargetIndex = ordered.firstIndex(where: { $0.id == targetID }) ?? targetIndex
+        ordered.insert(source, at: adjustedTargetIndex)
+        for (index, action) in ordered.enumerated() {
+            let stmt = try db.prepare("UPDATE actions SET display_order=?, updated_at=? WHERE id=?")
+            stmt.bindInt(index, at: 1)
+            stmt.bindText(dateFormatter.string(from: Date()), at: 2)
+            stmt.bindText(action.id.uuidString, at: 3)
+            _ = stmt.step()
+        }
     }
 
     public func count() throws -> Int {
@@ -121,8 +152,10 @@ public struct ActionStore {
             outputPathTemplate: stmt.columnIsNull(at: 10) ? nil : stmt.columnText(at: 10),
             requiresConfirmation: stmt.columnInt(at: 11) != 0,
             timeoutSeconds: stmt.columnInt(at: 12),
-            createdAt: dateFormatter.date(from: stmt.columnText(at: 13)) ?? Date(),
-            updatedAt: dateFormatter.date(from: stmt.columnText(at: 14)) ?? Date()
+            isFavorite: stmt.columnInt(at: 13) != 0,
+            displayOrder: stmt.columnInt(at: 14),
+            createdAt: dateFormatter.date(from: stmt.columnText(at: 15)) ?? Date(),
+            updatedAt: dateFormatter.date(from: stmt.columnText(at: 16)) ?? Date()
         )
     }
 
@@ -133,7 +166,7 @@ public struct ActionStore {
 
     private func bindActionForUpdate(_ action: Action, to stmt: Statement) {
         bindActionFields(action, to: stmt, startingAt: 1)
-        stmt.bindText(action.id.uuidString, at: 15)
+        stmt.bindText(action.id.uuidString, at: 17)
     }
 
     private func bindActionFields(_ action: Action, to stmt: Statement, startingAt start: Int32) {
@@ -161,7 +194,9 @@ public struct ActionStore {
         }
         stmt.bindInt(action.requiresConfirmation ? 1 : 0, at: start + 10)
         stmt.bindInt(action.timeoutSeconds, at: start + 11)
-        stmt.bindText(dateFormatter.string(from: action.createdAt), at: start + 12)
-        stmt.bindText(dateFormatter.string(from: action.updatedAt), at: start + 13)
+        stmt.bindInt(action.isFavorite ? 1 : 0, at: start + 12)
+        stmt.bindInt(action.displayOrder, at: start + 13)
+        stmt.bindText(dateFormatter.string(from: action.createdAt), at: start + 14)
+        stmt.bindText(dateFormatter.string(from: action.updatedAt), at: start + 15)
     }
 }

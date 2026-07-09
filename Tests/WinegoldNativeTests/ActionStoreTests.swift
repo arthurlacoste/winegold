@@ -69,7 +69,9 @@ final class ActionStoreTests: XCTestCase {
             workingDirectoryTemplate: "{parent}",
             outputPathTemplate: "{parent}/{basename}.webp",
             requiresConfirmation: false,
-            timeoutSeconds: 60
+            timeoutSeconds: 60,
+            isFavorite: true,
+            displayOrder: 7
         )
         try store.createAction(original)
 
@@ -84,5 +86,24 @@ final class ActionStoreTests: XCTestCase {
         XCTAssertEqual(loaded.workingDirectoryTemplate, original.workingDirectoryTemplate)
         XCTAssertEqual(loaded.outputPathTemplate, original.outputPathTemplate)
         XCTAssertEqual(loaded.timeoutSeconds, original.timeoutSeconds)
+        XCTAssertEqual(loaded.isFavorite, original.isFavorite)
+        XCTAssertEqual(loaded.displayOrder, original.displayOrder)
+    }
+
+    func testFavoriteActionsSortFirst() throws {
+        let normal = Action(name: "A", executablePath: "/bin/echo", displayOrder: 0)
+        let favorite = Action(name: "B", executablePath: "/bin/echo", isFavorite: true, displayOrder: 1)
+        try store.createAction(normal)
+        try store.createAction(favorite)
+        XCTAssertEqual(try store.listActions().first?.name, "B")
+    }
+
+    func testMoveActionUpdatesDisplayOrder() throws {
+        let first = Action(name: "A", executablePath: "/bin/echo", displayOrder: 0)
+        let second = Action(name: "B", executablePath: "/bin/echo", displayOrder: 1)
+        try store.createAction(first)
+        try store.createAction(second)
+        try store.moveAction(sourceID: second.id, before: first.id)
+        XCTAssertEqual(try store.listActions().map { $0.name }, ["B", "A"])
     }
 }

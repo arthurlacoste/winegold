@@ -28,7 +28,9 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         settingsStore: SettingsStore,
         onRunAction: @escaping (Action, [URL]) -> Void,
         onToggleSavedRun: @escaping (RunHistoryItem) -> Void,
-        onOpenSettings: @escaping () -> Void
+        onOpenSettings: @escaping () -> Void,
+        onToggleFavorite: @escaping (Action) -> Void,
+        onMoveAction: @escaping (Action, Action) -> Void
     ) {
         let state = PanelState()
         state.files = files
@@ -45,7 +47,9 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
             state: state,
             onRunAction: onRunAction,
             onToggleSavedRun: onToggleSavedRun,
-            onOpenSettings: onOpenSettings
+            onOpenSettings: onOpenSettings,
+            onToggleFavorite: onToggleFavorite,
+            onMoveAction: onMoveAction
         )
         self.panelVC = vc
 
@@ -121,6 +125,14 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         cancelPendingAutoHide()
         cancelHideAfterSuccess()
         stopSuccessHoverMonitor()
+    }
+
+    var currentFiles: [URL] { panelState.files }
+
+    func replaceActions(allActions: [Action], actions: [Action]) {
+        panelState.allActions = allActions
+        panelState.actions = actions
+        panelVC.refresh()
     }
 
     func updateSavedHistory(_ savedHistory: [RunHistoryItem], savedIds: Set<UUID>) {

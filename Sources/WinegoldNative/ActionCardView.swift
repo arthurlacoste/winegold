@@ -8,6 +8,8 @@ class ActionCardView: NSView {
     private let status: ActionValidationStatus
     private let isActive: Bool
     private let onDrop: ([URL]) -> Void
+    private let onToggleFavorite: (Action) -> Void
+    private let onMoveBefore: (Action, Action) -> Void
 
     private var isPressed = false
     private var isHovered = false
@@ -15,18 +17,30 @@ class ActionCardView: NSView {
     private let leadingIcon = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
+    private let favoriteButton = NSButton()
     private let runCard = NSView()
     private let runIcon = NSImageView()
 
-    init(action: Action, status: ActionValidationStatus, isActive: Bool, onDrop: @escaping ([URL]) -> Void) {
+    private static let actionDragType = NSPasteboard.PasteboardType("com.winegold.action-id")
+
+    init(
+        action: Action,
+        status: ActionValidationStatus,
+        isActive: Bool,
+        onDrop: @escaping ([URL]) -> Void,
+        onToggleFavorite: @escaping (Action) -> Void,
+        onMoveBefore: @escaping (Action, Action) -> Void
+    ) {
         self.action = action
         self.status = status
         self.isActive = isActive
         self.onDrop = onDrop
+        self.onToggleFavorite = onToggleFavorite
+        self.onMoveBefore = onMoveBefore
         super.init(frame: NSRect(x: 0, y: 0, width: 312, height: 64))
         wantsLayer = true
         layer?.cornerRadius = 8
-        registerForDraggedTypes(DragFileReader.supportedTypes)
+        registerForDraggedTypes(DragFileReader.supportedTypes + [Self.actionDragType])
         setup()
         applyVisualState(animated: false)
     }
@@ -41,6 +55,7 @@ class ActionCardView: NSView {
             configureTitle(action.name, weight: .bold, color: .controlTextColor)
             let exts = action.acceptedExtensions.contains("*") ? "all files" : action.acceptedExtensions.joined(separator: ", ")
             configureSubtitle(exts)
+            configureFavoriteButton()
             configureRunCard()
         case .missingDependency(let reason), .configError(let reason):
             layer?.backgroundColor = WinegoldTheme.cardBackground(in: self, disabled: true).cgColor
@@ -48,6 +63,7 @@ class ActionCardView: NSView {
             configureIcon(systemName: icon, tint: .secondaryLabelColor)
             configureTitle(action.name, weight: .regular, color: .secondaryLabelColor)
             configureSubtitle(reason)
+            favoriteButton.isHidden = true
             runCard.isHidden = true
             runIcon.isHidden = true
         }
@@ -84,12 +100,13 @@ class ActionCardView: NSView {
         let leftTextX: CGFloat = 48
         let buttonSize = NSSize(width: 36, height: 32)
         let buttonX = max(leftTextX + 120, bounds.width - rightInset - buttonSize.width)
-        let textRightPadding: CGFloat = caseAvailable ? 58 : 12
+        let textRightPadding: CGFloat = caseAvailable ? 88 : 12
         let textWidth = max(80, bounds.width - leftTextX - textRightPadding)
 
         leadingIcon.frame = NSRect(x: 12, y: 20, width: 24, height: 24)
         titleLabel.frame = NSRect(x: leftTextX, y: 14, width: textWidth, height: 20)
         subtitleLabel.frame = NSRect(x: leftTextX, y: 36, width: textWidth, height: 16)
+        favoriteButton.frame = NSRect(x: buttonX - 30, y: 18, width: 24, height: 24)
         runCard.frame = NSRect(x: buttonX, y: 16, width: buttonSize.width, height: buttonSize.height)
         runIcon.frame = NSRect(x: buttonX + 12, y: 24, width: 14, height: 16)
     }
@@ -105,6 +122,20 @@ class ActionCardView: NSView {
         guard caseAvailable else { return }
         isPressed = true
         applyVisualState(animated: true)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard caseAvailable else { return }
+        let pasteboardItem = NSPasteboardItem()
+        pasteboardItem.setString(action.id.uuidString, forType: Self.actionDragType)
+        let item = NSDraggingItem(pasteboardWriter: pasteboardItem)
+        let image = NSImage(size: bounds.size)
+        if let rep = bitmapImageRepForCachingDisplay(in: bounds) {
+            cacheDisplay(in: bounds, to: rep)
+            image.addRepresentation(rep)
+        }
+        item.setDraggingFrame(bounds, contents: image)
+        beginDraggingSession(with: [item], event: event, source: self)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -124,11 +155,13 @@ class ActionCardView: NSView {
         guard caseAvailable else { return [] }
         isHovered = true
         applyVisualState(animated: true)
+        if sender.draggingPasteboard.string(forType: Self.actionDragType) != nil { return .move }
         return .copy
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
         guard caseAvailable else { return [] }
+        if sender.draggingPasteboard.string(forType: Self.actionDragType) != nil { return .move }
         return .copy
     }
 
@@ -143,6 +176,11 @@ class ActionCardView: NSView {
         isPressed = true
         applyVisualState(animated: true)
         logMsg("[ActionCardView] performDragOperation for: \(action.name)")
+        if let sourceID = sender.draggingPasteboard.string(forType: Self.actionDragType),
+           let uuid = UUID(uuidString: sourceID), uuid != action.id {
+            onMoveBefore(Action(id: uuid, name: "", executablePath: "/bin/echo"), action)
+            return true
+        }
         let files = DragFileReader.urls(from: sender)
         logMsg("[ActionCardView] files from pasteboard: \(files.count)")
         onDrop(files)
@@ -205,6 +243,19 @@ class ActionCardView: NSView {
         addSubview(subtitleLabel)
     }
 
+    private func configureFavoriteButton() {
+        favoriteButton.image = NSImage(systemSymbolName: action.isFavorite ? "star.fill" : "star", accessibilityDescription: "Favorite")
+        favoriteButton.contentTintColor = action.isFavorite ? .systemYellow : .tertiaryLabelColor
+        favoriteButton.isBordered = false
+        favoriteButton.target = self
+        favoriteButton.action = #selector(favoriteClicked)
+        addSubview(favoriteButton)
+    }
+
+    @objc private func favoriteClicked() {
+        onToggleFavorite(action)
+    }
+
     private func configureRunCard() {
         runCard.wantsLayer = true
         runCard.layer?.cornerRadius = 10
@@ -228,6 +279,12 @@ class ActionCardView: NSView {
         if action.executablePath == "/bin/echo" { return "text.bubble" }
         if action.executablePath == "/usr/bin/open" { return "folder" }
         return "gearshape"
+    }
+}
+
+extension ActionCardView: NSDraggingSource {
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        .move
     }
 }
 

@@ -6,6 +6,8 @@ class ActionPanelViewController: NSViewController {
     private let onRunAction: (Action, [URL]) -> Void
     private let onToggleSavedRun: (RunHistoryItem) -> Void
     private let onOpenSettings: () -> Void
+    private let onToggleFavorite: (Action) -> Void
+    private let onMoveAction: (Action, Action) -> Void
     private var cardViews: [ActionCardView] = []
     private var runGeneration = 0
     private var lastLayoutWidth: CGFloat = 0
@@ -21,12 +23,16 @@ class ActionPanelViewController: NSViewController {
         state: PanelState,
         onRunAction: @escaping (Action, [URL]) -> Void,
         onToggleSavedRun: @escaping (RunHistoryItem) -> Void,
-        onOpenSettings: @escaping () -> Void
+        onOpenSettings: @escaping () -> Void,
+        onToggleFavorite: @escaping (Action) -> Void,
+        onMoveAction: @escaping (Action, Action) -> Void
     ) {
         self.state = state
         self.onRunAction = onRunAction
         self.onToggleSavedRun = onToggleSavedRun
         self.onOpenSettings = onOpenSettings
+        self.onToggleFavorite = onToggleFavorite
+        self.onMoveAction = onMoveAction
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -282,12 +288,23 @@ class ActionPanelViewController: NSViewController {
         for action in state.actions {
             let validator = ActionValidator()
             let status = validator.validate(action)
-            let card = ActionCardView(action: action, status: status, isActive: state.activeActionId == action.id, onDrop: { [weak self] droppedFiles in
-                let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
-                logMsg("[PanelVC] onDrop action=\(action.name) files=\(files.map { $0.lastPathComponent })")
-                guard !files.isEmpty else { return }
-                self?.startRun(action: action, files: files)
-            })
+            let card = ActionCardView(
+                action: action,
+                status: status,
+                isActive: state.activeActionId == action.id,
+                onDrop: { [weak self] droppedFiles in
+                    let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
+                    logMsg("[PanelVC] onDrop action=\(action.name) files=\(files.map { $0.lastPathComponent })")
+                    guard !files.isEmpty else { return }
+                    self?.startRun(action: action, files: files)
+                },
+                onToggleFavorite: { [weak self] action in
+                    self?.onToggleFavorite(action)
+                },
+                onMoveBefore: { [weak self] source, target in
+                    self?.onMoveAction(source, target)
+                }
+            )
             card.frame = NSRect(x: padding, y: y, width: w, height: 64)
             contentView.addSubview(card)
             cardViews.append(card)
