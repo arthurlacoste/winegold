@@ -140,8 +140,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func openSettings() {
-        guard let actionStore else { return }
+    private func ensureSettingsWindow() -> SettingsWindowController? {
+        guard let actionStore else { return nil }
         if settingsWC == nil {
             settingsWC = SettingsWindowController(
                 store: settingsStore,
@@ -162,7 +162,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             )
         }
-        settingsWC?.show()
+        return settingsWC
+    }
+
+    @objc private func openSettings() {
+        guard let settingsWC = ensureSettingsWindow() else { return }
+        settingsWC.show()
+    }
+
+    private func openNewScriptTemplate(for files: [URL]) {
+        guard let settingsWC = ensureSettingsWindow() else { return }
+        actionPanelWindow?.hide()
+        settingsWC.showNewScriptTemplate(for: files)
     }
 
     private func shouldAutoImportScripts(_ files: [URL]) -> Bool {
@@ -310,6 +321,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if action.name == DefaultActions.installAddScriptName {
             importScripts(files, using: action, runHistoryStore: runHistoryStore)
+            return
+        }
+
+        if action.name == DefaultActions.createScriptFromFileTypeName {
+            openNewScriptTemplate(for: files)
             return
         }
 

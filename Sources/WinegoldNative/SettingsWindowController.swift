@@ -45,6 +45,11 @@ class SettingsWindowController: NSWindowController {
     func refreshActions() {
         (window?.contentViewController as? SettingsViewController)?.refreshActions()
     }
+
+    func showNewScriptTemplate(for files: [URL]) {
+        show()
+        (window?.contentViewController as? SettingsViewController)?.prepareNewScriptTemplate(for: files)
+    }
 }
 
 class SettingsViewController: NSViewController {
@@ -237,6 +242,47 @@ class SettingsViewController: NSViewController {
     func refreshActions() {
         let selected = selectedActionID
         reloadActions(select: selected)
+    }
+
+    func prepareNewScriptTemplate(for files: [URL]) {
+        clearForm()
+        let extensions = inferredExtensions(from: files)
+        let extensionLabel = extensions.joined(separator: ", ")
+        nameField.stringValue = defaultScriptName(for: extensions)
+        extensionsField.stringValue = extensionLabel.isEmpty ? "*" : extensionLabel
+        commandTextView.string = defaultScriptCommand(for: extensions)
+        testResultTextView.string = files.isEmpty
+            ? "New script template created. Drop a file here to test it."
+            : "New script template for: \(files.map { $0.lastPathComponent }.joined(separator: ", "))"
+        nameField.becomeFirstResponder()
+    }
+
+    private func inferredExtensions(from files: [URL]) -> [String] {
+        let values = files.map { file -> String in
+            let ext = file.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !ext.isEmpty { return ext }
+            if file.hasDirectoryPath { return "folder" }
+            return "*"
+        }
+        let unique = Array(NSOrderedSet(array: values)) as? [String]
+        return unique?.isEmpty == false ? unique! : ["*"]
+    }
+
+    private func defaultScriptName(for extensions: [String]) -> String {
+        let label = extensions.filter { $0 != "*" }.joined(separator: ", ")
+        if label.isEmpty { return "New Winegold script" }
+        return "New \(label) script"
+    }
+
+    private func defaultScriptCommand(for extensions: [String]) -> String {
+        let label = extensions.joined(separator: ", ")
+        return """
+        # New Winegold script for: \(label)
+        # Available placeholders:
+        # {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}
+
+        echo "{input}"
+        """
     }
 
     private func reloadActions(select idToSelect: UUID? = nil) {
