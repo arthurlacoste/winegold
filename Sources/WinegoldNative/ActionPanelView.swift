@@ -455,6 +455,7 @@ class ActionPanelViewController: NSViewController {
                 isSaved: true,
                 showsSaveButton: false,
                 onRerun: { [weak self] historyItem in self?.rerun(historyItem) },
+                onView: { [weak self] historyItem in self?.viewResult(historyItem) },
                 onSave: { _ in }
             )
             row.frame = NSRect(x: padding, y: y, width: w, height: 52)
@@ -476,6 +477,7 @@ class ActionPanelViewController: NSViewController {
                 isSaved: state.savedHistoryIds.contains(item.id),
                 showsSaveButton: true,
                 onRerun: { [weak self] historyItem in self?.rerun(historyItem) },
+                onView: { [weak self] historyItem in self?.viewResult(historyItem) },
                 onSave: { [weak self] historyItem in self?.toggleSaved(historyItem) }
             )
             row.frame = NSRect(x: padding, y: y, width: w, height: 52)
@@ -487,6 +489,26 @@ class ActionPanelViewController: NSViewController {
 
     private func toggleSaved(_ item: RunHistoryItem) {
         onToggleSavedRun(item)
+    }
+
+    private func viewResult(_ item: RunHistoryItem) {
+        state.lastResult = CommandResult(
+            id: item.id,
+            actionId: item.actionId,
+            actionName: item.actionName,
+            inputFiles: item.inputFiles,
+            outputFiles: item.outputFiles,
+            status: item.status,
+            exitCode: item.exitCode,
+            stdout: item.stdout,
+            stderr: item.stderr,
+            startedAt: item.startedAt,
+            endedAt: item.endedAt
+        )
+        state.runningActionName = nil
+        state.runningFiles = []
+        state.isCompact = false
+        refresh()
     }
 
     private func rerun(_ item: RunHistoryItem) {
@@ -616,6 +638,7 @@ private final class RecentActionRowView: NSView {
     private let isSaved: Bool
     private let showsSaveButton: Bool
     private let onRerun: (RunHistoryItem) -> Void
+    private let onView: (RunHistoryItem) -> Void
     private let onSave: (RunHistoryItem) -> Void
 
     private let dot = NSView()
@@ -624,6 +647,8 @@ private final class RecentActionRowView: NSView {
     private let timeLabel = NSTextField(labelWithString: "")
     private let saveCard = NSView()
     private let saveIcon = NSImageView()
+    private let viewCard = NSView()
+    private let viewIcon = NSImageView()
     private let runCard = NSView()
     private let runIcon = NSImageView()
 
@@ -632,12 +657,14 @@ private final class RecentActionRowView: NSView {
         isSaved: Bool,
         showsSaveButton: Bool,
         onRerun: @escaping (RunHistoryItem) -> Void,
+        onView: @escaping (RunHistoryItem) -> Void,
         onSave: @escaping (RunHistoryItem) -> Void
     ) {
         self.item = item
         self.isSaved = isSaved
         self.showsSaveButton = showsSaveButton
         self.onRerun = onRerun
+        self.onView = onView
         self.onSave = onSave
         super.init(frame: NSRect(x: 0, y: 0, width: 312, height: 52))
         wantsLayer = true
@@ -658,7 +685,8 @@ private final class RecentActionRowView: NSView {
         let rightInset: CGFloat = 10
         let buttonWidth: CGFloat = 28
         let runCardX = max(230, rowWidth - rightInset - buttonWidth)
-        let saveCardX = runCardX - (showsSaveButton ? 36 : 0)
+        let viewCardX = runCardX - 36
+        let saveCardX = viewCardX - (showsSaveButton ? 36 : 0)
         let timeX = max(164, saveCardX - 52)
         let labelWidth = max(80, timeX - 42)
 
@@ -668,6 +696,8 @@ private final class RecentActionRowView: NSView {
         timeLabel.frame = NSRect(x: timeX, y: 9, width: 42, height: 18)
         saveCard.frame = NSRect(x: saveCardX, y: 10, width: buttonWidth, height: 32)
         saveIcon.frame = NSRect(x: saveCardX + 7, y: 18, width: 14, height: 14)
+        viewCard.frame = NSRect(x: viewCardX, y: 10, width: buttonWidth, height: 32)
+        viewIcon.frame = NSRect(x: viewCardX + 7, y: 18, width: 14, height: 14)
         runCard.frame = NSRect(x: runCardX, y: 10, width: buttonWidth, height: 32)
         runIcon.frame = NSRect(x: runCardX + 7, y: 18, width: 14, height: 14)
     }
@@ -692,6 +722,11 @@ private final class RecentActionRowView: NSView {
         if showsSaveButton, saveCard.frame.contains(point) {
             logMsg("[RecentActionRowView] save: \(item.actionName)")
             onSave(item)
+            return
+        }
+        if viewCard.frame.contains(point) {
+            logMsg("[RecentActionRowView] view: \(item.actionName)")
+            onView(item)
             return
         }
         logMsg("[RecentActionRowView] rerun: \(item.actionName)")
@@ -738,6 +773,17 @@ private final class RecentActionRowView: NSView {
             saveIcon.contentTintColor = .systemYellow
             addSubview(saveIcon)
         }
+
+        viewCard.wantsLayer = true
+        viewCard.layer?.cornerRadius = 9
+        viewCard.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.10).cgColor
+        viewCard.layer?.borderWidth = 1
+        viewCard.layer?.borderColor = NSColor.secondaryLabelColor.withAlphaComponent(0.20).cgColor
+        addSubview(viewCard)
+
+        viewIcon.image = NSImage(systemSymbolName: "eye", accessibilityDescription: "View result")
+        viewIcon.contentTintColor = .secondaryLabelColor
+        addSubview(viewIcon)
 
         runCard.wantsLayer = true
         runCard.layer?.cornerRadius = 9
