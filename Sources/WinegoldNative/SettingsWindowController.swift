@@ -210,7 +210,7 @@ class SettingsViewController: NSViewController {
         view.addSubview(scroll)
         y += 186
 
-        let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}. {{file}} style placeholders are converted on YAML import.")
+        let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}.")
         placeholderHelp.font = .systemFont(ofSize: 11)
         placeholderHelp.textColor = .tertiaryLabelColor
         placeholderHelp.lineBreakMode = .byWordWrapping
@@ -406,23 +406,18 @@ class SettingsViewController: NSViewController {
         let prompt = """
         Help me improve this Winegold Native script.
 
-        Current supported YAML format:
-        name: My action
-        trigger:
-          fileExtension:
-            - txt
-        cmd:
-          exec: 'echo "{{file}}"'
+        Use this documentation as the single source of truth.
 
-        Supported placeholders:
-        {{file}}, {{dir}}, {{name}}, {{namebase}}, {{ext}}, {{inside}}, {{desktop}}, {{downloads}}, {{timestamp}}
+        \(ScriptingGuide.text)
 
+        Current script:
         Script name: \(action.name)
         Extensions: \(action.acceptedExtensions.joined(separator: ", "))
         Command:
         \(shellCommand(for: action))
 
         Return a corrected .add.yml script and explain briefly what changed.
+        Use only placeholders documented above.
         """
         var components = URLComponents(string: "https://chatgpt.com/")
         components?.queryItems = [URLQueryItem(name: "prompt", value: prompt)]
