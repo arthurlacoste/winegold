@@ -346,8 +346,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func importScripts(_ files: [URL], using action: Action, runHistoryStore: RunHistoryStore) {
         actionPanelWindow?.markActionTriggered()
         guard let actionStore else { return }
+        actionPanelWindow?.beginRun(actionName: action.name, files: files)
         Task {
             let importer = LegacyActionImporter()
+            var batchHadFailure = false
             for file in files {
                 let startedAt = Date()
                 var result = CommandResult(
@@ -380,10 +382,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     logMsg("[AppDelegate] import script failed: \(error.localizedDescription)")
                 }
 
+                if result.status != .success { batchHadFailure = true }
                 try? runHistoryStore.addRun(result)
                 let resultCopy = result
                 await MainActor.run {
-                    self.actionPanelWindow?.showRunResult(result: resultCopy)
+                    if files.count > 1 {
+                        self.actionPanelWindow?.appendBatchResult(result: resultCopy)
+                    } else {
+                        self.actionPanelWindow?.showRunResult(result: resultCopy)
+                    }
+                }
+            }
+
+            if files.count > 1 {
+                await MainActor.run {
+                    let finalStatus: ExecutionStatus = batchHadFailure ? .failed : .success
+                    let final = CommandResult(actionId: action.id, actionName: action.name, inputFiles: files.map { $0.path }, status: finalStatus, startedAt: Date(), endedAt: Date())
+                    self.actionPanelWindow?.showRunResult(result: final)
                 }
             }
         }
@@ -406,7 +421,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let runner = CommandRunner()
         let resolver = ActionTemplateResolver()
 
+        actionPanelWindow?.beginRun(actionName: action.name, files: files)
+
         Task {
+            var batchHadFailure = false
             for file in files {
                 let args = resolver.resolve(argumentsTemplate: action.argumentsTemplate, for: file)
                 let wd = resolver.resolve(workingDirectoryTemplate: action.workingDirectoryTemplate, for: file)
@@ -418,7 +436,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     timeoutSeconds: action.timeoutSeconds
                 )
 
-                var result = await runner.run(request: request)
+                let startedAt = Date()
+                var result = await runner.run(request: request, onOutput: { [weak self] stdout, stderr in
+                    guard Date().timeIntervalSince(startedAt) >= 0.3 else { return }
+                    let running = CommandResult(
+                        actionId: action.id,
+                        actionName: action.name,
+                        inputFiles: [file.path],
+                        status: .running,
+                        stdout: stdout,
+                        stderr: stderr,
+                        startedAt: startedAt
+                    )
+                    Task { @MainActor in
+                        self?.actionPanelWindow?.showRunningResult(result: running)
+                    }
+                })
                 result.actionId = action.id
                 result.actionName = action.name
                 result.inputFiles = [file.path]
@@ -429,11 +462,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
 
+                if result.status != .success { batchHadFailure = true }
                 try? runHistoryStore.addRun(result)
 
                 let resultCopy = result
                 await MainActor.run {
-                    self.actionPanelWindow?.showRunResult(result: resultCopy)
+                    if files.count > 1 {
+                        self.actionPanelWindow?.appendBatchResult(result: resultCopy)
+                    } else {
+                        self.actionPanelWindow?.showRunResult(result: resultCopy)
+                    }
+                }
+            }
+
+            if files.count > 1 {
+                await MainActor.run {
+                    let finalStatus: ExecutionStatus = batchHadFailure ? .failed : .success
+                    let final = CommandResult(actionId: action.id, actionName: action.name, inputFiles: files.map { $0.path }, status: finalStatus, startedAt: Date(), endedAt: Date())
+                    self.actionPanelWindow?.showRunResult(result: final)
                 }
             }
         }

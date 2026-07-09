@@ -16,6 +16,29 @@ public enum CommandRunnerError: LocalizedError {
     }
 }
 
+private final class OutputCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stdoutValue = ""
+    private var stderrValue = ""
+
+    func appendStdout(_ data: Data) {
+        guard !data.isEmpty, let string = String(data: data, encoding: .utf8) else { return }
+        lock.lock(); stdoutValue += string; lock.unlock()
+    }
+
+    func appendStderr(_ data: Data) {
+        guard !data.isEmpty, let string = String(data: data, encoding: .utf8) else { return }
+        lock.lock(); stderrValue += string; lock.unlock()
+    }
+
+    var snapshot: (stdout: String, stderr: String) {
+        lock.lock(); defer { lock.unlock() }
+        return (stdoutValue, stderrValue)
+    }
+}
+
+public typealias CommandOutputHandler = @Sendable (_ stdout: String, _ stderr: String) -> Void
+
 private final class TimeoutState: @unchecked Sendable {
     private let lock = NSLock()
     private var value = false
@@ -37,6 +60,10 @@ public actor CommandRunner {
     public init() {}
 
     public func run(request: CommandExecutionRequest) async -> CommandResult {
+        await run(request: request, onOutput: nil)
+    }
+
+    public func run(request: CommandExecutionRequest, onOutput: CommandOutputHandler?) async -> CommandResult {
         let startTime = Date()
         let id = UUID()
 
@@ -87,6 +114,20 @@ public actor CommandRunner {
         process.standardError = stderrPipe
 
         let timeoutState = TimeoutState()
+        let outputCapture = OutputCapture()
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            outputCapture.appendStdout(data)
+            let snapshot = outputCapture.snapshot
+            onOutput?(snapshot.stdout, snapshot.stderr)
+        }
+        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            outputCapture.appendStderr(data)
+            let snapshot = outputCapture.snapshot
+            onOutput?(snapshot.stdout, snapshot.stderr)
+        }
 
         return await withTaskGroup(of: CommandResult.self) { group in
             group.addTask {
@@ -115,10 +156,13 @@ public actor CommandRunner {
                 process.waitUntilExit()
                 timeoutTask.cancel()
 
-                let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
-                var stderr = String(data: stderrData, encoding: .utf8) ?? ""
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
+                outputCapture.appendStdout(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
+                outputCapture.appendStderr(stderrPipe.fileHandleForReading.readDataToEndOfFile())
+                let snapshot = outputCapture.snapshot
+                let stdout = snapshot.stdout
+                var stderr = snapshot.stderr
 
                 let status: ExecutionStatus
                 if timeoutState.didTimeout {

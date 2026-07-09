@@ -9,6 +9,7 @@ class PanelState {
     var savedHistory: [RunHistoryItem] = []
     var savedHistoryIds: Set<UUID> = []
     var lastResult: CommandResult?
+    var batchResults: [CommandResult] = []
     var activeActionId: UUID?
     var runningActionName: String?
     var runningFiles: [URL] = []

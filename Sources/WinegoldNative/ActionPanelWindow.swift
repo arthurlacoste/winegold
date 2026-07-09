@@ -110,6 +110,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.savedHistory = savedHistory
         panelState.savedHistoryIds = savedHistoryIds
         panelState.lastResult = nil
+        panelState.batchResults = []
         panelState.activeActionId = nil
         panelState.runningActionName = nil
         panelState.runningFiles = []
@@ -431,6 +432,26 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
             self.isProgrammaticFrameChange = false
             self.isAnimatingOut = false
         }
+    }
+
+    func beginRun(actionName: String, files: [URL]) {
+        panelState.batchResults = []
+        panelState.lastResult = nil
+        panelState.runningActionName = actionName
+        panelState.runningFiles = files
+        panelVC.refresh()
+    }
+
+    func showRunningResult(result: CommandResult) {
+        panelState.lastResult = result
+        panelState.runningActionName = result.actionName
+        panelVC.refresh()
+    }
+
+    func appendBatchResult(result: CommandResult) {
+        panelState.lastResult = nil
+        panelState.batchResults.append(result)
+        panelVC.refresh()
     }
 
     func showRunResult(result: CommandResult) {

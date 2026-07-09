@@ -130,6 +130,10 @@ class ActionPanelViewController: NSViewController {
             y += addLoading(actionName: runningActionName, y: y, w: w)
         }
 
+        if !state.batchResults.isEmpty {
+            addBatchResultsSection(y: &y, w: w)
+        }
+
         if state.files.isEmpty {
             addEmptyState(y: &y, w: w)
         } else {
@@ -174,6 +178,7 @@ class ActionPanelViewController: NSViewController {
         state.files = files
         state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
         state.lastResult = nil
+        state.batchResults = []
         state.activeActionId = nil
         state.runningActionName = nil
         state.runningFiles = []
@@ -253,6 +258,7 @@ class ActionPanelViewController: NSViewController {
 
         state.files = files
         state.lastResult = nil
+        state.batchResults = []
         state.activeActionId = action.id
         state.runningActionName = nil
         state.runningFiles = files
@@ -360,7 +366,8 @@ class ActionPanelViewController: NSViewController {
         icon.contentTintColor = iconColor
         container.addSubview(icon)
 
-        let name = NSTextField(labelWithString: result.actionName)
+        let resultTitle = result.inputFiles.first.map { "\(result.actionName) - \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? result.actionName
+        let name = NSTextField(labelWithString: resultTitle)
         name.font = .boldSystemFont(ofSize: 13)
         name.frame = NSRect(x: 38, y: cy + 24, width: 200, height: 18)
         container.addSubview(name)
@@ -441,6 +448,16 @@ class ActionPanelViewController: NSViewController {
         container.frame.size.height = min(max(cy + 10, 60), 190)
         contentView.addSubview(container)
         return container.frame.height + 16
+    }
+
+    private func addBatchResultsSection(y: inout CGFloat, w: CGFloat) {
+        let label = sectionLabel("Batch results")
+        label.frame.origin = CGPoint(x: padding, y: y)
+        contentView.addSubview(label)
+        y += 18
+        for result in state.batchResults {
+            y += addResult(result: result, y: y, w: w)
+        }
     }
 
     private func addSavedSection(y: inout CGFloat, w: CGFloat) {
@@ -528,6 +545,7 @@ class ActionPanelViewController: NSViewController {
         state.files = files
         state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
         state.lastResult = nil
+        state.batchResults = []
         state.activeActionId = action.id
         state.isCompact = false
         refresh()
