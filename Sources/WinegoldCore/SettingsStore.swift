@@ -30,6 +30,11 @@ public struct SettingsStore {
         set { defaults.set(newValue, forKey: "historyLimit") }
     }
 
+    public var showPanelShortcut: String {
+        get { defaults.string(forKey: "showPanelShortcut") ?? "cmd+shift+p" }
+        set { defaults.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), forKey: "showPanelShortcut") }
+    }
+
     private static func clamp(_ value: Int, min minValue: Int, max maxValue: Int) -> Int {
         Swift.max(minValue, Swift.min(maxValue, value))
     }

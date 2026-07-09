@@ -11,12 +11,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var actionPanelWindow: ActionPanelWindow?
     private var settingsWC: SettingsWindowController?
     private var database: Database?
+    private var shortcutMonitors: [Any] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logMsg("[AppDelegate] app started")
         setupDatabase()
         setupMainMenu()
         setupMenuBar()
+        setupShortcutMonitors()
         setupEdgeCatcher()
     }
 
@@ -111,7 +113,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        let showItem = NSMenuItem(title: "Show Panel", action: #selector(togglePanel), keyEquivalent: "p")
+        let showItem = NSMenuItem(title: "Show Panel", action: #selector(togglePanel), keyEquivalent: "P")
+        showItem.keyEquivalentModifierMask = [.command, .shift]
         showItem.target = self
         menu.addItem(showItem)
 
@@ -124,6 +127,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         menuBarItem?.menu = menu
+    }
+
+    private func setupShortcutMonitors() {
+        let handler: (NSEvent) -> NSEvent? = { [weak self] event in
+            guard let self else { return event }
+            if self.matchesShowPanelShortcut(event) {
+                DispatchQueue.main.async { self.togglePanel() }
+                return nil
+            }
+            return event
+        }
+        shortcutMonitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: handler) as Any)
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
+            guard let self, self.matchesShowPanelShortcut(event) else { return }
+            DispatchQueue.main.async { self.togglePanel() }
+        }) {
+            shortcutMonitors.append(global)
+        }
+    }
+
+    private func matchesShowPanelShortcut(_ event: NSEvent) -> Bool {
+        let shortcut = settingsStore.showPanelShortcut
+        let parts = shortcut.split(separator: "+").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        guard let key = parts.last, event.charactersIgnoringModifiers?.lowercased() == key else { return false }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if parts.contains("cmd") || parts.contains("command") {
+            guard flags.contains(.command) else { return false }
+        }
+        if parts.contains("shift") {
+            guard flags.contains(.shift) else { return false }
+        }
+        if parts.contains("alt") || parts.contains("option") {
+            guard flags.contains(.option) else { return false }
+        }
+        if parts.contains("ctrl") || parts.contains("control") {
+            guard flags.contains(.control) else { return false }
+        }
+        return true
     }
 
     private func setupEdgeCatcher() {

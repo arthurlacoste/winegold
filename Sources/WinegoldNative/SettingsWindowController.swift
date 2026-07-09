@@ -59,6 +59,7 @@ class SettingsViewController: NSViewController {
 
     private var launchAtLoginCheckbox: NSButton!
     private var notificationsCheckbox: NSButton!
+    private var shortcutField: NSTextField!
     private var actionPopup: NSPopUpButton!
     private var nameField: NSTextField!
     private var extensionsField: NSTextField!
@@ -109,6 +110,18 @@ class SettingsViewController: NSViewController {
         notificationsCheckbox.state = store.showNotifications ? .on : .off
         notificationsCheckbox.frame = NSRect(x: padding + 220, y: y, width: 200, height: 24)
         view.addSubview(notificationsCheckbox)
+
+        let shortcutLabel = NSTextField(labelWithString: "Show panel shortcut")
+        shortcutLabel.font = .systemFont(ofSize: 12)
+        shortcutLabel.textColor = .secondaryLabelColor
+        shortcutLabel.frame = NSRect(x: padding + 430, y: y + 3, width: 130, height: 18)
+        view.addSubview(shortcutLabel)
+
+        shortcutField = NSTextField(frame: NSRect(x: padding + 560, y: y - 1, width: 130, height: 24))
+        shortcutField.stringValue = store.showPanelShortcut
+        shortcutField.target = self
+        shortcutField.action = #selector(shortcutChanged)
+        view.addSubview(shortcutField)
 
         y += 42
 
@@ -566,6 +579,11 @@ class SettingsViewController: NSViewController {
 
     @objc private func notificationsChanged() {
         store.showNotifications = notificationsCheckbox.state == .on
+    }
+
+    @objc private func shortcutChanged() {
+        store.showPanelShortcut = shortcutField.stringValue
+        shortcutField.stringValue = store.showPanelShortcut
     }
 }
 
