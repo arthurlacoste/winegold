@@ -11,7 +11,7 @@ class SettingsWindowController: NSWindowController {
         self.actionStore = actionStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
 
-        let window = NSWindow(
+        let window = SettingsWindow(
             contentRect: NSRect(x: 0, y: 0, width: 760, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
@@ -28,6 +28,7 @@ class SettingsWindowController: NSWindowController {
             onLaunchAtLoginChanged: onLaunchAtLoginChanged
         )
         window.contentViewController = vc
+        window.onSaveShortcut = { [weak vc] in vc?.saveFromShortcut() }
 
         super.init(window: window)
     }
@@ -64,8 +65,6 @@ class SettingsViewController: NSViewController {
     private var nameField: NSTextField!
     private var extensionsField: NSTextField!
     private var commandTextView: NSTextView!
-    private var testDropView: SettingsTestDropView!
-    private var testResultTextView: NSTextView!
     private var selectedActionID: UUID?
     private var actions: [Action] = []
 
@@ -220,27 +219,14 @@ class SettingsViewController: NSViewController {
         placeholderHelp.font = .systemFont(ofSize: 11)
         placeholderHelp.textColor = .tertiaryLabelColor
         placeholderHelp.lineBreakMode = .byWordWrapping
-        placeholderHelp.frame = NSRect(x: padding + 110, y: y, width: w - 110, height: 36)
+        placeholderHelp.frame = NSRect(x: padding + 110, y: y, width: w - 250, height: 36)
         view.addSubview(placeholderHelp)
+
+        let docsButton = NSButton(title: "Open scripting docs", target: self, action: #selector(openScriptingDocs))
+        docsButton.bezelStyle = .inline
+        docsButton.frame = NSRect(x: padding + w - 130, y: y - 1, width: 130, height: 22)
+        view.addSubview(docsButton)
         y += 52
-
-        addFormLabel("Test", x: padding, y: y)
-        testDropView = SettingsTestDropView(frame: NSRect(x: padding + 110, y: y - 2, width: 220, height: 72))
-        testDropView.onFilesDropped = { [weak self] files in
-            self?.testCurrentAction(with: files)
-        }
-        view.addSubview(testDropView)
-
-        let resultScroll = NSScrollView(frame: NSRect(x: padding + 344, y: y - 2, width: w - 344, height: 72))
-        resultScroll.hasVerticalScroller = true
-        resultScroll.autohidesScrollers = true
-        resultScroll.borderType = .bezelBorder
-        testResultTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 360, height: 72))
-        testResultTextView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        testResultTextView.isEditable = false
-        testResultTextView.string = "Drop a file here to test the selected script."
-        resultScroll.documentView = testResultTextView
-        view.addSubview(resultScroll)
     }
 
     private func addDivider(y: CGFloat, x: CGFloat, width: CGFloat) {
@@ -270,9 +256,6 @@ class SettingsViewController: NSViewController {
         nameField.stringValue = defaultScriptName(for: extensions)
         extensionsField.stringValue = extensionLabel.isEmpty ? "*" : extensionLabel
         commandTextView.string = defaultScriptCommand(for: extensions)
-        testResultTextView.string = files.isEmpty
-            ? "New script template created. Drop a file here to test it."
-            : "New script template for: \(files.map { $0.lastPathComponent }.joined(separator: ", "))"
         nameField.becomeFirstResponder()
     }
 
@@ -472,45 +455,6 @@ class SettingsViewController: NSViewController {
         URL(string: "https://chatgpt.com/")
     }
 
-    private func testCurrentAction(with files: [URL]) {
-        guard let action = currentEditedAction() else {
-            showMessage("Name, extensions and command are required before testing.")
-            return
-        }
-        guard let file = files.first else { return }
-        testResultTextView.string = "Running \(action.name) on \(file.lastPathComponent)…"
-
-        let resolver = ActionTemplateResolver()
-        let args = resolver.resolve(argumentsTemplate: action.argumentsTemplate, for: file)
-        let wd = resolver.resolve(workingDirectoryTemplate: action.workingDirectoryTemplate, for: file)
-        let request = CommandExecutionRequest(
-            executablePath: action.executablePath,
-            arguments: args,
-            workingDirectory: wd,
-            timeoutSeconds: action.timeoutSeconds
-        )
-
-        Task {
-            var result = await CommandRunner().run(request: request)
-            result.actionId = action.id
-            result.actionName = action.name
-            result.inputFiles = [file.path]
-            let output = testOutputText(result: result)
-            await MainActor.run {
-                self.testResultTextView.string = output
-            }
-        }
-    }
-
-    private func testOutputText(result: CommandResult) -> String {
-        var parts: [String] = []
-        parts.append("Status: \(result.status.rawValue)")
-        if let exitCode = result.exitCode { parts.append("Exit: \(exitCode)") }
-        if !result.stdout.isEmpty { parts.append("\nstdout:\n\(result.stdout)") }
-        if !result.stderr.isEmpty { parts.append("\nstderr:\n\(result.stderr)") }
-        return parts.joined(separator: "\n")
-    }
-
     private func showMessage(_ message: String) {
         let alert = NSAlert()
         alert.messageText = message
@@ -611,7 +555,24 @@ class SettingsViewController: NSViewController {
             view.window?.orderBack(nil)
             NSWorkspace.shared.open(url)
         }
-        testResultTextView.string = "Help prompt copied to clipboard. Paste it into ChatGPT."
+        showMessage("Help prompt copied to clipboard. Paste it into ChatGPT.")
+    }
+
+    func saveFromShortcut() {
+        shortcutChanged()
+        notificationsChanged()
+        launchAtLoginChanged()
+        saveAction()
+    }
+
+    @objc private func openScriptingDocs() {
+        let sourceFile = URL(fileURLWithPath: #filePath)
+        let repositoryRoot = sourceFile
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let docsURL = repositoryRoot.appendingPathComponent("docs/scripting.md")
+        NSWorkspace.shared.open(docsURL)
     }
 
     @objc private func launchAtLoginChanged() {
@@ -631,52 +592,15 @@ class SettingsViewController: NSViewController {
 }
 
 
-private final class SettingsTestDropView: NSView {
-    override var isFlipped: Bool { true }
-    var onFilesDropped: (([URL]) -> Void)?
-    private let label = NSTextField(labelWithString: "Drop test file")
+private final class SettingsWindow: NSWindow {
+    var onSaveShortcut: (() -> Void)?
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.cornerRadius = 10
-        layer?.borderWidth = 1
-        layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor
-        layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.08).cgColor
-        registerForDraggedTypes(DragFileReader.supportedTypes)
-
-        label.font = .systemFont(ofSize: 13, weight: .medium)
-        label.textColor = .secondaryLabelColor
-        label.alignment = .center
-        addSubview(label)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func layout() {
-        super.layout()
-        label.frame = NSRect(x: 10, y: (bounds.height - 20) / 2, width: bounds.width - 20, height: 20)
-    }
-
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        layer?.borderColor = NSColor.controlAccentColor.cgColor
-        layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
-        return .copy
-    }
-
-    override func draggingExited(_ sender: NSDraggingInfo?) {
-        layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor
-        layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.08).cgColor
-    }
-
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        draggingExited(nil)
-        let files = DragFileReader.urls(from: sender)
-        guard !files.isEmpty else { return false }
-        onFilesDropped?(files)
-        return true
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers?.lowercased() == "s" {
+            onSaveShortcut?()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
     }
 }
 
