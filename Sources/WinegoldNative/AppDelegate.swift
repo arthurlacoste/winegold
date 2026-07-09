@@ -395,8 +395,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             if files.count > 1 {
+                let finalStatus: ExecutionStatus = batchHadFailure ? .failed : .success
                 await MainActor.run {
-                    let finalStatus: ExecutionStatus = batchHadFailure ? .failed : .success
                     let final = CommandResult(actionId: action.id, actionName: action.name, inputFiles: files.map { $0.path }, status: finalStatus, startedAt: Date(), endedAt: Date())
                     self.actionPanelWindow?.showRunResult(result: final)
                 }
@@ -476,8 +476,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             if files.count > 1 {
+                let finalStatus: ExecutionStatus = batchHadFailure ? .failed : .success
                 await MainActor.run {
-                    let finalStatus: ExecutionStatus = batchHadFailure ? .failed : .success
                     let final = CommandResult(actionId: action.id, actionName: action.name, inputFiles: files.map { $0.path }, status: finalStatus, startedAt: Date(), endedAt: Date())
                     self.actionPanelWindow?.showRunResult(result: final)
                 }
