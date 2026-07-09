@@ -63,6 +63,19 @@ final class CommandRunnerTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("error"))
     }
 
+
+    func testStdinIsClosedForNonInteractiveRuns() async {
+        let request = CommandExecutionRequest(
+            executablePath: "/bin/cat",
+            timeoutSeconds: 2
+        )
+
+        let result = await runner.run(request: request)
+        XCTAssertEqual(result.status, .success)
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stdout, "")
+    }
+
     func testTimeout() async {
         let request = CommandExecutionRequest(
             executablePath: "/bin/sleep",

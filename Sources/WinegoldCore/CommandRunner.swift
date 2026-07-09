@@ -35,6 +35,38 @@ private final class OutputCapture: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         return (stdoutValue, stderrValue)
     }
+
+    func snapshot(maxCharacters: Int) -> (stdout: String, stderr: String) {
+        lock.lock(); defer { lock.unlock() }
+        return (
+            stdout: Self.suffix(stdoutValue, maxCharacters: maxCharacters),
+            stderr: Self.suffix(stderrValue, maxCharacters: maxCharacters)
+        )
+    }
+
+    private static func suffix(_ value: String, maxCharacters: Int) -> String {
+        guard value.count > maxCharacters else { return value }
+        return "…\n" + value.suffix(maxCharacters)
+    }
+}
+
+private final class OutputUpdateGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lastSentAt = Date.distantPast
+    private let minimumInterval: TimeInterval
+
+    init(minimumInterval: TimeInterval) {
+        self.minimumInterval = minimumInterval
+    }
+
+    func shouldSend(now: Date = Date()) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard now.timeIntervalSince(lastSentAt) >= minimumInterval else { return false }
+        lastSentAt = now
+        return true
+    }
 }
 
 public typealias CommandOutputHandler = @Sendable (_ stdout: String, _ stderr: String) -> Void
@@ -108,24 +140,30 @@ public actor CommandRunner {
         }
         process.environment = env
 
+        let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
+        process.standardInput = stdinPipe
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
         let timeoutState = TimeoutState()
         let outputCapture = OutputCapture()
+        let outputGate = OutputUpdateGate(minimumInterval: 0.2)
+        let maxLiveCharacters = 12_000
 
         stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             outputCapture.appendStdout(data)
-            let snapshot = outputCapture.snapshot
+            guard onOutput != nil, outputGate.shouldSend() else { return }
+            let snapshot = outputCapture.snapshot(maxCharacters: maxLiveCharacters)
             onOutput?(snapshot.stdout, snapshot.stderr)
         }
         stderrPipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             outputCapture.appendStderr(data)
-            let snapshot = outputCapture.snapshot
+            guard onOutput != nil, outputGate.shouldSend() else { return }
+            let snapshot = outputCapture.snapshot(maxCharacters: maxLiveCharacters)
             onOutput?(snapshot.stdout, snapshot.stderr)
         }
 
@@ -133,6 +171,7 @@ public actor CommandRunner {
             group.addTask {
                 do {
                     try process.run()
+                    try? stdinPipe.fileHandleForWriting.close()
                 } catch {
                     return CommandResult(
                         id: id,
