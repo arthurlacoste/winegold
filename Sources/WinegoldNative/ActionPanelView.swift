@@ -14,6 +14,7 @@ class ActionPanelViewController: NSViewController {
     private var lastHadStatusArea = false
     private var isRefreshing = false
     private var lastFilesSignature = ""
+    private(set) var currentContentHeight: CGFloat = 0
 
     private let padding: CGFloat = 24
     private let scrollView = DropForwardingScrollView()
@@ -155,6 +156,7 @@ class ActionPanelViewController: NSViewController {
     }
 
     private func installScrollView(panelWidth: CGFloat, contentHeight: CGFloat) {
+        currentContentHeight = contentHeight
         contentView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: contentHeight)
         scrollView.documentView = contentView
         scrollView.hasVerticalScroller = !state.isCompact

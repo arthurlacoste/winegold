@@ -262,7 +262,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         logMsg("[ActionPanelWindow] compact running status")
         panelState.isCompact = true
         panelVC.refresh()
-        animateHeight(to: compactFrameHeight)
+        animateHeight(to: compactStatusFrameHeight())
     }
 
     private func expandFromCompactForError() {
@@ -273,6 +273,15 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         let targetHeight = CGFloat(settingsStore.panelHeight == 0 ? Int(visibleFrame.height - 40) : settingsStore.panelHeight)
         let size = ActionPanelWindow.clampedPanelSize(width: frame.width, height: targetHeight, visibleFrame: visibleFrame)
         animateHeight(to: size.height)
+    }
+
+    private func compactStatusFrameHeight() -> CGFloat {
+        let visibleFrame = currentVisibleFrame()
+        let contentHeight = max(panelVC.currentContentHeight, compactFrameHeight)
+        let contentRect = NSRect(x: 0, y: 0, width: frame.width, height: contentHeight)
+        let frameHeight = frameRect(forContentRect: contentRect).height
+        let maxHeight = max(compactFrameHeight, visibleFrame.height - 40)
+        return max(compactFrameHeight, min(frameHeight, maxHeight))
     }
 
     private func animateHeight(to targetHeight: CGFloat, completion: (() -> Void)? = nil) {
@@ -487,7 +496,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
             if wasCompact {
                 panelState.isCompact = true
                 panelVC.refresh()
-                animateHeight(to: compactFrameHeight) { [weak self] in
+                animateHeight(to: compactStatusFrameHeight()) { [weak self] in
                     self?.scheduleHideAfterSuccess()
                 }
             } else {
