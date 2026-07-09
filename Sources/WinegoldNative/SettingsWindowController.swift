@@ -12,7 +12,7 @@ class SettingsWindowController: NSWindowController {
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 720),
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -79,7 +79,7 @@ class SettingsViewController: NSViewController {
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
 
     override func loadView() {
-        view = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 720))
+        view = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 800))
         view.wantsLayer = true
         view.layer?.backgroundColor = WinegoldTheme.panelBackground(in: view).cgColor
     }
@@ -152,7 +152,6 @@ class SettingsViewController: NSViewController {
 
         let saveButton = NSButton(title: "Save", target: self, action: #selector(saveAction))
         saveButton.bezelStyle = .rounded
-        saveButton.keyEquivalent = "\r"
         saveButton.frame = NSRect(x: padding + 392, y: y, width: 70, height: 28)
         view.addSubview(saveButton)
 
@@ -196,19 +195,26 @@ class SettingsViewController: NSViewController {
         y += 38
 
         addFormLabel("Command", x: padding, y: y)
-        let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 170))
+        let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 260))
         scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
         scroll.borderType = .bezelBorder
 
-        commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 170))
-        commandTextView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 260))
+        commandTextView.font = NSFont(name: "Menlo", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
+        commandTextView.isRichText = false
+        commandTextView.importsGraphics = false
+        commandTextView.isHorizontallyResizable = true
+        commandTextView.isVerticallyResizable = true
+        commandTextView.textContainer?.widthTracksTextView = false
+        commandTextView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         commandTextView.isAutomaticQuoteSubstitutionEnabled = false
         commandTextView.isAutomaticDashSubstitutionEnabled = false
         commandTextView.string = ""
         scroll.documentView = commandTextView
         view.addSubview(scroll)
-        y += 186
+        y += 276
 
         let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}.")
         placeholderHelp.font = .systemFont(ofSize: 11)
@@ -339,12 +345,14 @@ class SettingsViewController: NSViewController {
     }
 
     private func formAction(existing: Action? = nil) -> Action? {
+        let commandText = commandTextView.string
+        if let pastedAction = actionFromPastedYAML(commandText, existing: existing) {
+            return pastedAction
+        }
+
         let name = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        let command = commandTextView.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        let extensions = extensionsField.stringValue
-            .components(separatedBy: CharacterSet(charactersIn: ", \n\t"))
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            .filter { !$0.isEmpty }
+        let command = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let extensions = currentExtensions()
 
         guard !name.isEmpty, !command.isEmpty, !extensions.isEmpty else { return nil }
 
@@ -367,6 +375,34 @@ class SettingsViewController: NSViewController {
         )
     }
 
+    private func actionFromPastedYAML(_ text: String, existing: Action?) -> Action? {
+        guard looksLikeWinegoldYAML(text), var action = try? LegacyActionImporter().importLegacyYAML(text, sourceName: "pasted.add.yml") else {
+            return nil
+        }
+
+        action.id = existing?.id ?? action.id
+        action.description = existing?.description ?? action.description
+        action.enabled = existing?.enabled ?? true
+        action.acceptedUTIs = existing?.acceptedUTIs ?? []
+        action.requiresConfirmation = existing?.requiresConfirmation ?? false
+        action.timeoutSeconds = existing?.timeoutSeconds ?? action.timeoutSeconds
+        action.isFavorite = existing?.isFavorite ?? false
+        action.displayOrder = existing?.displayOrder ?? 0
+        action.createdAt = existing?.createdAt ?? action.createdAt
+        action.updatedAt = Date()
+        return action
+    }
+
+    private func looksLikeWinegoldYAML(_ text: String) -> Bool {
+        let lines = text.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        return lines.contains { $0.hasPrefix("name:") }
+            && lines.contains("trigger:")
+            && lines.contains { $0.hasPrefix("fileextension:") }
+            && lines.contains("cmd:")
+            && lines.contains { $0.hasPrefix("exec:") }
+    }
+
 
     private func currentEditedAction() -> Action? {
         let existing = selectedActionID.flatMap { id in actions.first { $0.id == id } }
@@ -383,8 +419,22 @@ class SettingsViewController: NSViewController {
           fileExtension:
         \(extLines)
         cmd:
-          exec: \(yamlScalar(command))
+          exec: \(yamlExec(command))
         """
+    }
+
+    private func yamlExec(_ command: String) -> String {
+        let normalized = command
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
+        guard normalized.contains("\n") else { return yamlScalar(normalized) }
+
+        let indented = normalized
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { "    \($0)" }
+            .joined(separator: "\n")
+        return "|\n\(indented)"
     }
 
     private func yamlScalar(_ value: String) -> String {
@@ -394,6 +444,7 @@ class SettingsViewController: NSViewController {
             .replacingOccurrences(of: "\r", with: "\n")
         return "'\(escaped)'"
     }
+
 
     private func filenameSlug(_ value: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))

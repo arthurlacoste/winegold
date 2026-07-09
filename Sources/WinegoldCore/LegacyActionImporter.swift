@@ -78,8 +78,10 @@ public struct LegacyActionImporter {
         guard path.count == 2 else { return nil }
         let section = path[0]
         let key = path[1]
+        let lines = text.lines
         var inSection = false
-        for line in text.lines {
+
+        for (index, line) in lines.enumerated() {
             let trimmed = line.trimmed
             if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
             if !line.hasIndent && trimmed == "\(section):" {
@@ -89,11 +91,39 @@ public struct LegacyActionImporter {
             if !line.hasIndent && !trimmed.hasPrefix("-") {
                 inSection = false
             }
-            if inSection && trimmed.hasPrefix("\(key):") {
-                return trimmed.valueAfterColon
-            }
+            guard inSection, trimmed.hasPrefix("\(key):") else { continue }
+
+            let inline = trimmed.valueAfterColon
+            guard inline.isYAMLBlockScalar else { return inline }
+            return blockScalarValue(after: index, keyIndent: line.indentCount, in: lines)
         }
         return nil
+    }
+
+    private func blockScalarValue(after index: Int, keyIndent: Int, in lines: [String]) -> String {
+        var blockLines: [String] = []
+        for line in lines.dropFirst(index + 1) {
+            let trimmed = line.trimmed
+            if trimmed.isEmpty {
+                blockLines.append("")
+                continue
+            }
+            guard line.indentCount > keyIndent else { break }
+            blockLines.append(line)
+        }
+
+        let minIndent = blockLines
+            .filter { !$0.trimmed.isEmpty }
+            .map(\.indentCount)
+            .min() ?? 0
+
+        return blockLines
+            .map { line in
+                guard line.count >= minIndent else { return "" }
+                return String(line.dropFirst(minIndent))
+            }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .newlines)
     }
 
     private func listValues(afterPath path: [String], in text: String) -> [String] {
@@ -156,9 +186,22 @@ private extension String {
     var lines: [String] { components(separatedBy: .newlines) }
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
     var hasIndent: Bool { hasPrefix(" ") || hasPrefix("\t") }
+    var indentCount: Int {
+        var count = 0
+        for character in self {
+            if character == " " { count += 1 }
+            else if character == "\t" { count += 4 }
+            else { break }
+        }
+        return count
+    }
     var valueAfterColon: String {
         guard let idx = firstIndex(of: ":") else { return "" }
         return String(self[index(after: idx)...]).trimmed
+    }
+    var isYAMLBlockScalar: Bool {
+        let value = trimmed
+        return value == "|" || value == ">" || value == "|-" || value == "|+" || value == ">-" || value == ">+"
     }
     var trimmedUnquoted: String {
         var value = trimmed

@@ -47,6 +47,36 @@ final class LegacyActionImporterTests: XCTestCase {
         XCTAssertTrue(action.argumentsTemplate[1].contains("{input}"))
     }
 
+
+    func testImportsBlockScalarCommand() throws {
+        let yaml = """
+        name: Upload compressed WebP and copy Markdown
+        trigger:
+          fileExtension:
+            - jpg
+            - jpeg
+            - png
+            - webp
+        cmd:
+          exec: |
+            TMP_WEBP="/tmp/{basename}-{timestamp}.webp"
+            LOG="{desktop}/uploadfile-full.log"
+
+            sips -Z 1200 "{input}" --out "$TMP_WEBP" >/dev/null
+            curl -sSL -F "file=@$TMP_WEBP;type=image/webp;filename={basename}.webp" "https://app.irz.fr/img/api.php?format=markdown"
+        """
+
+        let action = try LegacyActionImporter().importLegacyYAML(yaml, sourceName: "upload.add.yml")
+        let command = try XCTUnwrap(action.argumentsTemplate.dropFirst().first)
+
+        XCTAssertEqual(action.name, "Upload compressed WebP and copy Markdown")
+        XCTAssertEqual(action.acceptedExtensions, ["jpg", "jpeg", "png", "webp"])
+        XCTAssertTrue(command.contains("TMP_WEBP=\"/tmp/{basename}-{timestamp}.webp\""))
+        XCTAssertTrue(command.contains("LOG=\"{desktop}/uploadfile-full.log\""))
+        XCTAssertTrue(command.contains("\nsips -Z 1200 \"{input}\""))
+        XCTAssertTrue(command.contains("https://app.irz.fr/img/api.php?format=markdown"))
+    }
+
     func testResolverSupportsDotExtensionAndInside() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
