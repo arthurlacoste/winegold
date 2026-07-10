@@ -176,7 +176,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
             let naturalHeight = frameRect(forContentRect: contentRect).height
             panelHeight = max(compactFrameHeight, min(naturalHeight, visibleFrame.height - 40))
         }
-        let targetX = max(visibleFrame.minX, visibleFrame.maxX - panelWidth - 20)
+        let targetX = settingsStore.panelSide == .left ? visibleFrame.minX + 20 : max(visibleFrame.minX, visibleFrame.maxX - panelWidth - 20)
         var frame = self.frame
         frame.origin.x = targetX
         frame.origin.y = max(visibleFrame.minY + 20, visibleFrame.maxY - panelHeight - 20)
@@ -184,7 +184,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         logMsg("[ActionPanelWindow] show visibleFrame=\(NSStringFromRect(visibleFrame)) frame=\(NSStringFromRect(frame))")
         let finalFrame = frame
         var startFrame = finalFrame
-        startFrame.origin.x = visibleFrame.maxX + 8
+        startFrame.origin.x = settingsStore.panelSide == .left ? visibleFrame.minX - panelWidth - 8 : visibleFrame.maxX + 8
         let shouldSlideIn = !isVisible || self.frame.origin.x >= visibleFrame.maxX - 2
 
         isProgrammaticFrameChange = true
@@ -212,6 +212,26 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
                 self?.startAutoHideMonitor()
                 self?.startOutsideClickMonitor()
             }
+        }
+    }
+
+
+    func move(to side: PanelSide, animated: Bool) {
+        settingsStore.panelSide = side
+        guard isVisible else { return }
+        let visibleFrame = currentVisibleFrame()
+        var newFrame = frame
+        newFrame.origin.x = side == .left ? visibleFrame.minX + 20 : visibleFrame.maxX - newFrame.width - 20
+        isProgrammaticFrameChange = true
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.22
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                animator().setFrame(newFrame, display: true)
+            } completionHandler: { [weak self] in self?.isProgrammaticFrameChange = false }
+        } else {
+            setFrame(newFrame, display: true)
+            isProgrammaticFrameChange = false
         }
     }
 

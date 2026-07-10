@@ -1,10 +1,11 @@
 import Cocoa
+import WinegoldCore
 
 class EdgeCatcherWindow: NSPanel {
     static let edgeWidth: CGFloat = 12
 
-    init(screen: NSScreen) {
-        let frame = EdgeCatcherWindow.edgeFrame(for: screen)
+    init(screen: NSScreen, side: PanelSide) {
+        let frame = EdgeCatcherWindow.edgeFrame(for: screen, side: side)
 
         super.init(
             contentRect: frame,
@@ -31,10 +32,10 @@ class EdgeCatcherWindow: NSPanel {
 
     var onDragEnter: (([URL]) -> Void)?
 
-    static func edgeFrame(for screen: NSScreen) -> CGRect {
+    static func edgeFrame(for screen: NSScreen, side: PanelSide) -> CGRect {
         let visibleFrame = screen.visibleFrame
         return NSRect(
-            x: visibleFrame.maxX - edgeWidth,
+            x: side == .left ? visibleFrame.minX : visibleFrame.maxX - edgeWidth,
             y: visibleFrame.minY,
             width: edgeWidth,
             height: visibleFrame.height

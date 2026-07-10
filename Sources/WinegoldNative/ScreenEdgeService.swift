@@ -1,10 +1,13 @@
 import Cocoa
+import WinegoldCore
 
 class ScreenEdgeService {
     private var edgeWindows: [EdgeCatcherWindow] = []
+    private var side: PanelSide
     private let onDragEnter: ([URL], NSScreen) -> Void
 
-    init(onDragEnter: @escaping ([URL], NSScreen) -> Void) {
+    init(side: PanelSide, onDragEnter: @escaping ([URL], NSScreen) -> Void) {
+        self.side = side
         self.onDragEnter = onDragEnter
         setupWindows()
         setupScreenChangeObserver()
@@ -21,7 +24,7 @@ class ScreenEdgeService {
         logMsg("[ScreenEdgeService] screens \(ScreenResolver.describeScreens())")
 
         for screen in NSScreen.screens {
-            let window = EdgeCatcherWindow(screen: screen)
+            let window = EdgeCatcherWindow(screen: screen, side: side)
             window.onDragEnter = { [weak self, weak screen] files in
                 guard let self, let screen else { return }
                 self.onDragEnter(files, screen)
@@ -52,10 +55,14 @@ class ScreenEdgeService {
     private func refreshWindowFrames() {
         for window in edgeWindows {
             guard let screen = window.screen ?? ScreenResolver.currentInteractionScreen() else { continue }
-            window.setFrame(EdgeCatcherWindow.edgeFrame(for: screen), display: true)
+            window.setFrame(EdgeCatcherWindow.edgeFrame(for: screen, side: side), display: true)
             window.orderFrontRegardless()
             logMsg("[ScreenEdgeService] refreshed edge frame=\(NSStringFromRect(window.frame))")
         }
     }
 
+    func setSide(_ side: PanelSide) {
+        self.side = side
+        refreshWindowFrames()
+    }
 }

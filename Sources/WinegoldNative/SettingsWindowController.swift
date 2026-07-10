@@ -6,12 +6,14 @@ class SettingsWindowController: NSWindowController {
     private let actionStore: ActionStore
     private let onLaunchAtLoginChanged: (Bool) -> Void
     private let onShortcutChanged: () -> Void
+    private let onPanelSideChanged: (PanelSide) -> Void
 
-    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void) {
+    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
         self.store = store
         self.actionStore = actionStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
         self.onShortcutChanged = onShortcutChanged
+        self.onPanelSideChanged = onPanelSideChanged
 
         let window = SettingsWindow(
             contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
@@ -28,7 +30,8 @@ class SettingsWindowController: NSWindowController {
             store: store,
             actionStore: actionStore,
             onLaunchAtLoginChanged: onLaunchAtLoginChanged,
-            onShortcutChanged: onShortcutChanged
+            onShortcutChanged: onShortcutChanged,
+            onPanelSideChanged: onPanelSideChanged
         )
         window.contentViewController = vc
         window.onSaveShortcut = { [weak vc] in vc?.saveFromShortcut() }
@@ -61,10 +64,12 @@ class SettingsViewController: NSViewController {
     private let actionStore: ActionStore
     private let onLaunchAtLoginChanged: (Bool) -> Void
     private let onShortcutChanged: () -> Void
+    private let onPanelSideChanged: (PanelSide) -> Void
 
     private var launchAtLoginCheckbox: NSButton!
     private var notificationsCheckbox: NSButton!
     private var shortcutField: NSTextField!
+    private var panelSideControl: NSSegmentedControl!
     private var actionPopup: NSPopUpButton!
     private var nameField: NSTextField!
     private var extensionsField: NSTextField!
@@ -72,11 +77,12 @@ class SettingsViewController: NSViewController {
     private var selectedActionID: UUID?
     private var actions: [Action] = []
 
-    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void) {
+    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
         self.store = store
         self.actionStore = actionStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
         self.onShortcutChanged = onShortcutChanged
+        self.onPanelSideChanged = onPanelSideChanged
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -129,6 +135,17 @@ class SettingsViewController: NSViewController {
 
         y += 42
 
+        panelSideControl = NSSegmentedControl(labels: ["Left", "Right"], trackingMode: .selectOne, target: self, action: #selector(panelSideChanged))
+        panelSideControl.selectedSegment = store.panelSide == .left ? 0 : 1
+        panelSideControl.frame = NSRect(x: padding, y: y, width: 170, height: 26)
+        view.addSubview(panelSideControl)
+
+        let panelSideLabel = NSTextField(labelWithString: "Bottom panel side")
+        panelSideLabel.font = .systemFont(ofSize: 12)
+        panelSideLabel.textColor = .secondaryLabelColor
+        panelSideLabel.frame = NSRect(x: padding + 184, y: y + 4, width: 150, height: 18)
+        view.addSubview(panelSideLabel)
+        y += 40
         addDivider(y: y, x: padding, width: w)
         y += 24
 
@@ -583,6 +600,12 @@ class SettingsViewController: NSViewController {
 
     @objc private func notificationsChanged() {
         store.showNotifications = notificationsCheckbox.state == .on
+    }
+
+    @objc private func panelSideChanged() {
+        let side: PanelSide = panelSideControl.selectedSegment == 0 ? .left : .right
+        store.panelSide = side
+        onPanelSideChanged(side)
     }
 
     @objc private func shortcutChanged() {

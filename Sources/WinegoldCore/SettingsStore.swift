@@ -1,5 +1,10 @@
 import Foundation
 
+public enum PanelSide: String, CaseIterable, Codable {
+    case left
+    case right
+}
+
 public struct SettingsStore {
     private let defaults = UserDefaults.standard
 
@@ -28,6 +33,11 @@ public struct SettingsStore {
     public var historyLimit: Int {
         get { defaults.integer(forKey: "historyLimit").nonzero ?? 100 }
         set { defaults.set(newValue, forKey: "historyLimit") }
+    }
+
+    public var panelSide: PanelSide {
+        get { PanelSide(rawValue: defaults.string(forKey: "panelSide") ?? "") ?? .right }
+        set { defaults.set(newValue.rawValue, forKey: "panelSide") }
     }
 
     public var showPanelShortcut: String {

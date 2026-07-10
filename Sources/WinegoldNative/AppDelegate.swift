@@ -213,7 +213,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupEdgeCatcher() {
-        screenEdgeService = ScreenEdgeService(onDragEnter: { [weak self] files, screen in
+        screenEdgeService = ScreenEdgeService(side: settingsStore.panelSide, onDragEnter: { [weak self] files, screen in
             guard !files.isEmpty else {
                 logMsg("[AppDelegate] ignored empty drag event")
                 return
@@ -252,6 +252,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onShortcutChanged: { [weak self] in
                     self?.refreshShowPanelShortcut()
+                },
+                onPanelSideChanged: { [weak self] side in
+                    self?.screenEdgeService?.setSide(side)
+                    self?.actionPanelWindow?.move(to: side, animated: true)
                 }
             )
         }
