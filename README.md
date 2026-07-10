@@ -1,4 +1,4 @@
-# Winegold Native
+# Winegold
 
 Drop files to the right screen edge → pick an action → command runs locally.
 
@@ -25,6 +25,32 @@ swift build --build-system native
 ```
 
 The script builds, prepares the `.app` bundle, ad-hoc signs it, and opens it.
+
+## Release builds
+
+GitHub Actions validates pull requests and every push to `main`.
+
+- Pull requests run tests and a release build without publishing an artifact.
+- Pushes to `main` and manual workflow runs produce a downloadable ZIP artifact.
+- Tags matching `vMAJOR.MINOR.PATCH`, such as `v0.2.0`, also create a GitHub Release and attach the ZIP.
+
+Create a release with:
+
+```bash
+git tag -a v0.2.0 -m "Winegold v0.2.0"
+git push origin v0.2.0
+```
+
+The tag controls `CFBundleShortVersionString`. GitHub Actions uses its run number for `CFBundleVersion`.
+
+Build and package the same unsigned release locally with:
+
+```bash
+VERSION=0.2.0 BUILD_NUMBER=2 scripts/build-app.sh
+scripts/package-release.sh
+```
+
+Current packages are ad-hoc signed but not Apple-notarized. macOS Gatekeeper may warn after downloading the ZIP. In Finder, Control-click the app and choose **Open** to approve it manually.
 
 The app lives in the menu bar (no dock icon). Drag any file toward the right screen edge to open the action panel.
 
@@ -119,7 +145,7 @@ MIT
 
 ## Agent skill
 
-For agents creating or migrating Winegold Native scripts, see:
+For agents creating or migrating Winegold scripts, see:
 
 ```txt
 ../skills/winegold-native-scripts/SKILL.md

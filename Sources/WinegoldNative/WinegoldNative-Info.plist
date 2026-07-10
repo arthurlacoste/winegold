@@ -13,9 +13,9 @@
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleName</key>
-    <string>WinegoldNative</string>
+    <string>Winegold</string>
     <key>CFBundleDisplayName</key>
-    <string>WinegoldNative</string>
+    <string>Winegold</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
