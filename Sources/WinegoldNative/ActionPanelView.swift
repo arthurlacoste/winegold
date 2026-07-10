@@ -480,7 +480,8 @@ class ActionPanelViewController: NSViewController {
         let statusText = NSTextField(labelWithString: result.status.rawValue.capitalized)
         statusText.font = .systemFont(ofSize: 11)
         statusText.textColor = iconColor
-        statusText.frame = NSRect(x: w - 80, y: cy + 24, width: 80, height: 18)
+        statusText.alignment = .right
+        statusText.frame = NSRect(x: w - 104, y: cy + 24, width: 88, height: 18)
         container.addSubview(statusText)
         cy += 46
 

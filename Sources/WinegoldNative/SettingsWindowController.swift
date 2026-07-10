@@ -12,7 +12,7 @@ class SettingsWindowController: NSWindowController {
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
 
         let window = SettingsWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 800),
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -78,7 +78,7 @@ class SettingsViewController: NSViewController {
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
 
     override func loadView() {
-        view = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 800))
+        view = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 680))
         view.wantsLayer = true
         view.layer?.backgroundColor = WinegoldTheme.panelBackground(in: view).cgColor
     }
@@ -566,12 +566,7 @@ class SettingsViewController: NSViewController {
     }
 
     @objc private func openScriptingDocs() {
-        let sourceFile = URL(fileURLWithPath: #filePath)
-        let repositoryRoot = sourceFile
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let docsURL = repositoryRoot.appendingPathComponent("docs/scripting.md")
+        guard let docsURL = URL(string: "https://github.com/arthurlacoste/winegold/blob/main/docs/scripting.md") else { return }
         NSWorkspace.shared.open(docsURL)
     }
 
