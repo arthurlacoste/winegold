@@ -196,7 +196,7 @@ class SettingsViewController: NSViewController {
         addFormLabel("Command", x: padding, y: y)
         let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 260))
         scroll.hasVerticalScroller = true
-        scroll.hasHorizontalScroller = true
+        scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
         scroll.borderType = .bezelBorder
 
@@ -204,10 +204,10 @@ class SettingsViewController: NSViewController {
         commandTextView.font = NSFont(name: "Menlo", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
         commandTextView.isRichText = false
         commandTextView.importsGraphics = false
-        commandTextView.isHorizontallyResizable = true
+        commandTextView.isHorizontallyResizable = false
         commandTextView.isVerticallyResizable = true
-        commandTextView.textContainer?.widthTracksTextView = false
-        commandTextView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        commandTextView.textContainer?.widthTracksTextView = true
+        commandTextView.textContainer?.containerSize = NSSize(width: w - 124, height: CGFloat.greatestFiniteMagnitude)
         commandTextView.isAutomaticQuoteSubstitutionEnabled = false
         commandTextView.isAutomaticDashSubstitutionEnabled = false
         commandTextView.string = ""
