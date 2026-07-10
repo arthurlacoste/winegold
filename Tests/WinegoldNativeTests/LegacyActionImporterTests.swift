@@ -91,7 +91,7 @@ final class LegacyActionImporterTests: XCTestCase {
         XCTAssertEqual(resolved[0], "hello.txt")
         XCTAssertEqual(resolved[1], "bonjour")
     }
-    func testImportsNamePlaceholders() throws {
+    func testImportsNameAndSuccessMessagePlaceholders() throws {
         let yaml = """
         name: Convert {{name}}
         trigger:
@@ -99,10 +99,23 @@ final class LegacyActionImporterTests: XCTestCase {
             - txt
         cmd:
           exec: 'echo "{{file}}"'
+        successMessage: 'Created {{namebase}}.done'
         """
         let action = try LegacyActionImporter().importLegacyYAML(yaml)
         XCTAssertEqual(action.name, "Convert {filename}")
+        XCTAssertEqual(action.successMessage, "Created {basename}.done")
     }
 
-
+    func testEmptySuccessMessageIsIgnored() throws {
+        let yaml = """
+        name: Test
+        trigger:
+          fileExtension:
+            - txt
+        cmd:
+          exec: 'echo ok'
+        successMessage: '   '
+        """
+        XCTAssertNil(try LegacyActionImporter().importLegacyYAML(yaml).successMessage)
+    }
 }

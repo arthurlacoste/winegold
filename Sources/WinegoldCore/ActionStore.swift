@@ -12,7 +12,7 @@ public struct ActionStore {
     }
 
     private var actionColumns: String {
-        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, executable_path, arguments_template, working_directory_template, output_path_template, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at"
+        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, executable_path, arguments_template, working_directory_template, output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at"
     }
 
     public func listActions() throws -> [Action] {
@@ -37,8 +37,8 @@ public struct ActionStore {
         let stmt = try db.prepare("""
             INSERT INTO actions (id, name, description, icon_name, enabled, accepted_extensions,
             accepted_utis, executable_path, arguments_template, working_directory_template,
-            output_path_template, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """)
         bindAction(action, to: stmt)
         _ = stmt.step()
@@ -60,6 +60,7 @@ public struct ActionStore {
                 argumentsTemplate: action.argumentsTemplate,
                 workingDirectoryTemplate: action.workingDirectoryTemplate,
                 outputPathTemplate: action.outputPathTemplate,
+                successMessage: action.successMessage,
                 requiresConfirmation: action.requiresConfirmation,
                 timeoutSeconds: action.timeoutSeconds,
                 isFavorite: existing.isFavorite,
@@ -87,7 +88,7 @@ public struct ActionStore {
         let stmt = try db.prepare("""
             UPDATE actions SET name=?, description=?, icon_name=?, enabled=?, accepted_extensions=?,
             accepted_utis=?, executable_path=?, arguments_template=?, working_directory_template=?,
-            output_path_template=?, requires_confirmation=?, timeout_seconds=?, is_favorite=?,
+            output_path_template=?, success_message=?, requires_confirmation=?, timeout_seconds=?, is_favorite=?,
             display_order=?, created_at=?, updated_at=? WHERE id=?
         """)
         bindActionForUpdate(action, to: stmt)
@@ -150,12 +151,13 @@ public struct ActionStore {
             argumentsTemplate: decodeArgumentsTemplate(argsStr, executablePath: stmt.columnText(at: 7)),
             workingDirectoryTemplate: stmt.columnIsNull(at: 9) ? nil : stmt.columnText(at: 9),
             outputPathTemplate: stmt.columnIsNull(at: 10) ? nil : stmt.columnText(at: 10),
-            requiresConfirmation: stmt.columnInt(at: 11) != 0,
-            timeoutSeconds: stmt.columnInt(at: 12),
-            isFavorite: stmt.columnInt(at: 13) != 0,
-            displayOrder: stmt.columnInt(at: 14),
-            createdAt: dateFormatter.date(from: stmt.columnText(at: 15)) ?? Date(),
-            updatedAt: dateFormatter.date(from: stmt.columnText(at: 16)) ?? Date()
+            successMessage: stmt.columnIsNull(at: 11) ? nil : stmt.columnText(at: 11),
+            requiresConfirmation: stmt.columnInt(at: 12) != 0,
+            timeoutSeconds: stmt.columnInt(at: 13),
+            isFavorite: stmt.columnInt(at: 14) != 0,
+            displayOrder: stmt.columnInt(at: 15),
+            createdAt: dateFormatter.date(from: stmt.columnText(at: 16)) ?? Date(),
+            updatedAt: dateFormatter.date(from: stmt.columnText(at: 17)) ?? Date()
         )
     }
 
@@ -166,7 +168,7 @@ public struct ActionStore {
 
     private func bindActionForUpdate(_ action: Action, to stmt: Statement) {
         bindActionFields(action, to: stmt, startingAt: 1)
-        stmt.bindText(action.id.uuidString, at: 17)
+        stmt.bindText(action.id.uuidString, at: 18)
     }
 
     private func encodeArgumentsTemplate(_ arguments: [String]) -> String {
@@ -215,11 +217,16 @@ public struct ActionStore {
         } else {
             stmt.bindNull(at: start + 9)
         }
-        stmt.bindInt(action.requiresConfirmation ? 1 : 0, at: start + 10)
-        stmt.bindInt(action.timeoutSeconds, at: start + 11)
-        stmt.bindInt(action.isFavorite ? 1 : 0, at: start + 12)
-        stmt.bindInt(action.displayOrder, at: start + 13)
-        stmt.bindText(dateFormatter.string(from: action.createdAt), at: start + 14)
-        stmt.bindText(dateFormatter.string(from: action.updatedAt), at: start + 15)
+        if let message = action.successMessage {
+            stmt.bindText(message, at: start + 10)
+        } else {
+            stmt.bindNull(at: start + 10)
+        }
+        stmt.bindInt(action.requiresConfirmation ? 1 : 0, at: start + 11)
+        stmt.bindInt(action.timeoutSeconds, at: start + 12)
+        stmt.bindInt(action.isFavorite ? 1 : 0, at: start + 13)
+        stmt.bindInt(action.displayOrder, at: start + 14)
+        stmt.bindText(dateFormatter.string(from: action.createdAt), at: start + 15)
+        stmt.bindText(dateFormatter.string(from: action.updatedAt), at: start + 16)
     }
 }

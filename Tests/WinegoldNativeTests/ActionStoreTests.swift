@@ -68,6 +68,7 @@ final class ActionStoreTests: XCTestCase {
             argumentsTemplate: ["{input}", "-quality", "85", "{basename}.webp"],
             workingDirectoryTemplate: "{parent}",
             outputPathTemplate: "{parent}/{basename}.webp",
+            successMessage: "Created {basename}.webp",
             requiresConfirmation: false,
             timeoutSeconds: 60,
             isFavorite: true,
@@ -85,6 +86,7 @@ final class ActionStoreTests: XCTestCase {
         XCTAssertEqual(loaded.argumentsTemplate, original.argumentsTemplate)
         XCTAssertEqual(loaded.workingDirectoryTemplate, original.workingDirectoryTemplate)
         XCTAssertEqual(loaded.outputPathTemplate, original.outputPathTemplate)
+        XCTAssertEqual(loaded.successMessage, original.successMessage)
         XCTAssertEqual(loaded.timeoutSeconds, original.timeoutSeconds)
         XCTAssertEqual(loaded.isFavorite, original.isFavorite)
         XCTAssertEqual(loaded.displayOrder, original.displayOrder)

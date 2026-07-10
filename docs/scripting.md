@@ -19,7 +19,7 @@ cmd:
 
 ## Supported YAML
 
-Only these fields are supported for now:
+Supported fields:
 
 ```yml
 name: My action
@@ -29,13 +29,17 @@ trigger:
     - png
 cmd:
   exec: 'echo "{input}"'
+successMessage: 'Created {filename}'
 ```
 
 ```txt
 name
 trigger.fileExtension
 cmd.exec
+successMessage
 ```
+
+`successMessage` is optional. It is displayed only when the command succeeds. It supports the same placeholders as `name` and `cmd.exec`. When omitted or empty, Winegold keeps the default completion message.
 
 Unsupported fields are ignored.
 
@@ -65,6 +69,22 @@ trigger:
 ```
 
 Write extensions without the dot.
+
+## Completion message
+
+Use `successMessage` to replace the default `Done` label after a successful action:
+
+```yml
+name: Convert {filename}
+trigger:
+  fileExtension:
+    - webp
+cmd:
+  exec: 'sips -s format jpeg "{input}" --out "{parent}/{basename}.jpg"'
+successMessage: 'Created {basename}.jpg'
+```
+
+The message is not shown for failed, timed-out, or cancelled commands.
 
 ## Placeholders
 

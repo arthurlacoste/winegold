@@ -671,7 +671,7 @@ class ActionPanelViewController: NSViewController {
 
         let titleText: String
         switch result.status {
-        case .success: titleText = "Done"
+        case .success: titleText = result.completionMessage ?? "Done"
         case .failed: titleText = "Failed"
         case .timeout: titleText = "Timed out"
         case .cancelled: titleText = "Cancelled"

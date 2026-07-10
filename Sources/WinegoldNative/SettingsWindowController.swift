@@ -73,6 +73,7 @@ class SettingsViewController: NSViewController {
     private var actionPopup: NSPopUpButton!
     private var nameField: NSTextField!
     private var extensionsField: NSTextField!
+    private var successMessageField: NSTextField!
     private var commandTextView: NSTextView!
     private var selectedActionID: UUID?
     private var actions: [Action] = []
@@ -215,14 +216,20 @@ class SettingsViewController: NSViewController {
         view.addSubview(extensionsField)
         y += 38
 
+        addFormLabel("On success", x: padding, y: y)
+        successMessageField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
+        successMessageField.placeholderString = "Optional, e.g. Created {basename}.jpg"
+        view.addSubview(successMessageField)
+        y += 38
+
         addFormLabel("Command", x: padding, y: y)
-        let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 260))
+        let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 220))
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
         scroll.borderType = .bezelBorder
 
-        commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 260))
+        commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 220))
         commandTextView.font = NSFont(name: "Menlo", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
         commandTextView.isRichText = false
         commandTextView.importsGraphics = false
@@ -235,7 +242,7 @@ class SettingsViewController: NSViewController {
         commandTextView.string = ""
         scroll.documentView = commandTextView
         view.addSubview(scroll)
-        y += 276
+        y += 236
 
         let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}.")
         placeholderHelp.font = .systemFont(ofSize: 11)
@@ -277,6 +284,7 @@ class SettingsViewController: NSViewController {
         let extensionLabel = extensions.joined(separator: ", ")
         nameField.stringValue = defaultScriptName(for: extensions)
         extensionsField.stringValue = extensionLabel.isEmpty ? "*" : extensionLabel
+        successMessageField.stringValue = ""
         commandTextView.string = defaultScriptCommand(for: extensions)
         nameField.becomeFirstResponder()
     }
@@ -332,6 +340,7 @@ class SettingsViewController: NSViewController {
         selectedActionID = action.id
         nameField.stringValue = action.name
         extensionsField.stringValue = action.acceptedExtensions.joined(separator: ", ")
+        successMessageField.stringValue = action.successMessage ?? ""
         commandTextView.string = shellCommand(for: action)
     }
 
@@ -339,6 +348,7 @@ class SettingsViewController: NSViewController {
         selectedActionID = nil
         nameField.stringValue = ""
         extensionsField.stringValue = "*"
+        successMessageField.stringValue = ""
         commandTextView.string = ""
     }
 
@@ -358,6 +368,7 @@ class SettingsViewController: NSViewController {
         let name = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let command = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
         let extensions = currentExtensions()
+        let successMessage = normalizedSuccessMessage()
 
         guard !name.isEmpty, !command.isEmpty, !extensions.isEmpty else { return nil }
 
@@ -373,6 +384,7 @@ class SettingsViewController: NSViewController {
             argumentsTemplate: ["-lc", command],
             workingDirectoryTemplate: existing?.workingDirectoryTemplate,
             outputPathTemplate: existing?.outputPathTemplate,
+            successMessage: successMessage,
             requiresConfirmation: existing?.requiresConfirmation ?? false,
             timeoutSeconds: existing?.timeoutSeconds ?? 120,
             createdAt: existing?.createdAt ?? Date(),
@@ -394,6 +406,7 @@ class SettingsViewController: NSViewController {
         action.isFavorite = existing?.isFavorite ?? false
         action.displayOrder = existing?.displayOrder ?? 0
         action.createdAt = existing?.createdAt ?? action.createdAt
+        action.successMessage = normalizedSuccessMessage() ?? action.successMessage
         action.updatedAt = Date()
         return action
     }
@@ -424,8 +437,19 @@ class SettingsViewController: NSViewController {
           fileExtension:
         \(extLines)
         cmd:
-          exec: \(yamlExec(command))
+          exec: \(yamlExec(command))\(yamlSuccessMessage(action.successMessage))
         """
+    }
+
+
+    private func yamlSuccessMessage(_ message: String?) -> String {
+        guard let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
+        return "\nsuccessMessage: \(yamlScalar(message))"
+    }
+
+    private func normalizedSuccessMessage() -> String? {
+        let value = successMessageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 
     private func yamlExec(_ command: String) -> String {

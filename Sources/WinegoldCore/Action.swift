@@ -16,6 +16,7 @@ public struct Action: Identifiable, Codable, Equatable {
 
     public var workingDirectoryTemplate: String?
     public var outputPathTemplate: String?
+    public var successMessage: String?
 
     public var requiresConfirmation: Bool
     public var timeoutSeconds: Int
@@ -38,6 +39,7 @@ public struct Action: Identifiable, Codable, Equatable {
         argumentsTemplate: [String] = [],
         workingDirectoryTemplate: String? = nil,
         outputPathTemplate: String? = nil,
+        successMessage: String? = nil,
         requiresConfirmation: Bool = false,
         timeoutSeconds: Int = 30,
         isFavorite: Bool = false,
@@ -57,6 +59,7 @@ public struct Action: Identifiable, Codable, Equatable {
         self.argumentsTemplate = argumentsTemplate
         self.workingDirectoryTemplate = workingDirectoryTemplate
         self.outputPathTemplate = outputPathTemplate
+        self.successMessage = successMessage
         self.requiresConfirmation = requiresConfirmation
         self.timeoutSeconds = timeoutSeconds
         self.isFavorite = isFavorite

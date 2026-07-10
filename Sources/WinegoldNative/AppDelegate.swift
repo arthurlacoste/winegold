@@ -590,6 +590,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 result.actionId = action.id
                 result.actionName = resolvedActionName
                 result.inputFiles = [file.path]
+                if result.status == .success, let template = action.successMessage {
+                    let message = resolver.resolve(template: template, for: file)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    result.completionMessage = message.isEmpty ? nil : message
+                }
 
                 if result.status != .success {
                     result.stderr = failureDebugText(

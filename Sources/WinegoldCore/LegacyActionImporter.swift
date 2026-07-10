@@ -30,7 +30,11 @@ public struct LegacyActionImporter {
         }
 
         let translatedCommand = translateLegacyPlaceholders(command)
+        let successMessage = scalarValue(for: "successMessage", in: text)
+            ?? scalarValue(for: "message", in: text)
         let translatedName = translateLegacyPlaceholders(name)
+        let translatedMessage = successMessage.map { translateLegacyPlaceholders($0.trimmedUnquoted) }
+            .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         return Action(
             name: translatedName,
             description: "Imported legacy .add.yml script",
@@ -41,6 +45,7 @@ public struct LegacyActionImporter {
             argumentsTemplate: ["-lc", translatedCommand],
             workingDirectoryTemplate: nil,
             outputPathTemplate: nil,
+            successMessage: translatedMessage,
             requiresConfirmation: false,
             timeoutSeconds: 120
         )

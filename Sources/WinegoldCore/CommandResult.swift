@@ -15,6 +15,7 @@ public struct CommandResult: Identifiable, Codable {
     public var actionName: String
     public var inputFiles: [String]
     public var outputFiles: [String]
+    public var completionMessage: String?
     public var status: ExecutionStatus
     public var exitCode: Int32?
     public var stdout: String
@@ -28,6 +29,7 @@ public struct CommandResult: Identifiable, Codable {
         actionName: String = "",
         inputFiles: [String] = [],
         outputFiles: [String] = [],
+        completionMessage: String? = nil,
         status: ExecutionStatus = .pending,
         exitCode: Int32? = nil,
         stdout: String = "",
@@ -40,6 +42,7 @@ public struct CommandResult: Identifiable, Codable {
         self.actionName = actionName
         self.inputFiles = inputFiles
         self.outputFiles = outputFiles
+        self.completionMessage = completionMessage
         self.status = status
         self.exitCode = exitCode
         self.stdout = stdout

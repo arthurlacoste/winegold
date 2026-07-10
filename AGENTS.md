@@ -46,6 +46,8 @@ Do not commit build artifacts.
 
 Keep user scripts data-driven when possible.
 
+When changing the script format, placeholders, importer, exporter, or other scripting core behavior, update `docs/scripting.md` in the same change.
+
 ## Main flows
 
 Panel actions:

@@ -21,6 +21,7 @@ public struct Migrations {
                 arguments_template TEXT NOT NULL,
                 working_directory_template TEXT,
                 output_path_template TEXT,
+                success_message TEXT,
                 requires_confirmation INTEGER NOT NULL,
                 timeout_seconds INTEGER NOT NULL,
                 is_favorite INTEGER NOT NULL DEFAULT 0,
@@ -54,11 +55,17 @@ public struct Migrations {
 
         let version = try currentVersion()
         if version == 0 {
-            try db.execute("INSERT INTO schema_version (version) VALUES (2)")
-        } else if version < 2 {
-            try db.execute("ALTER TABLE actions ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
-            try db.execute("ALTER TABLE actions ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0")
-            try db.execute("INSERT INTO schema_version (version) VALUES (2)")
+            try db.execute("INSERT INTO schema_version (version) VALUES (3)")
+        } else {
+            if version < 2 {
+                try db.execute("ALTER TABLE actions ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
+                try db.execute("ALTER TABLE actions ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0")
+                try db.execute("INSERT INTO schema_version (version) VALUES (2)")
+            }
+            if version < 3 {
+                try db.execute("ALTER TABLE actions ADD COLUMN success_message TEXT")
+                try db.execute("INSERT INTO schema_version (version) VALUES (3)")
+            }
         }
     }
 
