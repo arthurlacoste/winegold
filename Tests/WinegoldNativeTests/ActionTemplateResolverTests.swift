@@ -70,4 +70,9 @@ final class ActionTemplateResolverTests: XCTestCase {
         let result = resolver.resolve(argumentsTemplate: ["{desktop}"], for: url)
         XCTAssertTrue(result[0].hasSuffix("/Desktop"))
     }
+    func testResolveGenericTemplateWithKnownAndUnknownPlaceholders() {
+        let url = URL(fileURLWithPath: "/tmp/my file.txt")
+        let result = resolver.resolve(template: "Convert {filename} {unknown}", for: url)
+        XCTAssertEqual(result, "Convert my file.txt {unknown}")
+    }
 }

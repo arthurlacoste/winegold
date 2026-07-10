@@ -3,6 +3,7 @@ import Foundation
 public struct Action: Identifiable, Codable, Equatable {
     public var id: UUID
     public var name: String
+    public var runtimeNameTemplate: String?
     public var description: String
     public var iconName: String?
     public var enabled: Bool
@@ -27,6 +28,7 @@ public struct Action: Identifiable, Codable, Equatable {
     public init(
         id: UUID = UUID(),
         name: String,
+        runtimeNameTemplate: String? = nil,
         description: String = "",
         iconName: String? = nil,
         enabled: Bool = true,
@@ -45,6 +47,7 @@ public struct Action: Identifiable, Codable, Equatable {
     ) {
         self.id = id
         self.name = name
+        self.runtimeNameTemplate = runtimeNameTemplate
         self.description = description
         self.iconName = iconName
         self.enabled = enabled

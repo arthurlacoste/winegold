@@ -3,6 +3,10 @@ import Foundation
 public struct ActionTemplateResolver {
     public init() {}
 
+    public func resolve(template: String, for inputFile: URL) -> String {
+        resolvePlaceholders(in: template, for: inputFile)
+    }
+
     public func resolve(argumentsTemplate: [String], for inputFile: URL) -> [String] {
         argumentsTemplate.map { resolvePlaceholders(in: $0, for: inputFile) }
     }

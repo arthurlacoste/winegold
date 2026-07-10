@@ -30,8 +30,9 @@ public struct LegacyActionImporter {
         }
 
         let translatedCommand = translateLegacyPlaceholders(command)
+        let translatedName = translateLegacyPlaceholders(name)
         return Action(
-            name: name,
+            name: translatedName,
             description: "Imported legacy .add.yml script",
             iconName: "terminal",
             enabled: true,

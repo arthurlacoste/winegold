@@ -91,4 +91,18 @@ final class LegacyActionImporterTests: XCTestCase {
         XCTAssertEqual(resolved[0], "hello.txt")
         XCTAssertEqual(resolved[1], "bonjour")
     }
+    func testImportsNamePlaceholders() throws {
+        let yaml = """
+        name: Convert {{name}}
+        trigger:
+          fileExtension:
+            - txt
+        cmd:
+          exec: 'echo "{{file}}"'
+        """
+        let action = try LegacyActionImporter().importLegacyYAML(yaml)
+        XCTAssertEqual(action.name, "Convert {filename}")
+    }
+
+
 }

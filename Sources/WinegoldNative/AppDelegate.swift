@@ -303,7 +303,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let actions = (try? store.listEnabledActions()) ?? []
+        let storedActions = (try? store.listEnabledActions()) ?? []
+        let actions = runtimeActions(storedActions, for: files.first)
         var matched = ActionMatcher().matchingActions(for: files, actions: actions)
         matched = prioritizeInstallActionIfNeeded(matched, files: files)
         if invocation == .drag, matched.isEmpty, !shouldAutoImportScripts(files) {
@@ -365,10 +366,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
 
+    private func runtimeActions(_ actions: [Action], for file: URL?) -> [Action] {
+        guard let file else { return actions }
+        let resolver = ActionTemplateResolver()
+        return actions.map { action in
+            var runtime = action
+            runtime.runtimeNameTemplate = action.name
+            runtime.name = resolver.resolve(template: action.name, for: file)
+            return runtime
+        }
+    }
+
     private func refreshPanelActions() {
         guard let actionStore else { return }
-        let actions = (try? actionStore.listEnabledActions()) ?? []
-        let matched = ActionMatcher().matchingActions(for: actionPanelWindow?.currentFiles ?? [], actions: actions)
+        let storedActions = (try? actionStore.listEnabledActions()) ?? []
+        let files = actionPanelWindow?.currentFiles ?? []
+        let actions = runtimeActions(storedActions, for: files.first)
+        let matched = ActionMatcher().matchingActions(for: files, actions: actions)
         actionPanelWindow?.replaceActions(allActions: actions, actions: matched)
     }
 
@@ -536,6 +550,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             var batchHadFailure = false
             for (offset, file) in files.enumerated() {
+                let resolvedActionName = resolver.resolve(template: action.runtimeNameTemplate ?? action.name, for: file)
                 let args = resolver.resolve(argumentsTemplate: action.argumentsTemplate, for: file)
                 let wd = resolver.resolve(workingDirectoryTemplate: action.workingDirectoryTemplate, for: file)
 
@@ -549,7 +564,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 await MainActor.run {
                     self.actionPanelWindow?.updateRunningProgress(
-                        actionName: action.name,
+                        actionName: resolvedActionName,
                         file: file,
                         fileIndex: fileIndex,
                         fileCount: files.count,
@@ -562,7 +577,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     guard Date().timeIntervalSince(startedAt) >= 0.3 else { return }
                     Task { @MainActor in
                         self?.actionPanelWindow?.updateRunningProgress(
-                            actionName: action.name,
+                            actionName: resolvedActionName,
                             file: file,
                             fileIndex: fileIndex,
                             fileCount: files.count,
@@ -573,7 +588,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 })
                 result.actionId = action.id
-                result.actionName = action.name
+                result.actionName = resolvedActionName
                 result.inputFiles = [file.path]
 
                 if result.status != .success {
