@@ -5,11 +5,13 @@ class SettingsWindowController: NSWindowController {
     private let store: SettingsStore
     private let actionStore: ActionStore
     private let onLaunchAtLoginChanged: (Bool) -> Void
+    private let onShortcutChanged: () -> Void
 
-    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void) {
+    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void) {
         self.store = store
         self.actionStore = actionStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
+        self.onShortcutChanged = onShortcutChanged
 
         let window = SettingsWindow(
             contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
@@ -25,7 +27,8 @@ class SettingsWindowController: NSWindowController {
         let vc = SettingsViewController(
             store: store,
             actionStore: actionStore,
-            onLaunchAtLoginChanged: onLaunchAtLoginChanged
+            onLaunchAtLoginChanged: onLaunchAtLoginChanged,
+            onShortcutChanged: onShortcutChanged
         )
         window.contentViewController = vc
         window.onSaveShortcut = { [weak vc] in vc?.saveFromShortcut() }
@@ -57,6 +60,7 @@ class SettingsViewController: NSViewController {
     private var store: SettingsStore
     private let actionStore: ActionStore
     private let onLaunchAtLoginChanged: (Bool) -> Void
+    private let onShortcutChanged: () -> Void
 
     private var launchAtLoginCheckbox: NSButton!
     private var notificationsCheckbox: NSButton!
@@ -68,10 +72,11 @@ class SettingsViewController: NSViewController {
     private var selectedActionID: UUID?
     private var actions: [Action] = []
 
-    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void) {
+    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void) {
         self.store = store
         self.actionStore = actionStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
+        self.onShortcutChanged = onShortcutChanged
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -583,6 +588,7 @@ class SettingsViewController: NSViewController {
     @objc private func shortcutChanged() {
         store.showPanelShortcut = shortcutField.stringValue
         shortcutField.stringValue = store.showPanelShortcut
+        onShortcutChanged()
     }
 }
 

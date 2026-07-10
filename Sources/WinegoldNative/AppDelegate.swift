@@ -11,14 +11,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var actionPanelWindow: ActionPanelWindow?
     private var settingsWC: SettingsWindowController?
     private var database: Database?
-    private var shortcutMonitors: [Any] = []
+    private var globalHotKey: GlobalHotKey?
+    private weak var showPanelMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logMsg("[AppDelegate] app started")
         setupDatabase()
         setupMainMenu()
         setupMenuBar()
-        setupShortcutMonitors()
+        setupGlobalHotKey()
         setupEdgeCatcher()
     }
 
@@ -138,8 +139,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        let showItem = NSMenuItem(title: "Show Panel", action: #selector(togglePanel), keyEquivalent: "P")
-        showItem.keyEquivalentModifierMask = [.command, .shift]
+        let showItem = NSMenuItem(title: "Show Panel", action: #selector(togglePanel), keyEquivalent: "")
+        applyShortcutToMenuItem(showItem)
+        showPanelMenuItem = showItem
         showItem.target = self
         menu.addItem(showItem)
 
@@ -154,42 +156,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarItem?.menu = menu
     }
 
-    private func setupShortcutMonitors() {
-        let handler: (NSEvent) -> NSEvent? = { [weak self] event in
-            guard let self else { return event }
-            if self.matchesShowPanelShortcut(event) {
-                DispatchQueue.main.async { self.togglePanel() }
-                return nil
-            }
-            return event
+    private func setupGlobalHotKey() {
+        let hotKey = GlobalHotKey { [weak self] in
+            self?.showPanelFromShortcut()
         }
-        shortcutMonitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: handler) as Any)
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
-            guard let self, self.matchesShowPanelShortcut(event) else { return }
-            DispatchQueue.main.async { self.togglePanel() }
-        }) {
-            shortcutMonitors.append(global)
-        }
+        globalHotKey = hotKey
+        let registered = hotKey.register(shortcut: settingsStore.showPanelShortcut)
+        logMsg("[AppDelegate] global shortcut \(settingsStore.showPanelShortcut): \(registered ? "registered" : "invalid or unavailable")")
     }
 
-    private func matchesShowPanelShortcut(_ event: NSEvent) -> Bool {
-        let shortcut = settingsStore.showPanelShortcut
-        let parts = shortcut.split(separator: "+").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-        guard let key = parts.last, event.charactersIgnoringModifiers?.lowercased() == key else { return false }
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if parts.contains("cmd") || parts.contains("command") {
-            guard flags.contains(.command) else { return false }
+    private func refreshShowPanelShortcut() {
+        let registered = globalHotKey?.register(shortcut: settingsStore.showPanelShortcut) ?? false
+        if let showPanelMenuItem {
+            applyShortcutToMenuItem(showPanelMenuItem)
         }
-        if parts.contains("shift") {
-            guard flags.contains(.shift) else { return false }
+        logMsg("[AppDelegate] global shortcut updated to \(settingsStore.showPanelShortcut): \(registered ? "registered" : "invalid or unavailable")")
+    }
+
+    private func applyShortcutToMenuItem(_ item: NSMenuItem) {
+        let parts = settingsStore.showPanelShortcut
+            .split(separator: "+")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        guard let key = parts.last, key.count == 1 else {
+            item.keyEquivalent = ""
+            item.keyEquivalentModifierMask = []
+            return
         }
-        if parts.contains("alt") || parts.contains("option") {
-            guard flags.contains(.option) else { return false }
-        }
-        if parts.contains("ctrl") || parts.contains("control") {
-            guard flags.contains(.control) else { return false }
-        }
-        return true
+        item.keyEquivalent = key
+        var modifiers: NSEvent.ModifierFlags = []
+        if parts.contains("cmd") || parts.contains("command") { modifiers.insert(.command) }
+        if parts.contains("shift") { modifiers.insert(.shift) }
+        if parts.contains("alt") || parts.contains("option") { modifiers.insert(.option) }
+        if parts.contains("ctrl") || parts.contains("control") { modifiers.insert(.control) }
+        item.keyEquivalentModifierMask = modifiers
+    }
+
+    private func showPanelFromShortcut() {
+        showPanel(with: [], on: ScreenResolver.currentInteractionScreen())
     }
 
     private func setupEdgeCatcher() {
@@ -225,6 +228,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             print("Login item error: \(error)")
                         }
                     }
+                },
+                onShortcutChanged: { [weak self] in
+                    self?.refreshShowPanelShortcut()
                 }
             )
         }
