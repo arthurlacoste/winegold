@@ -16,6 +16,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     private var successHoverTimer: Timer?
     private var isAnimatingOut = false
     private let compactFrameHeight: CGFloat = 132
+    private let idleDropFrameHeight: CGFloat = 220
     private var staysOpenUntilExplicitClose = false
 
     init(
@@ -77,8 +78,10 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
             defer: false
         )
 
-        self.title = "Winegold"
-        self.isOpaque = true
+        self.title = ""
+        self.titleVisibility = .hidden
+        self.titlebarAppearsTransparent = true
+        self.isOpaque = false
         self.alphaValue = 1
         self.backgroundColor = WinegoldTheme.panelBackground(in: nil)
         self.level = .floating
@@ -119,6 +122,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         cancelHideAfterSuccess()
         stopSuccessHoverMonitor()
         panelVC.refresh()
+        resizeForCurrentContent(animated: true)
     }
 
     func markActionTriggered() {
@@ -158,16 +162,25 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         stopSuccessHoverMonitor()
         applyTheme()
         let visibleFrame = targetScreen.visibleFrame
-        let panelSize = ActionPanelWindow.clampedPanelSize(
+        let savedPanelSize = ActionPanelWindow.clampedPanelSize(
             width: CGFloat(settingsStore.panelWidth),
             height: CGFloat(settingsStore.panelHeight == 0 ? Int(visibleFrame.height - 40) : settingsStore.panelHeight),
             visibleFrame: visibleFrame
         )
-        let targetX = max(visibleFrame.minX, visibleFrame.maxX - panelSize.width - 20)
+        let panelWidth = savedPanelSize.width
+        let panelHeight: CGFloat
+        if panelVC.shouldShowActions {
+            panelHeight = savedPanelSize.height
+        } else {
+            let contentRect = NSRect(x: 0, y: 0, width: panelWidth, height: idleDropFrameHeight)
+            let naturalHeight = frameRect(forContentRect: contentRect).height
+            panelHeight = max(compactFrameHeight, min(naturalHeight, visibleFrame.height - 40))
+        }
+        let targetX = max(visibleFrame.minX, visibleFrame.maxX - panelWidth - 20)
         var frame = self.frame
         frame.origin.x = targetX
-        frame.origin.y = max(visibleFrame.minY + 20, visibleFrame.maxY - panelSize.height - 20)
-        frame.size = panelSize
+        frame.origin.y = max(visibleFrame.minY + 20, visibleFrame.maxY - panelHeight - 20)
+        frame.size = NSSize(width: panelWidth, height: panelHeight)
         logMsg("[ActionPanelWindow] show visibleFrame=\(NSStringFromRect(visibleFrame)) frame=\(NSStringFromRect(frame))")
         let finalFrame = frame
         var startFrame = finalFrame
@@ -193,6 +206,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         DispatchQueue.main.async { [weak self] in
             self?.applyTheme()
+            self?.resizeForCurrentContent(animated: false)
             self?.canPersistUserResize = true
             if self?.staysOpenUntilExplicitClose == false {
                 self?.startAutoHideMonitor()
@@ -224,6 +238,10 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.runningActionName != nil || !panelState.runningFiles.isEmpty
     }
 
+    private var hasActiveFileDrag: Bool {
+        panelVC.hasActiveFileDrag
+    }
+
     private func startOutsideClickMonitor() {
         stopOutsideClickMonitor()
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
@@ -241,7 +259,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     private func handleGlobalMouseDown() {
-        guard !staysOpenUntilExplicitClose, isVisible, !isAnimatingOut else { return }
+        guard !staysOpenUntilExplicitClose, isVisible, !isAnimatingOut, !hasActiveFileDrag else { return }
         let point = NSEvent.mouseLocation
         guard !frame.insetBy(dx: -2, dy: -2).contains(point) else { return }
 
@@ -253,7 +271,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        guard !staysOpenUntilExplicitClose, isVisible, !isAnimatingOut else { return }
+        guard !staysOpenUntilExplicitClose, isVisible, !isAnimatingOut, !hasActiveFileDrag else { return }
         if hasRunningAction, !panelState.isCompact {
             collapseToCompactStatus()
         } else if !hasRunningAction {
@@ -377,7 +395,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     private func checkAutoHideMousePosition() {
-        guard isVisible, !isAnimatingOut, !actionTriggeredSinceShow else {
+        guard isVisible, !isAnimatingOut, !actionTriggeredSinceShow, !hasActiveFileDrag else {
             cancelPendingAutoHide()
             return
         }
@@ -395,7 +413,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingAutoHideWorkItem = nil
-            guard self.isVisible, !self.actionTriggeredSinceShow else { return }
+            guard self.isVisible, !self.actionTriggeredSinceShow, !self.hasActiveFileDrag else { return }
             let expandedFrame = self.frame.insetBy(dx: -20, dy: -20)
             guard !expandedFrame.contains(NSEvent.mouseLocation) else { return }
             self.animateOutToRight()
@@ -409,6 +427,39 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         pendingAutoHideWorkItem = nil
     }
 
+
+    func resizeForCurrentContent(animated: Bool) {
+        guard isVisible, !isAnimatingOut else { return }
+        let targetHeight: CGFloat
+        if panelState.isCompact {
+            targetHeight = compactStatusFrameHeight()
+        } else if panelVC.shouldShowActions {
+            targetHeight = targetFrameHeight(forContentHeight: max(panelVC.currentContentHeight, 520))
+        } else {
+            targetHeight = targetFrameHeight(forContentHeight: max(panelVC.currentContentHeight, idleDropFrameHeight))
+        }
+
+        if abs(frame.height - targetHeight) < 1 { return }
+        if animated {
+            animateHeight(to: targetHeight)
+        } else {
+            let visibleFrame = currentVisibleFrame()
+            var newFrame = frame
+            let topY = frame.maxY
+            newFrame.size.height = targetHeight
+            newFrame.origin.y = max(visibleFrame.minY + 20, min(topY - targetHeight, visibleFrame.maxY - targetHeight - 20))
+            isProgrammaticFrameChange = true
+            setFrame(newFrame, display: true)
+            isProgrammaticFrameChange = false
+        }
+    }
+
+    private func targetFrameHeight(forContentHeight contentHeight: CGFloat) -> CGFloat {
+        let visibleFrame = currentVisibleFrame()
+        let contentRect = NSRect(x: 0, y: 0, width: frame.width, height: contentHeight)
+        let naturalHeight = frameRect(forContentRect: contentRect).height
+        return max(compactFrameHeight, min(naturalHeight, visibleFrame.height - 40))
+    }
 
     private func currentVisibleFrame() -> NSRect {
         let center = NSPoint(x: frame.midX, y: frame.midY)
@@ -455,6 +506,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.runningActionName = actionName
         panelState.runningFiles = files
         panelVC.refresh()
+        resizeForCurrentContent(animated: true)
     }
 
     func updateRunningProgress(
@@ -476,6 +528,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.runningStdout = stdout
         panelState.runningStderr = stderr
         panelVC.refresh()
+        resizeForCurrentContent(animated: true)
     }
 
     func showRunningResult(result: CommandResult) {
@@ -484,6 +537,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.runningStdout = result.stdout
         panelState.runningStderr = result.stderr
         panelVC.refresh()
+        resizeForCurrentContent(animated: true)
     }
 
     func appendBatchResult(result: CommandResult) {
@@ -499,15 +553,11 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
 
         switch result.status {
         case .success:
-            if wasCompact {
-                panelState.isCompact = true
-                panelVC.refresh()
-                animateHeight(to: compactStatusFrameHeight()) { [weak self] in
-                    self?.scheduleHideAfterSuccess()
-                }
-            } else {
-                panelVC.refresh()
-            }
+            panelState.isCompact = false
+            cancelHideAfterSuccess()
+            stopSuccessHoverMonitor()
+            panelVC.refresh()
+            resizeForCurrentContent(animated: true)
         case .failed, .timeout, .cancelled:
             cancelHideAfterSuccess()
             stopSuccessHoverMonitor()
@@ -515,9 +565,11 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
                 expandFromCompactForError()
             } else {
                 panelVC.refresh()
+                resizeForCurrentContent(animated: true)
             }
         default:
             panelVC.refresh()
+            resizeForCurrentContent(animated: true)
         }
     }
 

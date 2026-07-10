@@ -14,7 +14,27 @@ class ActionPanelViewController: NSViewController {
     private var lastHadStatusArea = false
     private var isRefreshing = false
     private var lastFilesSignature = ""
+    private var showsRecentRuns = false
+    private var showsTechnicalDetails = false
+    private var isDraggingFiles = false
+    private var dragPreviewFiles: [URL] = []
+    private let settingsButton = NSButton()
+    private let helpButton = NSButton()
+    private let footerBar = PanelFooterBarView(frame: .zero)
     private(set) var currentContentHeight: CGFloat = 0
+
+    var shouldShowActions: Bool {
+        !state.files.isEmpty || !dragPreviewFiles.isEmpty || state.runningActionName != nil || state.lastResult != nil
+    }
+
+    var hasActiveFileDrag: Bool {
+        isDraggingFiles || !dragPreviewFiles.isEmpty
+    }
+
+    private var previewMatchedActions: [Action] {
+        guard !dragPreviewFiles.isEmpty else { return [] }
+        return ActionMatcher().matchingActions(for: dragPreviewFiles, actions: state.allActions)
+    }
 
     private let padding: CGFloat = 24
     private let scrollView = DropForwardingScrollView()
@@ -48,15 +68,28 @@ class ActionPanelViewController: NSViewController {
         let fileDropHandler: ([URL]) -> Void = { [weak self] files in
             self?.setDraggedFiles(files)
         }
+        let filePreviewHandler: ([URL]) -> Void = { [weak self] files in
+            self?.setDragPreviewFiles(files)
+        }
         (view as? PanelDropView)?.onFilesDropped = fileDropHandler
+        (view as? PanelDropView)?.onFilesPreviewed = filePreviewHandler
         scrollView.onFilesDropped = fileDropHandler
+        scrollView.onFilesPreviewed = filePreviewHandler
         contentView.onFilesDropped = fileDropHandler
+        contentView.onFilesPreviewed = filePreviewHandler
+        let draggingHandler: (Bool) -> Void = { [weak self] dragging in
+            self?.setDraggingFiles(dragging)
+        }
+        (view as? PanelDropView)?.onDraggingChanged = draggingHandler
+        scrollView.onDraggingChanged = draggingHandler
+        contentView.onDraggingChanged = draggingHandler
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         logMsg("[PanelVC] viewDidLoad files=\(state.files.count) actions=\(state.actions.count)")
         applyTheme()
+        configureBottomTools()
         buildUI()
     }
 
@@ -78,6 +111,7 @@ class ActionPanelViewController: NSViewController {
         applyTheme()
         let width = view.bounds.width
         guard width > 0 else { return }
+        layoutFooterBar()
         if abs(width - lastLayoutWidth) > 1 {
             refresh(animatedStatusInsert: false)
         }
@@ -108,67 +142,212 @@ class ActionPanelViewController: NSViewController {
         var y: CGFloat = 18
         let panelWidth = max(view.bounds.width, 320)
         lastLayoutWidth = panelWidth
-        let w: CGFloat = panelWidth - padding * 2
+        let w = panelWidth - padding * 2
 
         if state.isCompact {
             if let result = state.lastResult {
                 y += addResult(result: result, y: y, w: w)
-            } else if let runningActionName = state.runningActionName {
-                y += addLoading(actionName: runningActionName, y: y, w: w)
             } else {
-                y += addLoading(actionName: "Action en cours", y: y, w: w)
+                y += addLoading(actionName: state.runningActionName ?? "Running action", y: y, w: w)
             }
             installScrollView(panelWidth: panelWidth, contentHeight: max(y + 10, 98))
             return
         }
 
-        addHeader(y: &y, w: w)
-        addDivider(y: &y, w: w)
-
         if let result = state.lastResult {
-            y += addResult(result: result, y: y, w: w)
-        } else if let runningActionName = state.runningActionName {
-            y += addLoading(actionName: runningActionName, y: y, w: w)
-        }
-
-        if !state.batchResults.isEmpty {
-            addBatchResultsSection(y: &y, w: w)
-        }
-
-        if state.files.isEmpty {
-            addEmptyState(y: &y, w: w)
+            y += addDoneState(result: result, y: y, w: w)
         } else {
+            y += addDropZone(y: y, w: w)
+        }
+
+        if shouldShowActions && !state.files.isEmpty {
             addFilesSection(y: &y, w: w)
+        }
+
+        if shouldShowActions {
             addActionsSection(y: &y, w: w)
+            addRecentRunsLink(y: &y, w: w)
         }
 
-        if !state.savedHistory.isEmpty {
-            y += 18
-            addSavedSection(y: &y, w: w)
+        if shouldShowActions && showsRecentRuns {
+            if !state.savedHistory.isEmpty {
+                y += 12
+                addSavedSection(y: &y, w: w)
+            }
+            if !state.history.isEmpty {
+                y += 12
+                addHistorySection(y: &y, w: w)
+            }
         }
 
-        if !state.history.isEmpty {
-            y += 18
-            addHistorySection(y: &y, w: w)
+        let minimumHeight: CGFloat = shouldShowActions ? 520 : y + 24
+        installScrollView(panelWidth: panelWidth, contentHeight: max(y + 20, minimumHeight))
+    }
+
+    private func addDropZone(y: CGFloat, w: CGFloat) -> CGFloat {
+        let isRunning = state.runningActionName != nil
+        let height: CGFloat = isRunning ? 148 : 118
+        let container = PanelDropZoneView(frame: NSRect(x: padding, y: y, width: w, height: height))
+        container.onFilesDropped = { [weak self] files in self?.setDraggedFiles(files) }
+        container.onFilesPreviewed = { [weak self] files in self?.setDragPreviewFiles(files) }
+        container.onDraggingChanged = { [weak self] dragging in self?.setDraggingFiles(dragging) }
+        if !isRunning {
+            container.onChooseFiles = { [weak self] in self?.chooseFiles() }
+        }
+        container.isHighlighted = isDraggingFiles
+
+        if isRunning {
+            let spinner = NSProgressIndicator(frame: NSRect(x: 18, y: 20, width: 22, height: 22))
+            spinner.style = .spinning
+            spinner.startAnimation(nil)
+            container.addSubview(spinner)
+
+            let file = state.runningCurrentFile ?? state.runningFiles.first ?? state.files.first
+            let titleText = file.map { "\(state.runningActionName ?? "Running") \($0.lastPathComponent)" } ?? (state.runningActionName ?? "Running")
+            let title = NSTextField(labelWithString: titleText)
+            title.font = .systemFont(ofSize: 15, weight: .semibold)
+            title.frame = NSRect(x: 54, y: 18, width: w - 100, height: 22)
+            container.addSubview(title)
+
+            let subtitle = NSTextField(labelWithString: "Running…")
+            subtitle.font = .systemFont(ofSize: 11)
+            subtitle.textColor = .secondaryLabelColor
+            subtitle.frame = NSRect(x: 54, y: 42, width: w - 100, height: 18)
+            container.addSubview(subtitle)
+
+            let info = NSButton(title: "ⓘ", target: self, action: #selector(toggleTechnicalDetails))
+            info.isBordered = false
+            info.font = .systemFont(ofSize: 15)
+            info.frame = NSRect(x: w - 40, y: 15, width: 28, height: 28)
+            info.toolTip = "Technical details"
+            container.addSubview(info)
+
+            if showsTechnicalDetails {
+                let detailText = [state.runningWorkingDirectory.map { "cwd: \($0)" }, state.runningCommand.map { "command: \($0)" }, latestRunningOutputLine()].compactMap { $0 }.joined(separator: "\n")
+                let details = NSTextField(wrappingLabelWithString: detailText.isEmpty ? "No technical details yet." : detailText)
+                details.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+                details.textColor = .secondaryLabelColor
+                details.frame = NSRect(x: 54, y: 68, width: w - 70, height: 62)
+                container.addSubview(details)
+            }
+        } else {
+            let icon = NSImageView(image: NSImage(systemSymbolName: "arrow.down.doc", accessibilityDescription: nil)!)
+            icon.contentTintColor = .secondaryLabelColor
+            icon.frame = NSRect(x: 18, y: 28, width: 36, height: 44)
+            container.addSubview(icon)
+
+            let title = NSTextField(labelWithString: !dragPreviewFiles.isEmpty ? "Drop to show compatible actions" : "Drop files here")
+            title.font = .systemFont(ofSize: 15, weight: .semibold)
+            title.frame = NSRect(x: 70, y: 25, width: w - 92, height: 22)
+            container.addSubview(title)
+
+            let droppedOrPreviewFiles = !dragPreviewFiles.isEmpty ? dragPreviewFiles : state.files
+            let subtitleText = droppedOrPreviewFiles.isEmpty ? "Winegold will suggest compatible actions. Click anywhere here to choose files, or drag directly onto an action below." : droppedOrPreviewFiles.map(\.lastPathComponent).joined(separator: ", ")
+            let subtitle = NSTextField(wrappingLabelWithString: subtitleText)
+            subtitle.font = .systemFont(ofSize: 11)
+            subtitle.textColor = .secondaryLabelColor
+            subtitle.frame = NSRect(x: 70, y: 48, width: w - 92, height: 48)
+            container.addSubview(subtitle)
         }
 
-        installScrollView(panelWidth: panelWidth, contentHeight: max(y + 24, 520))
+        contentView.addSubview(container)
+        return height + 18
+    }
+
+    private func addRecentRunsLink(y: inout CGFloat, w: CGFloat) {
+        let button = NSButton(title: showsRecentRuns ? "Hide recent runs" : "Show recent runs", target: self, action: #selector(toggleRecentRuns))
+        button.isBordered = false
+        button.font = .systemFont(ofSize: 12)
+        button.contentTintColor = .secondaryLabelColor
+        button.frame = NSRect(x: padding, y: y, width: w, height: 28)
+        contentView.addSubview(button)
+        y += 32
+    }
+
+    private func configureBottomTools() {
+        footerBar.wantsLayer = true
+        view.addSubview(footerBar)
+
+        settingsButton.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
+        settingsButton.contentTintColor = .secondaryLabelColor
+        settingsButton.isBordered = false
+        settingsButton.toolTip = "Settings"
+        settingsButton.target = self
+        settingsButton.action = #selector(settingsClicked)
+        footerBar.addSubview(settingsButton)
+
+        helpButton.title = "?"
+        helpButton.isBordered = false
+        helpButton.contentTintColor = .secondaryLabelColor
+        helpButton.font = .systemFont(ofSize: 14)
+        helpButton.toolTip = "Help"
+        helpButton.target = self
+        helpButton.action = #selector(helpClicked)
+        footerBar.addSubview(helpButton)
+        layoutFooterBar()
+    }
+
+    private var footerHeight: CGFloat { 36 }
+
+    private func layoutFooterBar() {
+        guard view.bounds.width > 0, view.bounds.height > 0 else { return }
+        footerBar.frame = NSRect(x: 0, y: max(0, view.bounds.height - footerHeight), width: view.bounds.width, height: footerHeight)
+        let leftInset: CGFloat = 12
+        let itemSpacing: CGFloat = 14
+        settingsButton.frame = NSRect(x: leftInset, y: 6, width: 24, height: 24)
+        helpButton.frame = NSRect(x: leftInset + 24 + itemSpacing, y: 6, width: 24, height: 24)
     }
 
     private func installScrollView(panelWidth: CGFloat, contentHeight: CGFloat) {
         currentContentHeight = contentHeight
         contentView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: contentHeight)
         scrollView.documentView = contentView
-        scrollView.hasVerticalScroller = !state.isCompact
+        scrollView.hasVerticalScroller = !state.isCompact && shouldShowActions
         scrollView.autohidesScrollers = true
-        scrollView.frame = view.bounds
+        scrollView.frame = NSRect(x: 0, y: 0, width: view.bounds.width, height: max(0, view.bounds.height - footerHeight))
         scrollView.autoresizingMask = [.width, .height]
         scrollView.drawsBackground = false
         if scrollView.superview == nil {
-            view.addSubview(scrollView)
+            view.addSubview(scrollView, positioned: .below, relativeTo: footerBar)
         }
+        layoutFooterBar()
     }
 
+
+    private func setDraggingFiles(_ dragging: Bool) {
+        if !dragging, isMouseInsidePanelWindow() {
+            return
+        }
+        if !dragging {
+            dragPreviewFiles = []
+        }
+        guard isDraggingFiles != dragging || !dragging else { return }
+        isDraggingFiles = dragging
+        refresh()
+        requestWindowResize(animated: true)
+    }
+
+    private func isMouseInsidePanelWindow() -> Bool {
+        guard let window = view.window else { return false }
+        return window.frame.insetBy(dx: -8, dy: -8).contains(NSEvent.mouseLocation)
+    }
+
+    private func setDragPreviewFiles(_ files: [URL]) {
+        guard !files.isEmpty else { return }
+        let signature = files.map { $0.path }.joined(separator: "\n")
+        guard signature != dragPreviewFiles.map({ $0.path }).joined(separator: "\n") else { return }
+        dragPreviewFiles = files
+        isDraggingFiles = true
+        refresh()
+        requestWindowResize(animated: true)
+    }
+
+
+    private func requestWindowResize(animated: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            (self?.view.window as? ActionPanelWindow)?.resizeForCurrentContent(animated: animated)
+        }
+    }
 
     private func setDraggedFiles(_ files: [URL]) {
         guard !files.isEmpty else { return }
@@ -176,6 +355,8 @@ class ActionPanelViewController: NSViewController {
         let isSameDragPayload = signature == lastFilesSignature
         if isSameDragPayload, state.lastResult == nil, state.runningActionName == nil { return }
         lastFilesSignature = signature
+        dragPreviewFiles = []
+        isDraggingFiles = false
 
         state.files = files
         state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
@@ -185,6 +366,7 @@ class ActionPanelViewController: NSViewController {
         state.clearRunningDetails()
         state.isCompact = false
         refresh()
+        requestWindowResize(animated: true)
     }
 
     private func addHeader(y: inout CGFloat, w: CGFloat) {
@@ -278,12 +460,15 @@ class ActionPanelViewController: NSViewController {
     }
 
     private func addActionsSection(y: inout CGFloat, w: CGFloat) {
-        let label = sectionLabel("Actions")
-        label.frame.origin = CGPoint(x: padding, y: y)
+        let label = sectionLabel("ACTIONS")
+        label.frame.origin = CGPoint(x: padding + 2, y: y)
         contentView.addSubview(label)
-        y += 18
+        y += 20
 
-        if state.actions.isEmpty {
+        let dragActions = previewMatchedActions
+        let visibleActions = !dragPreviewFiles.isEmpty ? dragActions : (state.actions.isEmpty ? state.allActions : state.actions)
+
+        if visibleActions.isEmpty {
             let empty = NSTextField(labelWithString: "No compatible actions")
             empty.font = .systemFont(ofSize: 13)
             empty.textColor = .secondaryLabelColor
@@ -293,13 +478,19 @@ class ActionPanelViewController: NSViewController {
             return
         }
 
-        for action in state.actions {
-            let validator = ActionValidator()
+        let rowHeight: CGFloat = 58
+        let containerHeight = CGFloat(visibleActions.count) * rowHeight
+        let container = PanelActionListView(frame: NSRect(x: padding, y: y, width: w, height: containerHeight))
+        contentView.addSubview(container)
+
+        let validator = ActionValidator()
+        for (index, action) in visibleActions.enumerated() {
             let status = validator.validate(action)
             let card = ActionCardView(
                 action: action,
                 status: status,
                 isActive: state.activeActionId == action.id,
+                isGroupedRow: true,
                 onDrop: { [weak self] droppedFiles in
                     let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
                     logMsg("[PanelVC] onDrop action=\(action.name) files=\(files.map { $0.lastPathComponent })")
@@ -313,11 +504,19 @@ class ActionPanelViewController: NSViewController {
                     self?.onMoveAction(source, target)
                 }
             )
-            card.frame = NSRect(x: padding, y: y, width: w, height: 64)
-            contentView.addSubview(card)
+            card.frame = NSRect(x: 0, y: CGFloat(index) * rowHeight, width: w, height: rowHeight)
+            container.addSubview(card)
             cardViews.append(card)
-            y += 76
+
+            if index < visibleActions.count - 1 {
+                let separator = NSView(frame: NSRect(x: 0, y: CGFloat(index + 1) * rowHeight, width: w, height: 1))
+                separator.wantsLayer = true
+                separator.layer?.backgroundColor = WinegoldTheme.separator(in: view).cgColor
+                container.addSubview(separator)
+            }
         }
+
+        y += containerHeight + 12
     }
 
     private func addLoading(actionName: String, y: CGFloat, w: CGFloat) -> CGFloat {
@@ -424,8 +623,8 @@ class ActionPanelViewController: NSViewController {
 
     private func addRunningLabel(_ title: String, value: String, y: inout CGFloat, w: CGFloat, to container: NSView) {
         let label = NSTextField(labelWithString: "\(title): \(value)")
-        label.font = .systemFont(ofSize: 11)
-        label.textColor = .secondaryLabelColor
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.textColor = .tertiaryLabelColor
         label.lineBreakMode = .byTruncatingMiddle
         label.frame = NSRect(x: 54, y: y, width: w - 68, height: 18)
         container.addSubview(label)
@@ -453,6 +652,69 @@ class ActionPanelViewController: NSViewController {
         scroll.drawsBackground = false
         container.addSubview(scroll)
         y += height + 10
+    }
+
+    private func addDoneState(result: CommandResult, y: CGFloat, w: CGFloat) -> CGFloat {
+        let height: CGFloat = 86
+        let container = NSView(frame: NSRect(x: padding, y: y, width: w, height: height))
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 14
+        container.layer?.backgroundColor = WinegoldTheme.cardBackground(in: view).cgColor
+        container.layer?.borderWidth = 1
+        container.layer?.borderColor = WinegoldTheme.border(in: view).cgColor
+
+        let (iconName, iconColor) = iconFor(status: result.status)
+        let icon = NSImageView(image: NSImage(systemSymbolName: iconName, accessibilityDescription: nil)!)
+        icon.contentTintColor = iconColor
+        icon.frame = NSRect(x: 18, y: 28, width: 30, height: 30)
+        container.addSubview(icon)
+
+        let titleText: String
+        switch result.status {
+        case .success: titleText = "Done"
+        case .failed: titleText = "Failed"
+        case .timeout: titleText = "Timed out"
+        case .cancelled: titleText = "Cancelled"
+        default: titleText = result.status.rawValue.capitalized
+        }
+        let title = NSTextField(labelWithString: titleText)
+        title.font = .systemFont(ofSize: 15, weight: .semibold)
+        title.frame = NSRect(x: 64, y: 22, width: w - 150, height: 22)
+        container.addSubview(title)
+
+        let inputName = result.inputFiles.first.map { URL(fileURLWithPath: $0).lastPathComponent }
+        let detailParts = [result.actionName, inputName].compactMap { $0 }
+        let detail = NSTextField(labelWithString: detailParts.joined(separator: " · "))
+        detail.font = .systemFont(ofSize: 11)
+        detail.textColor = .secondaryLabelColor
+        detail.lineBreakMode = .byTruncatingMiddle
+        detail.frame = NSRect(x: 64, y: 46, width: w - 150, height: 18)
+        container.addSubview(detail)
+
+        let info = NSButton(title: "ⓘ", target: self, action: #selector(toggleTechnicalDetails))
+        info.isBordered = false
+        info.font = .systemFont(ofSize: 15)
+        info.frame = NSRect(x: w - 42, y: 26, width: 28, height: 28)
+        info.toolTip = "Technical details"
+        container.addSubview(info)
+
+        if showsTechnicalDetails {
+            container.frame.size.height = 178
+            let cy: CGFloat = 80
+            let technical = [
+                result.exitCode.map { "exit code: \($0)" },
+                result.stdout.isEmpty ? nil : "stdout: \(result.stdout)",
+                result.stderr.isEmpty ? nil : "stderr: \(result.stderr)"
+            ].compactMap { $0 }.joined(separator: "\n")
+            let details = NSTextField(wrappingLabelWithString: technical.isEmpty ? "No technical details." : technical)
+            details.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+            details.textColor = .secondaryLabelColor
+            details.frame = NSRect(x: 64, y: cy, width: w - 82, height: 86)
+            container.addSubview(details)
+        }
+
+        contentView.addSubview(container)
+        return container.frame.height + 18
     }
 
     private func addResult(result: CommandResult, y: CGFloat, w: CGFloat) -> CGFloat {
@@ -660,8 +922,8 @@ class ActionPanelViewController: NSViewController {
 
     private func sectionLabel(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 11)
-        label.textColor = .secondaryLabelColor
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.textColor = .tertiaryLabelColor
         label.sizeToFit()
         return label
     }
@@ -674,6 +936,29 @@ class ActionPanelViewController: NSViewController {
         case .running: return ("arrow.triangle.2.circlepath", .systemBlue)
         case .pending: return ("clock", .secondaryLabelColor)
         }
+    }
+
+    @objc private func chooseFiles() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        guard panel.runModal() == .OK else { return }
+        setDraggedFiles(panel.urls)
+    }
+
+    @objc private func toggleRecentRuns() {
+        showsRecentRuns.toggle()
+        refresh()
+    }
+
+    @objc private func toggleTechnicalDetails() {
+        showsTechnicalDetails.toggle()
+        refresh()
+    }
+
+    @objc private func helpClicked() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/arthurlacoste/winegold/blob/main/docs/scripting.md")!)
     }
 
     @objc private func settingsClicked() { onOpenSettings() }
@@ -695,9 +980,119 @@ extension NSButton {
 }
 
 
+
+private final class PanelFooterBarView: NSView {
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = WinegoldTheme.panelBackground(in: self).withAlphaComponent(0.96).cgColor
+        layer?.borderWidth = 0
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+private final class PanelActionListView: NSView {
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 10
+        layer?.masksToBounds = true
+        layer?.backgroundColor = WinegoldTheme.cardBackground(in: self).cgColor
+        layer?.borderWidth = 1
+        layer?.borderColor = WinegoldTheme.border(in: self).cgColor
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+private final class PanelDropZoneView: NSView {
+    override var isFlipped: Bool { true }
+    var onFilesDropped: (([URL]) -> Void)?
+    var onFilesPreviewed: (([URL]) -> Void)?
+    var onDraggingChanged: ((Bool) -> Void)?
+    var onChooseFiles: (() -> Void)?
+    private var isPressed = false { didSet { applyStyle() } }
+    var isHighlighted = false { didSet { applyStyle() } }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        registerForDraggedTypes(DragFileReader.supportedTypes)
+        applyStyle()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private func applyStyle() {
+        layer?.cornerRadius = 14
+        let emphasized = isHighlighted || isPressed
+        layer?.borderWidth = emphasized ? 1.5 : 1
+        layer?.borderColor = (emphasized ? NSColor.controlAccentColor.withAlphaComponent(0.55) : WinegoldTheme.border(in: self)).cgColor
+        layer?.backgroundColor = (emphasized ? NSColor.controlAccentColor.withAlphaComponent(0.08) : WinegoldTheme.cardBackground(in: self)).cgColor
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard onChooseFiles != nil else { return super.hitTest(point) }
+        let localPoint = convert(point, from: superview)
+        guard bounds.contains(localPoint) else { return nil }
+        return self
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if onChooseFiles != nil {
+            addCursorRect(bounds, cursor: .pointingHand)
+        }
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        onChooseFiles != nil
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard onChooseFiles != nil else { return super.mouseDown(with: event) }
+        isPressed = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard onChooseFiles != nil else { return super.mouseUp(with: event) }
+        defer { isPressed = false }
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onChooseFiles?()
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let files = DragFileReader.urls(from: sender)
+        if !files.isEmpty { onFilesPreviewed?(files) }
+        onDraggingChanged?(true)
+        isHighlighted = true
+        return .copy
+    }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let files = DragFileReader.urls(from: sender)
+        if !files.isEmpty { onFilesPreviewed?(files) }
+        return .copy
+    }
+    override func draggingExited(_ sender: NSDraggingInfo?) { onDraggingChanged?(false); isHighlighted = false }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let files = DragFileReader.urls(from: sender)
+        onDraggingChanged?(false)
+        isHighlighted = false
+        if !files.isEmpty { onFilesDropped?(files) }
+        return !files.isEmpty
+    }
+}
+
 private final class PanelDropView: NSView {
     override var isFlipped: Bool { true }
     var onFilesDropped: (([URL]) -> Void)?
+    var onFilesPreviewed: (([URL]) -> Void)?
+    var onDraggingChanged: ((Bool) -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -710,16 +1105,22 @@ private final class PanelDropView: NSView {
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         let files = DragFileReader.urls(from: sender)
-        if !files.isEmpty { onFilesDropped?(files) }
+        if !files.isEmpty { onFilesPreviewed?(files) }
+        onDraggingChanged?(true)
         return .copy
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        .copy
+        let files = DragFileReader.urls(from: sender)
+        if !files.isEmpty { onFilesPreviewed?(files) }
+        return .copy
     }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) { onDraggingChanged?(false) }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let files = DragFileReader.urls(from: sender)
+        onDraggingChanged?(false)
         if !files.isEmpty { onFilesDropped?(files) }
         return !files.isEmpty
     }
@@ -728,6 +1129,8 @@ private final class PanelDropView: NSView {
 
 private final class DropForwardingScrollView: NSScrollView {
     var onFilesDropped: (([URL]) -> Void)?
+    var onFilesPreviewed: (([URL]) -> Void)?
+    var onDraggingChanged: ((Bool) -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -740,16 +1143,22 @@ private final class DropForwardingScrollView: NSScrollView {
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         let files = DragFileReader.urls(from: sender)
-        if !files.isEmpty { onFilesDropped?(files) }
+        if !files.isEmpty { onFilesPreviewed?(files) }
+        onDraggingChanged?(true)
         return .copy
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        .copy
+        let files = DragFileReader.urls(from: sender)
+        if !files.isEmpty { onFilesPreviewed?(files) }
+        return .copy
     }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) { onDraggingChanged?(false) }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let files = DragFileReader.urls(from: sender)
+        onDraggingChanged?(false)
         if !files.isEmpty { onFilesDropped?(files) }
         return !files.isEmpty
     }

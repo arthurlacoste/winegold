@@ -10,6 +10,7 @@ class ActionCardView: NSView {
     private let onDrop: ([URL]) -> Void
     private let onToggleFavorite: (Action) -> Void
     private let onMoveBefore: (Action, Action) -> Void
+    private let isGroupedRow: Bool
 
     private var isPressed = false
     private var isHovered = false
@@ -27,6 +28,7 @@ class ActionCardView: NSView {
         action: Action,
         status: ActionValidationStatus,
         isActive: Bool,
+        isGroupedRow: Bool = false,
         onDrop: @escaping ([URL]) -> Void,
         onToggleFavorite: @escaping (Action) -> Void,
         onMoveBefore: @escaping (Action, Action) -> Void
@@ -34,12 +36,13 @@ class ActionCardView: NSView {
         self.action = action
         self.status = status
         self.isActive = isActive
+        self.isGroupedRow = isGroupedRow
         self.onDrop = onDrop
         self.onToggleFavorite = onToggleFavorite
         self.onMoveBefore = onMoveBefore
         super.init(frame: NSRect(x: 0, y: 0, width: 312, height: 64))
         wantsLayer = true
-        layer?.cornerRadius = 8
+        layer?.cornerRadius = isGroupedRow ? 0 : 8
         registerForDraggedTypes(DragFileReader.supportedTypes + [Self.actionDragType])
         setup()
         applyVisualState(animated: false)
@@ -51,7 +54,7 @@ class ActionCardView: NSView {
         switch status {
         case .available:
             layer?.backgroundColor = WinegoldTheme.cardBackground(in: self).cgColor
-            configureIcon(systemName: iconName, tint: .controlTextColor)
+            configureIcon(systemName: iconName, tint: .secondaryLabelColor)
             configureTitle(action.name, weight: .bold, color: .controlTextColor)
             let exts = action.acceptedExtensions.contains("*") ? "all files" : action.acceptedExtensions.joined(separator: ", ")
             configureSubtitle(exts)
@@ -82,6 +85,17 @@ class ActionCardView: NSView {
         addTrackingArea(area)
     }
 
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard caseAvailable else { return super.hitTest(point) }
+        let localPoint = convert(point, from: superview)
+        guard bounds.contains(localPoint) else { return nil }
+        let favoritePoint = favoriteButton.convert(point, from: superview)
+        if !favoriteButton.isHidden, favoriteButton.bounds.contains(favoritePoint) {
+            return favoriteButton
+        }
+        return self
+    }
+
     override func mouseEntered(with event: NSEvent) {
         guard caseAvailable else { return }
         isHovered = true
@@ -98,7 +112,7 @@ class ActionCardView: NSView {
         super.layout()
         let rightInset: CGFloat = 12
         let leftTextX: CGFloat = 48
-        let buttonSize = NSSize(width: 36, height: 32)
+        let buttonSize = NSSize(width: 34, height: 30)
         let buttonX = max(leftTextX + 120, bounds.width - rightInset - buttonSize.width)
         let textRightPadding: CGFloat = caseAvailable ? 88 : 12
         let textWidth = max(80, bounds.width - leftTextX - textRightPadding)
@@ -108,7 +122,7 @@ class ActionCardView: NSView {
         subtitleLabel.frame = NSRect(x: leftTextX, y: 36, width: textWidth, height: 16)
         favoriteButton.frame = NSRect(x: buttonX - 30, y: 18, width: 24, height: 24)
         runCard.frame = NSRect(x: buttonX, y: 16, width: buttonSize.width, height: buttonSize.height)
-        runIcon.frame = NSRect(x: buttonX + 12, y: 24, width: 14, height: 16)
+        runIcon.frame = runCard.frame
     }
 
     override func resetCursorRects() {
@@ -190,7 +204,7 @@ class ActionCardView: NSView {
 
     private func applyVisualState(animated: Bool) {
         let isEmphasized = isActive || isPressed || isHovered
-        let borderWidth: CGFloat = isEmphasized ? 2 : 1
+        let borderWidth: CGFloat = isGroupedRow ? 0 : (isEmphasized ? 1.5 : 1)
         let borderColor: NSColor
         let backgroundColor: NSColor
 
@@ -205,10 +219,10 @@ class ActionCardView: NSView {
         let changes = {
             self.layer?.borderWidth = borderWidth
             self.layer?.borderColor = borderColor.cgColor
-            self.layer?.backgroundColor = backgroundColor.cgColor
+            self.layer?.backgroundColor = (self.isGroupedRow && !isEmphasized) ? NSColor.clear.cgColor : backgroundColor.cgColor
             if self.caseAvailable {
-                self.runCard.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(isEmphasized ? 0.18 : 0.12).cgColor
-                self.runCard.layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(isEmphasized ? 0.45 : 0.25).cgColor
+                self.runCard.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(isEmphasized ? 0.16 : 0.09).cgColor
+                self.runCard.layer?.borderColor = NSColor.clear.cgColor
             }
         }
 
@@ -259,13 +273,18 @@ class ActionCardView: NSView {
     private func configureRunCard() {
         runCard.wantsLayer = true
         runCard.layer?.cornerRadius = 10
-        runCard.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
-        runCard.layer?.borderWidth = 1
-        runCard.layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.25).cgColor
+        runCard.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.11).cgColor
+        runCard.layer?.borderWidth = 0
+        runCard.layer?.borderColor = NSColor.clear.cgColor
         addSubview(runCard)
 
-        runIcon.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: "Run")
-        runIcon.contentTintColor = .controlAccentColor
+        runIcon.image = NSImage(
+            systemSymbolName: "play.fill",
+            accessibilityDescription: "Run"
+        )?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .medium))
+        runIcon.imageAlignment = .alignCenter
+        runIcon.imageScaling = .scaleNone
+        runIcon.contentTintColor = NSColor.controlAccentColor.withAlphaComponent(0.82)
         addSubview(runIcon)
     }
 

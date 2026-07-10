@@ -501,6 +501,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if action.name == DefaultActions.createScriptFromFileTypeName {
             openNewScriptTemplate(for: files)
+            let result = CommandResult(
+                actionId: action.id,
+                actionName: action.name,
+                inputFiles: files.map { $0.path },
+                status: .success,
+                stdout: "Opened script template.\n",
+                startedAt: Date(),
+                endedAt: Date()
+            )
+            try? runHistoryStore.addRun(result)
+            actionPanelWindow?.showRunResult(result: result)
             return
         }
 
