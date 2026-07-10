@@ -148,14 +148,78 @@ For long local AI commands, keep the command non-interactive.
 
 Use flags like `--print`, `--no-session`, and `--no-approve` when the tool supports them.
 
-## Tips
+## Example: upload a file with curl and copy Markdown
 
-Keep commands short.
+This example uses an `uploadfile` server exposing `api.php`.
 
-Quote file paths.
+The endpoint accepts `multipart/form-data` with a file field named `file`.
 
-Use Settings to test a script by dropping a file into the test zone.
+It returns JSON by default. Add `?format=markdown`, `?format=url`, or `?format=html` to get plain text output for CLI scripts.
 
-Use Export YAML to save an existing action as a script.
+```yml
+name: Upload file and copy Markdown
+trigger:
+  fileExtension:
+    - jpg
+    - jpeg
+    - png
+    - webp
+    - gif
+    - pdf
+cmd:
+  exec: 'curl -fsS -H "Authorization: Bearer CHANGE_ME_TO_A_SECRET_TOKEN" -F "file=@{input}" "https://example.com/api.php?format=markdown" | pbcopy'
+```
 
-Use Help prompt to open ChatGPT with this documentation and the current action context.
+Use the same one-line curl directly in a terminal:
+
+```sh
+curl -fsS -H "Authorization: Bearer CHANGE_ME_TO_A_SECRET_TOKEN" -F "file=@/absolute/path/file.png" "https://example.com/api.php?format=markdown"
+```
+
+## Script authoring tips
+
+Keep commands short and explicit.
+
+Quote every file path placeholder.
+
+Use a YAML block scalar for multiline shell commands:
+
+```yml
+cmd:
+  exec: |
+    first command
+    second command
+```
+
+Remember that Winegold runs `cmd.exec` with `/bin/zsh -lc`.
+
+Avoid injecting `{inside}` directly into a shell argument when the file may contain quotes, HTML, JSON, dollar signs, backticks, or other shell syntax. Prefer reading `{input}` from Python, Node, or another tool and building the request payload safely.
+
+Good for simple text:
+
+```yml
+cmd:
+  exec: 'printf "%s" "{inside}" | pbcopy'
+```
+
+Safer for structured or multiline content:
+
+```yml
+cmd:
+  exec: |
+    python3 -c '
+    from pathlib import Path
+    print(Path("{input}").read_text())
+    '
+```
+
+Use `&&` when the next step must run only after the previous command succeeds.
+
+Use `|` when piping output into another command.
+
+Write generated files with an absolute path based on `{parent}`:
+
+```yml
+cmd:
+  exec: 'some-command "{input}" > "{parent}/{basename}.out.txt"'
+```
