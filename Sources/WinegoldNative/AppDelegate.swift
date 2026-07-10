@@ -143,7 +143,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupMenuBar() {
         menuBarItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = menuBarItem?.button {
-            button.image = NSImage(systemSymbolName: "square.grid.3x1.folder.badge.plus", accessibilityDescription: "Winegold")
+            if let url = Bundle.main.url(forResource: "icon-bar", withExtension: "svg"),
+               let image = NSImage(contentsOf: url) {
+                image.isTemplate = true
+                image.size = NSSize(width: 18, height: 18)
+                button.image = image
+            } else {
+                button.image = NSImage(systemSymbolName: "wineglass", accessibilityDescription: "Winegold")
+            }
+            button.imagePosition = .imageOnly
+            button.toolTip = "Winegold"
         }
 
         let menu = NSMenu()

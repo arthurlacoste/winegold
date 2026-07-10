@@ -16,7 +16,7 @@ let package = Package(
         .executableTarget(
             name: "WinegoldNative",
             dependencies: ["WinegoldCore"],
-            exclude: ["WinegoldNative-Info.plist"]
+            exclude: ["WinegoldNative-Info.plist", "Resources"]
         ),
         .testTarget(
             name: "WinegoldNativeTests",
