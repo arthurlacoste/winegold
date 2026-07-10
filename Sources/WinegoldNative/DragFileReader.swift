@@ -1,4 +1,5 @@
 import Cocoa
+import WinegoldCore
 
 enum DragFileReader {
     static let supportedTypes: [NSPasteboard.PasteboardType] = [
@@ -37,35 +38,63 @@ enum DragFileReader {
 
     private static func urlsFromPasteboardItems(_ pasteboard: NSPasteboard) -> [URL] {
         guard let items = pasteboard.pasteboardItems else { return [] }
-        var generated: [URL] = []
-        var fileURLs: [URL] = []
+        var urls: [URL] = []
 
         for item in items {
-            if let raw = item.string(forType: .fileURL), let url = urlFromRaw(raw), url.isFileURL {
-                fileURLs.append(url)
+            if let url = existingFileURL(from: item) {
+                urls.append(url)
                 continue
             }
 
-            if let raw = item.string(forType: .URL) ?? item.string(forType: .string) {
-                if raw.hasPrefix("/") {
-                    fileURLs.append(URL(fileURLWithPath: raw))
-                } else if let url = URL(string: raw), url.isFileURL {
-                    fileURLs.append(url)
-                } else if looksLikeWebURL(raw) {
-                    if let generatedURL = createTemporaryDragFile(contents: raw, preferredExtension: "url", prefix: "dragged-url") {
-                        generated.append(generatedURL)
-                    }
+            if let html = nonEmptyString(item.string(forType: .html)) {
+                if let url = createTemporaryDragFile(
+                    contents: html,
+                    preferredExtension: "html",
+                    prefix: "dragged-html"
+                ) {
+                    urls.append(url)
                 }
+                continue
             }
 
-            if let html = item.string(forType: .html), !html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                if let generatedURL = createTemporaryDragFile(contents: html, preferredExtension: "html", prefix: "dragged-html") {
-                    generated.append(generatedURL)
-                }
+            if let raw = nonEmptyString(item.string(forType: .URL) ?? item.string(forType: .string)),
+               looksLikeWebURL(raw),
+               let url = createTemporaryDragFile(
+                   contents: raw,
+                   preferredExtension: "url",
+                   prefix: "dragged-url"
+               ) {
+                urls.append(url)
             }
         }
 
-        return fileURLs.isEmpty ? generated.compactMap { $0 } : fileURLs
+        return uniqueURLs(urls)
+    }
+
+    private static func existingFileURL(from item: NSPasteboardItem) -> URL? {
+        if let raw = item.string(forType: .fileURL),
+           let url = urlFromRaw(raw),
+           url.isFileURL {
+            return url
+        }
+
+        guard let raw = nonEmptyString(item.string(forType: .URL) ?? item.string(forType: .string)) else {
+            return nil
+        }
+        if raw.hasPrefix("/") { return URL(fileURLWithPath: raw) }
+        guard let url = URL(string: raw), url.isFileURL else { return nil }
+        return url
+    }
+
+    private static func nonEmptyString(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func uniqueURLs(_ urls: [URL]) -> [URL] {
+        var seen: Set<String> = []
+        return urls.filter { seen.insert($0.standardizedFileURL.path).inserted }
     }
 
     private static func generatedFilesFromTextPasteboard(_ pasteboard: NSPasteboard) -> [URL] {
@@ -100,11 +129,13 @@ enum DragFileReader {
                 appropriateFor: nil,
                 create: true
             ).appendingPathComponent("WinegoldNative/DraggedPayloads", isDirectory: true)
-            try FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
-            let filename = "\(prefix)-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8)).\(preferredExtension)"
-            let url = appSupport.appendingPathComponent(filename)
-            try contents.write(to: url, atomically: true, encoding: .utf8)
-            logMsg("[DragFileReader] generated file from pasteboard: \(url.lastPathComponent)")
+            let store = ContentAddressedFileStore(directory: appSupport)
+            let url = try store.store(
+                contents: contents,
+                prefix: prefix,
+                fileExtension: preferredExtension
+            )
+            logMsg("[DragFileReader] resolved pasteboard file: \(url.lastPathComponent)")
             return url
         } catch {
             logMsg("[DragFileReader] failed to generate pasteboard file: \(error.localizedDescription)")
