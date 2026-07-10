@@ -551,7 +551,7 @@ class ActionPanelViewController: NSViewController {
             cy += 26
         }
 
-        container.frame.size.height = min(max(cy + 10, 60), 190)
+        container.frame.size.height = max(cy + 16, 60)
         contentView.addSubview(container)
         return container.frame.height + 16
     }

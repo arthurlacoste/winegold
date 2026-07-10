@@ -429,6 +429,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func failureDebugText(
+        existingStderr: String,
+        action: Action,
+        request: CommandExecutionRequest
+    ) -> String {
+        let templateArguments = action.argumentsTemplate.enumerated().map { index, argument in
+            let lineCount = argument.components(separatedBy: .newlines).count
+            let preview = redactSecrets(argument.count > 2_000 ? String(argument.prefix(2_000)) + "\n…" : argument)
+            return "Argument template [\(index)] (\(lineCount) line(s), \(argument.count) chars):\n\(preview)"
+        }.joined(separator: "\n\n")
+
+        let resolvedArguments = request.arguments.enumerated().map { index, argument in
+            let lineCount = argument.components(separatedBy: .newlines).count
+            return "Resolved argument [\(index)]: \(lineCount) line(s), \(argument.count) chars"
+        }.joined(separator: "\n")
+
+        let workingDirectory = request.workingDirectory ?? "(default)"
+        let debug = """
+
+        [Winegold debug]
+        Executable: \(request.executablePath)
+        Working directory: \(workingDirectory)
+        Argument count: \(request.arguments.count)
+        \(resolvedArguments)
+
+        \(templateArguments)
+        """
+
+        return existingStderr.trimmingCharacters(in: .newlines) + debug + "\n"
+    }
+
+    private func redactSecrets(_ value: String) -> String {
+        value.replacingOccurrences(
+            of: #"(?i)(Authorization:\s*(?:Bearer|DeepL-Auth-Key)\s+)[^\s\"]+"#,
+            with: "$1[REDACTED]",
+            options: .regularExpression
+        )
+    }
+
     private func runAction(_ action: Action, files: [URL]) {
         actionPanelWindow?.markActionTriggered()
         guard let runHistoryStore = runHistoryStore else { return }
@@ -490,6 +529,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 result.actionId = action.id
                 result.actionName = action.name
                 result.inputFiles = [file.path]
+
+                if result.status != .success {
+                    result.stderr = failureDebugText(
+                        existingStderr: result.stderr,
+                        action: action,
+                        request: request
+                    )
+                }
 
                 if let outputTemplate = action.outputPathTemplate {
                     if let outputPath = resolver.resolve(outputPathTemplate: outputTemplate, for: file) {
