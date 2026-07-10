@@ -2,21 +2,15 @@ import Cocoa
 
 class ScreenEdgeService {
     private var edgeWindows: [EdgeCatcherWindow] = []
-    private var dragMonitor: Any?
-    private var lastFallbackOpenAt = Date.distantPast
     private let onDragEnter: ([URL], NSScreen) -> Void
 
     init(onDragEnter: @escaping ([URL], NSScreen) -> Void) {
         self.onDragEnter = onDragEnter
         setupWindows()
-        setupFallbackDragMonitor()
         setupScreenChangeObserver()
     }
 
     deinit {
-        if let dragMonitor {
-            NSEvent.removeMonitor(dragMonitor)
-        }
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -64,24 +58,4 @@ class ScreenEdgeService {
         }
     }
 
-    private func setupFallbackDragMonitor() {
-        dragMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDragged]) { [weak self] event in
-            self?.openPanelWhenDraggingNearRightEdge(event)
-        }
-    }
-
-    private func openPanelWhenDraggingNearRightEdge(_ event: NSEvent) {
-        let point = NSEvent.mouseLocation
-        guard let screen = ScreenResolver.screen(containing: point) else { return }
-        let frame = screen.visibleFrame
-        guard frame.contains(point) else { return }
-        guard point.x >= frame.maxX - 24 else { return }
-        guard Date().timeIntervalSince(lastFallbackOpenAt) > 0.6 else { return }
-
-        lastFallbackOpenAt = Date()
-        logMsg("[ScreenEdgeService] fallback drag edge hit point=\(NSStringFromPoint(point)) screen=\(NSStringFromRect(screen.visibleFrame))")
-        DispatchQueue.main.async { [onDragEnter] in
-            onDragEnter([], screen)
-        }
-    }
 }

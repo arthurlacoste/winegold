@@ -16,6 +16,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     private var successHoverTimer: Timer?
     private var isAnimatingOut = false
     private let compactFrameHeight: CGFloat = 132
+    private var staysOpenUntilExplicitClose = false
 
     init(
         screen: NSScreen,
@@ -146,7 +147,8 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         contentView?.layer?.backgroundColor = WinegoldTheme.panelBackground(in: contentView).cgColor
     }
 
-    func show() {
+    func show(staysOpen: Bool = false) {
+        staysOpenUntilExplicitClose = staysOpen
         canPersistUserResize = false
         isAnimatingOut = false
         actionTriggeredSinceShow = false
@@ -192,8 +194,10 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.applyTheme()
             self?.canPersistUserResize = true
-            self?.startAutoHideMonitor()
-            self?.startOutsideClickMonitor()
+            if self?.staysOpenUntilExplicitClose == false {
+                self?.startAutoHideMonitor()
+                self?.startOutsideClickMonitor()
+            }
         }
     }
 
@@ -237,7 +241,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     private func handleGlobalMouseDown() {
-        guard isVisible, !isAnimatingOut else { return }
+        guard !staysOpenUntilExplicitClose, isVisible, !isAnimatingOut else { return }
         let point = NSEvent.mouseLocation
         guard !frame.insetBy(dx: -2, dy: -2).contains(point) else { return }
 
@@ -249,7 +253,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        guard isVisible, !isAnimatingOut else { return }
+        guard !staysOpenUntilExplicitClose, isVisible, !isAnimatingOut else { return }
         if hasRunningAction, !panelState.isCompact {
             collapseToCompactStatus()
         } else if !hasRunningAction {
@@ -303,6 +307,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     private func scheduleHideAfterSuccess() {
+        guard !staysOpenUntilExplicitClose else { return }
         cancelHideAfterSuccess()
         startSuccessHoverMonitor()
         let workItem = DispatchWorkItem { [weak self] in
@@ -358,6 +363,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     private func startAutoHideMonitor() {
+        guard !staysOpenUntilExplicitClose else { return }
         autoHideTimer?.invalidate()
         autoHideTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
             self?.checkAutoHideMousePosition()

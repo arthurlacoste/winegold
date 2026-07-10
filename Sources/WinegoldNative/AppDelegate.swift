@@ -2,6 +2,14 @@ import Cocoa
 import WinegoldCore
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    private enum PanelInvocation {
+        case shortcut
+        case menu
+        case drag
+
+        var staysOpen: Bool { self == .shortcut }
+    }
+
     private var menuBarItem: NSStatusItem?
     private let settingsStore = SettingsStore()
     private var actionStore: ActionStore?
@@ -192,12 +200,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showPanelFromShortcut() {
-        showPanel(with: [], on: ScreenResolver.currentInteractionScreen())
+        showPanel(with: [], on: ScreenResolver.currentInteractionScreen(), invocation: .shortcut)
     }
 
     private func setupEdgeCatcher() {
         screenEdgeService = ScreenEdgeService(onDragEnter: { [weak self] files, screen in
-            self?.showPanel(with: files, on: screen)
+            guard !files.isEmpty else {
+                logMsg("[AppDelegate] ignored empty drag event")
+                return
+            }
+            self?.showPanel(with: files, on: screen, invocation: .drag)
         })
     }
 
@@ -205,7 +217,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if actionPanelWindow?.isVisible == true {
             actionPanelWindow?.hide()
         } else {
-            showPanel(with: [], on: ScreenResolver.currentInteractionScreen())
+            showPanel(with: [], on: ScreenResolver.currentInteractionScreen(), invocation: .menu)
         }
     }
 
@@ -268,7 +280,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
 
-    private func showPanel(with files: [URL], on requestedScreen: NSScreen? = nil) {
+    private func showPanel(with files: [URL], on requestedScreen: NSScreen? = nil, invocation: PanelInvocation = .menu) {
         let screen = requestedScreen ?? ScreenResolver.currentInteractionScreen()
         logMsg("[AppDelegate] showPanel files=\(files.count) mouse=\(NSStringFromPoint(NSEvent.mouseLocation)) screen=\(screen.map { NSStringFromRect($0.visibleFrame) } ?? "nil")")
         guard let store = actionStore,
@@ -281,6 +293,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let actions = (try? store.listEnabledActions()) ?? []
         var matched = ActionMatcher().matchingActions(for: files, actions: actions)
         matched = prioritizeInstallActionIfNeeded(matched, files: files)
+        if invocation == .drag, matched.isEmpty, !shouldAutoImportScripts(files) {
+            logMsg("[AppDelegate] ignored drag with no matching action files=\(files.map { $0.lastPathComponent })")
+            return
+        }
         let history = (try? runHistoryStore.recentRuns(limit: 10)) ?? []
         let savedHistory = savedRunStore.savedRuns(limit: 10)
 
@@ -332,7 +348,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             actionPanelWindow = panel
             logMsg("[AppDelegate] created panel")
         }
-        panel.show()
+        panel.show(staysOpen: invocation.staysOpen)
     }
 
 
