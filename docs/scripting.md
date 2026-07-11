@@ -268,3 +268,29 @@ Support paths must be relative to the recipe, stay inside its source folder, and
 Recipe subfolders become local action categories. The category and manual display order stay in SQLite; they are not written into the recipe.
 
 Settings updates known recipe fields atomically while preserving unknown top-level YAML fields, comments, version, declared files, requirements, and file permissions where practical. Use **Reveal** to open the source recipe in Finder.
+
+## Published recipes and supporting files
+
+Remote recipes use a stable `id` and `version`. They can declare required files and external commands:
+
+```yml
+id: winegold.resize-image
+name: Resize image
+description: Resize an image.
+version: 1.0.0
+enabled: true
+
+trigger: extension in {"jpg" "jpeg" "png" "webp"}
+
+files:
+  - resize.py
+
+requires:
+  commands:
+    - python3
+
+cmd:
+  exec: 'python3 resize.py "{input}"'
+```
+
+Supporting paths must be relative to the recipe directory. Absolute paths and `..` traversal are rejected. Every declared file is required. Remote installation downloads only declared files and an optional sibling `README.md`. Missing commands mark the recipe as needing setup. Winegold never installs dependencies automatically.

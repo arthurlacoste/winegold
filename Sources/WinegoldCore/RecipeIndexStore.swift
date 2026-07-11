@@ -180,6 +180,9 @@ public final class RecipeCoordinator {
     }
 
     private func checkNeedsSetup(record: RecipeRecord) -> Bool {
+        if !RecipeRequirementChecker().missingCommands(record.document.requirements).isEmpty {
+            return true
+        }
         guard let variables = record.document.variables, !variables.isEmpty else { return false }
         guard let variableStore, let keychainStore else { return false }
         let resolver = RecipeVariableResolver(variableStore: variableStore, keychainStore: keychainStore)

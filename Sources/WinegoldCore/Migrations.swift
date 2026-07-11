@@ -79,6 +79,19 @@ public struct Migrations {
         """)
 
         try db.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_provenance (
+                recipe_id TEXT PRIMARY KEY,
+                source_url TEXT NOT NULL,
+                installed_version TEXT NOT NULL,
+                installed_at TEXT NOT NULL,
+                yaml_hash TEXT NOT NULL,
+                file_hashes TEXT NOT NULL,
+                last_update_check TEXT,
+                latest_known_version TEXT
+            )
+        """)
+
+        try db.execute("""
             CREATE TABLE IF NOT EXISTS recipe_variable_consent (
                 key TEXT NOT NULL,
                 external_id TEXT NOT NULL,
@@ -90,7 +103,7 @@ public struct Migrations {
         try ensureRecipeIndexColumns()
         let version = try currentVersion()
         if version == 0 {
-            try db.execute("INSERT INTO schema_version (version) VALUES (8)")
+            try db.execute("INSERT INTO schema_version (version) VALUES (9)")
         } else {
             if version < 2 {
                 try db.execute("ALTER TABLE actions ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
@@ -121,6 +134,10 @@ public struct Migrations {
                 try ensureRecipeVariableTables()
                 try db.execute("INSERT INTO schema_version (version) VALUES (8)")
             }
+            if version < 9 {
+                try ensureRecipeProvenanceTable()
+                try db.execute("INSERT INTO schema_version (version) VALUES (9)")
+            }
         }
     }
 
@@ -142,6 +159,21 @@ public struct Migrations {
         let columns = try tableColumns("recipe_index")
         if !columns.contains("installed_from") { try db.execute("ALTER TABLE recipe_index ADD COLUMN installed_from TEXT") }
         if !columns.contains("installed_at") { try db.execute("ALTER TABLE recipe_index ADD COLUMN installed_at TEXT") }
+    }
+
+    private func ensureRecipeProvenanceTable() throws {
+        try db.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_provenance (
+                recipe_id TEXT PRIMARY KEY,
+                source_url TEXT NOT NULL,
+                installed_version TEXT NOT NULL,
+                installed_at TEXT NOT NULL,
+                yaml_hash TEXT NOT NULL,
+                file_hashes TEXT NOT NULL,
+                last_update_check TEXT,
+                latest_known_version TEXT
+            )
+        """)
     }
 
     private func ensureRecipeVariableTables() throws {

@@ -115,7 +115,7 @@ public struct RecipeParser {
             command: command,
             successMessage: scalar("successMessage", lines: lines),
             supportFiles: topLevelList("files", lines: lines),
-            requirements: topLevelList("requirements", lines: lines),
+            requirements: requirementCommands(lines: lines),
             variables: (try? RecipeVariableParser().parseVariables(lines: lines)).flatMap { $0.isEmpty ? nil : $0 }
         )
     }
@@ -146,7 +146,7 @@ public struct RecipeParser {
             command: command,
             successMessage: scalar("successMessage", lines: lines),
             supportFiles: topLevelList("files", lines: lines),
-            requirements: topLevelList("requirements", lines: lines),
+            requirements: requirementCommands(lines: lines),
             variables: variables.isEmpty ? nil : variables
         )
     }
@@ -196,6 +196,11 @@ public struct RecipeParser {
         return values
     }
 
+
+    private func requirementCommands(lines: [String]) -> [String] {
+        let nested = nestedList(section: "requires", key: "commands", lines: lines)
+        return nested.isEmpty ? topLevelList("requirements", lines: lines) : nested
+    }
 
     private func topLevelList(_ key: String, lines: [String]) -> [String] {
         guard let start = lines.firstIndex(where: { $0.indent == 0 && $0.trimmed == "\(key):" }) else { return [] }
@@ -251,6 +256,17 @@ public struct RecipeSerializer {
             let varText = RecipeVariableSerializer().serialize(variables)
             lines.append("")
             lines.append(varText.trimmingCharacters(in: .newlines))
+        }
+        if !document.supportFiles.isEmpty {
+            lines.append("")
+            lines.append("files:")
+            lines.append(contentsOf: document.supportFiles.map { "  - \(quote($0))" })
+        }
+        if !document.requirements.isEmpty {
+            lines.append("")
+            lines.append("requires:")
+            lines.append("  commands:")
+            lines.append(contentsOf: document.requirements.map { "    - \(quote($0))" })
         }
         lines.append("")
         lines.append("trigger: \(quote(document.trigger))")
