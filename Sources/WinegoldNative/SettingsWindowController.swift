@@ -82,6 +82,9 @@ class SettingsViewController: NSViewController {
     private var commandTextView: NSTextView!
     private var selectedActionID: UUID?
     private var actions: [Action] = []
+    private var recipeIssues: [RecipeIndexEntry] = []
+    private var issuePopup: NSPopUpButton!
+    private var issueLabel: NSTextField!
 
     init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
         self.store = store
@@ -161,7 +164,7 @@ class SettingsViewController: NSViewController {
         scriptTitle.frame = NSRect(x: padding, y: y, width: 220, height: 24)
         view.addSubview(scriptTitle)
 
-        let hint = NSTextField(labelWithString: "Edit shell actions. .add.yml files can be imported from here, or by dragging them into Winegold.")
+        let hint = NSTextField(labelWithString: "Edit .wg.yml recipes. Files and folders can be installed here or by dragging them into Winegold.")
         hint.font = .systemFont(ofSize: 12)
         hint.textColor = .secondaryLabelColor
         hint.frame = NSRect(x: padding + 170, y: y + 3, width: w - 170, height: 20)
@@ -188,11 +191,28 @@ class SettingsViewController: NSViewController {
         deleteButton.frame = NSRect(x: padding + 472, y: y, width: 78, height: 28)
         view.addSubview(deleteButton)
 
-        let importButton = NSButton(title: "Import YAML…", target: self, action: #selector(importYAML))
+        let revealButton = NSButton(title: "Reveal", target: self, action: #selector(revealRecipe))
+        revealButton.bezelStyle = .rounded
+        revealButton.frame = NSRect(x: padding + 560, y: y, width: 72, height: 28)
+        view.addSubview(revealButton)
+
+        let importButton = NSButton(title: "Install…", target: self, action: #selector(importYAML))
         importButton.bezelStyle = .rounded
-        importButton.frame = NSRect(x: padding + 560, y: y, width: 120, height: 28)
+        importButton.frame = NSRect(x: padding + 638, y: y, width: 82, height: 28)
         view.addSubview(importButton)
         y += 38
+
+        issuePopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 300, height: 26), pullsDown: false)
+        issuePopup.target = self
+        issuePopup.action = #selector(recipeIssueChanged)
+        view.addSubview(issuePopup)
+        issueLabel = NSTextField(labelWithString: "")
+        issueLabel.textColor = .systemRed
+        issueLabel.font = .systemFont(ofSize: 11)
+        issueLabel.lineBreakMode = .byTruncatingMiddle
+        issueLabel.frame = NSRect(x: padding + 312, y: y + 3, width: w - 312, height: 20)
+        view.addSubview(issueLabel)
+        y += 36
 
         let exportButton = NSButton(title: "Export YAML…", target: self, action: #selector(exportYAML))
         exportButton.bezelStyle = .rounded
@@ -249,7 +269,7 @@ class SettingsViewController: NSViewController {
         view.addSubview(scroll)
         y += 160
 
-        let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}.")
+        let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}, {recipeDir}.")
         placeholderHelp.font = .systemFont(ofSize: 11)
         placeholderHelp.textColor = .tertiaryLabelColor
         placeholderHelp.lineBreakMode = .byWordWrapping
@@ -323,6 +343,12 @@ class SettingsViewController: NSViewController {
 
     private func reloadActions(select idToSelect: UUID? = nil) {
         actions = (try? actionStore.listActions()) ?? []
+        recipeIssues = ((try? recipeCoordinator?.entries()) ?? []).filter { $0.status == "invalid" }
+        issuePopup.removeAllItems()
+        issuePopup.addItem(withTitle: recipeIssues.isEmpty ? "No recipe errors" : "Recipe errors (\(recipeIssues.count))")
+        for issue in recipeIssues { issuePopup.addItem(withTitle: URL(fileURLWithPath: issue.path).lastPathComponent) }
+        issuePopup.isEnabled = !recipeIssues.isEmpty
+        issueLabel.stringValue = recipeIssues.first?.parseError ?? ""
         actionPopup.removeAllItems()
         for action in actions {
             actionPopup.addItem(withTitle: action.name)
@@ -564,11 +590,29 @@ class SettingsViewController: NSViewController {
         }
     }
 
+    @objc private func revealRecipe() {
+        if let selectedActionID, let url = try? recipeCoordinator?.path(for: selectedActionID) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } else if let issue = selectedRecipeIssue() {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: issue.path)])
+        }
+    }
+
+    @objc private func recipeIssueChanged() {
+        issueLabel.stringValue = selectedRecipeIssue()?.parseError ?? ""
+    }
+
+    private func selectedRecipeIssue() -> RecipeIndexEntry? {
+        let index = issuePopup.indexOfSelectedItem - 1
+        guard index >= 0, index < recipeIssues.count else { return recipeIssues.first }
+        return recipeIssues[index]
+    }
+
     @objc private func importYAML() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = []
         panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowedFileTypes = ["yml", "yaml"]
         guard panel.runModal() == .OK else { return }
@@ -577,14 +621,15 @@ class SettingsViewController: NSViewController {
         var importedNames: [String] = []
         do {
             for url in panel.urls {
-                let imported = try importer.importActions(from: url)
-                for action in imported {
-                    if let recipeCoordinator { try recipeCoordinator.save(action: action) }
-                    else {
+                if let recipeCoordinator {
+                    let summary = try recipeCoordinator.install(url)
+                    importedNames.append(contentsOf: summary.recipeNames)
+                } else {
+                    let imported = try importer.importActions(from: url)
+                    for action in imported {
                         _ = try actionStore.upsertActionByName(action)
-                        try actionStore.deleteDuplicateActionsByName(keeping: action.name)
+                        importedNames.append(action.name)
                     }
-                    importedNames.append(action.name)
                 }
             }
             reloadActions()

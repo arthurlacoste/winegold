@@ -139,6 +139,20 @@ public final class RecipeCoordinator {
         _ = try reconcile()
     }
 
+    public func entries() throws -> [RecipeIndexEntry] { try index.entries() }
+
+    public func path(for actionID: UUID) throws -> URL? { try index.path(for: actionID) }
+
+    public func install(_ source: URL) throws -> RecipeInstallationSummary {
+        let summary = try RecipeInstaller(root: root).install(source)
+        _ = try reconcile()
+        return summary
+    }
+
+    public func inspectInstallation(_ source: URL) throws -> RecipeInstallationSummary {
+        try RecipeInstaller(root: root).inspect(source)
+    }
+
     public func delete(actionID: UUID) throws {
         guard let path = try index.path(for: actionID) else { return }
         try fileStore.remove(path)

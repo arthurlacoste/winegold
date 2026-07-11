@@ -68,9 +68,64 @@ final class RecipeTests: XCTestCase {
         XCTAssertEqual(try ActionStore(db: db).listActions().first?.id, original.id)
     }
 
-    private func writeRecipe(_ url: URL, id: String = "winegold.test", name: String = "Test") throws {
+    func testStandaloneInstallerCopiesReferencedHelper() throws {
+        let sourceRoot = temporaryDirectory()
+        let recipe = sourceRoot.appendingPathComponent("resize.wg.yml")
+        try writeRecipe(recipe, id: "winegold.resize", name: "Resize", command: "python3 resize.py {input}")
+        try Data("print('ok')".utf8).write(to: sourceRoot.appendingPathComponent("resize.py"))
+        let target = temporaryDirectory().appendingPathComponent("recipes")
+
+        let summary = try RecipeInstaller(root: target).install(recipe)
+
+        XCTAssertEqual(summary.recipeNames, ["Resize"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: summary.destination.appendingPathComponent("resize.wg.yml").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: summary.destination.appendingPathComponent("resize.py").path))
+    }
+
+    func testStandaloneInstallerWarnsAboutMissingHelper() throws {
+        let sourceRoot = temporaryDirectory()
+        let recipe = sourceRoot.appendingPathComponent("resize.wg.yml")
+        try writeRecipe(recipe, command: "python3 missing.py {input}")
+
+        let summary = try RecipeInstaller(root: temporaryDirectory()).inspect(recipe)
+
+        XCTAssertEqual(summary.warnings, ["Likely missing helper: missing.py"])
+    }
+
+    func testFolderInstallerCopiesBundleAndSkipsSymlinksAndDependencies() throws {
+        let source = temporaryDirectory().appendingPathComponent("bundle")
+        try writeRecipe(source.appendingPathComponent("main.wg.yml"), id: "winegold.bundle", name: "Bundle")
+        try Data("helper".utf8).write(to: source.appendingPathComponent("helper.py"))
+        try FileManager.default.createDirectory(at: source.appendingPathComponent("node_modules"), withIntermediateDirectories: true)
+        try Data("skip".utf8).write(to: source.appendingPathComponent("node_modules/skip.js"))
+        try FileManager.default.createSymbolicLink(at: source.appendingPathComponent("linked.py"), withDestinationURL: source.appendingPathComponent("helper.py"))
+        let target = temporaryDirectory().appendingPathComponent("recipes")
+
+        let summary = try RecipeInstaller(root: target).install(source)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: summary.destination.appendingPathComponent("main.wg.yml").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: summary.destination.appendingPathComponent("helper.py").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: summary.destination.appendingPathComponent("node_modules").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: summary.destination.appendingPathComponent("linked.py").path))
+    }
+
+    func testLegacyInstallerConvertsAddYAMLToWGRecipe() throws {
+        let source = temporaryDirectory().appendingPathComponent("copy.add.yml")
+        let yaml = "name: Copy\ntrigger:\n  fileExtension:\n    - txt\ncmd:\n  exec: 'echo {input}'\n"
+        try Data(yaml.utf8).write(to: source)
+        let target = temporaryDirectory().appendingPathComponent("recipes")
+
+        let summary = try RecipeInstaller(root: target).install(source)
+        let installed = try RecipeScanner().scan(root: target)
+
+        XCTAssertEqual(installed.count, 1)
+        XCTAssertTrue(installed[0].url.lastPathComponent.hasSuffix(".wg.yml"))
+        XCTAssertEqual(summary.recipeNames, ["Copy"])
+    }
+
+    private func writeRecipe(_ url: URL, id: String = "winegold.test", name: String = "Test", command: String = "echo {input}") throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let text = "id: '\(id)'\nname: '\(name)'\nenabled: true\ntrigger: 'extension in {\"txt\"}'\ncmd:\n  exec: 'echo {input}'\n"
+        let text = "id: '\(id)'\nname: '\(name)'\nenabled: true\ntrigger: 'extension in {\"txt\"}'\ncmd:\n  exec: '\(command)'\n"
         try Data(text.utf8).write(to: url)
     }
 

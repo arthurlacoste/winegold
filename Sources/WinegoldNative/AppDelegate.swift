@@ -38,6 +38,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard let recipeCoordinator else { return }
+        do {
+            try recipeCoordinator.reconcile()
+            settingsWC?.refreshActions()
+            refreshPanelActions()
+        } catch {
+            logMsg("[AppDelegate] active recipe reconcile failed: \(error.localizedDescription)")
+        }
+    }
+
     private func setupDatabase() {
         logMsg("[AppDelegate] setupDatabase")
         do {
@@ -303,10 +314,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func shouldAutoImportScripts(_ files: [URL]) -> Bool {
-        guard !files.isEmpty else { return false }
+        guard !files.isEmpty, let recipeCoordinator else { return false }
         return files.allSatisfy { file in
-            let ext = file.pathExtension.lowercased()
-            return ext == "yml" || ext == "yaml" || file.lastPathComponent.lowercased().hasSuffix(".add.yml")
+            (try? recipeCoordinator.inspectInstallation(file)) != nil
         }
     }
 
@@ -448,69 +458,54 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func importScripts(_ files: [URL], using action: Action, runHistoryStore: RunHistoryStore) {
         actionPanelWindow?.markActionTriggered()
-        guard let actionStore else { return }
+        guard let recipeCoordinator else { return }
         actionPanelWindow?.beginRun(actionName: action.name, files: files)
-        Task {
-            let importer = LegacyActionImporter()
-            var batchHadFailure = false
+        Task { @MainActor in
+            var failed = false
             for file in files {
                 let startedAt = Date()
-                var result = CommandResult(
-                    actionId: action.id,
-                    actionName: action.name,
-                    inputFiles: [file.path],
-                    status: .success,
-                    startedAt: startedAt,
-                    endedAt: Date()
-                )
+                var result = CommandResult(actionId: action.id, actionName: action.name, inputFiles: [file.path], status: .success, startedAt: startedAt, endedAt: Date())
                 do {
-                    let importedActions = try importer.importActions(from: file)
-                    var created: [String] = []
-                    var updated: [String] = []
-                    for imported in importedActions {
-                        if let recipeCoordinator {
-                            let existed = try actionStore.listActions().contains { $0.name == imported.name }
-                            try recipeCoordinator.save(action: imported)
-                            if existed { updated.append(imported.name) } else { created.append(imported.name) }
-                        } else {
-                            let didCreate = try actionStore.upsertActionByName(imported)
-                            try actionStore.deleteDuplicateActionsByName(keeping: imported.name)
-                            if didCreate { created.append(imported.name) } else { updated.append(imported.name) }
-                        }
+                    let preview = try recipeCoordinator.inspectInstallation(file)
+                    let alert = NSAlert()
+                    alert.messageText = "Install Winegold recipe?"
+                    alert.informativeText = installationSummaryText(preview)
+                    alert.addButton(withTitle: "Install")
+                    alert.addButton(withTitle: "Cancel")
+                    guard alert.runModal() == .alertFirstButtonReturn else {
+                        result.status = .failed
+                        result.stderr = "Installation cancelled.\n"
+                        failed = true
+                        try? runHistoryStore.addRun(result)
+                        actionPanelWindow?.showRunResult(result: result)
+                        continue
                     }
-                    let createdLine = created.isEmpty ? "" : "Created: \(created.joined(separator: ", "))\n"
-                    let updatedLine = updated.isEmpty ? "" : "Updated: \(updated.joined(separator: ", "))\n"
-                    result.stdout = createdLine + updatedLine
-                    logMsg("[AppDelegate] imported scripts from \(file.lastPathComponent): created=\(created) updated=\(updated)")
-                    await MainActor.run {
-                        self.settingsWC?.refreshActions()
-                    }
+                    let summary = try recipeCoordinator.install(file)
+                    result.stdout = "Installed: \(summary.recipeNames.joined(separator: ", "))\nDestination: \(summary.destination.path)\n"
+                    settingsWC?.refreshActions()
+                    refreshPanelActions()
                 } catch {
+                    failed = true
                     result.status = .failed
                     result.stderr = "\(error.localizedDescription)\n"
-                    logMsg("[AppDelegate] import script failed: \(error.localizedDescription)")
                 }
-
-                if result.status != .success { batchHadFailure = true }
                 try? runHistoryStore.addRun(result)
-                let resultCopy = result
-                await MainActor.run {
-                    if files.count > 1 {
-                        self.actionPanelWindow?.appendBatchResult(result: resultCopy)
-                    } else {
-                        self.actionPanelWindow?.showRunResult(result: resultCopy)
-                    }
-                }
+                actionPanelWindow?.showRunResult(result: result)
             }
-
-            if files.count > 1 {
-                let finalStatus: ExecutionStatus = batchHadFailure ? .failed : .success
-                await MainActor.run {
-                    let final = CommandResult(actionId: action.id, actionName: action.name, inputFiles: files.map { $0.path }, status: finalStatus, startedAt: Date(), endedAt: Date())
-                    self.actionPanelWindow?.showRunResult(result: final)
-                }
+            if files.count > 1, failed {
+                logMsg("[AppDelegate] one or more recipe installations failed")
             }
         }
+    }
+
+    private func installationSummaryText(_ summary: RecipeInstallationSummary) -> String {
+        var lines = [
+            "Recipes: \(summary.recipeNames.joined(separator: ", "))",
+            "Files copied: \(summary.copiedFiles.count)",
+            "Destination: \(summary.destination.path)"
+        ]
+        if !summary.warnings.isEmpty { lines.append("Warnings:\n" + summary.warnings.joined(separator: "\n")) }
+        return lines.joined(separator: "\n")
     }
 
     private func failureDebugText(

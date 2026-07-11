@@ -160,3 +160,11 @@ cmd:
     cd "{parent}"
     printf "%s\n" "{filename}"
 ```
+
+## Installing recipes
+
+Drag a `.wg.yml` file or a folder containing recipes into Winegold. Winegold shows a summary before installation, then copies the recipe into `~/.winegold/recipes/`; it never executes from the original location.
+
+A standalone recipe gets its own folder. Relative helper references such as `resize.py` are copied from beside the recipe when found, and missing helpers produce a warning. Folder installation preserves ordinary nested files while skipping symlinks, hidden folders, dependency folders, caches, and build output.
+
+Settings shows invalid recipe files and their parse errors. Use **Reveal** to locate the selected recipe or invalid file in Finder.
