@@ -53,6 +53,56 @@ final class RecipeTests: XCTestCase {
         XCTAssertEqual(restored.displayOrder, 42)
     }
 
+    func testRepairInvalidRecipeAddsMissingTriggerAndPreservesOtherFields() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        let url = root.appendingPathComponent("convert/convert.wg.yml")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let invalid = """
+        # Keep this comment
+        id: 'winegold.convert'
+        name: 'Convert webp to jpg'
+        enabled: true
+        variables:
+          QUALITY:
+            default: '90'
+        customField: keep-me
+        cmd:
+          exec: 'echo old'
+        """ + "\n"
+        try Data(invalid.utf8).write(to: url)
+
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        try coordinator.reconcile()
+        XCTAssertEqual(try coordinator.entries().first?.status, "invalid")
+
+        let draft = try coordinator.repairDraft(at: url)
+        XCTAssertEqual(draft.name, "Convert webp to jpg")
+        XCTAssertEqual(draft.trigger, "extension in {\"*\"}")
+        XCTAssertEqual(draft.command, "echo old")
+
+        let action = Action(
+            name: draft.name,
+            acceptedExtensions: ["png"],
+            triggerExpression: "extension in {\"png\"}",
+            executablePath: "/bin/zsh",
+            argumentsTemplate: ["-lc", "echo repaired"]
+        )
+        try coordinator.repairInvalidRecipe(at: url, action: action)
+
+        let repaired = try RecipeParser().parse(url: url)
+        XCTAssertEqual(repaired.document.trigger, "extension in {\"png\"}")
+        XCTAssertEqual(repaired.document.command, "echo repaired")
+        let text = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(text.contains("# Keep this comment"))
+        XCTAssertTrue(text.contains("customField: keep-me"))
+        XCTAssertTrue(text.contains("variables:"))
+        XCTAssertEqual(try coordinator.entries().first?.status, "valid")
+        XCTAssertEqual(try ActionStore(db: db).listActions().first?.name, "Convert webp to jpg")
+    }
+
     func testLegacyMigrationIsIdempotentAndPreservesActionID() throws {
         let temp = temporaryDirectory()
         let db = try Database(path: temp.appendingPathComponent("test.db").path)

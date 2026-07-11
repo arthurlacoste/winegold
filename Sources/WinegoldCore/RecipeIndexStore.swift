@@ -197,6 +197,29 @@ public final class RecipeCoordinator {
         return resolver.setupStatus(variables: variables, externalID: record.document.id ?? "", appEnvironment: ProcessInfo.processInfo.environment)
     }
 
+    public func repairDraft(at path: URL) throws -> RecipeDocument {
+        try parser.repairDraft(url: path)
+    }
+
+    public func repairInvalidRecipe(at path: URL, action: Action) throws {
+        let draft = try parser.repairDraft(url: path)
+        let document = RecipeDocument(
+            id: draft.id,
+            name: action.name,
+            description: draft.description,
+            version: draft.version,
+            enabled: draft.enabled,
+            trigger: action.triggerExpression ?? "extension in {\"*\"}",
+            command: action.argumentsTemplate.count > 1 ? action.argumentsTemplate[1] : action.argumentsTemplate.joined(separator: " "),
+            successMessage: action.successMessage,
+            supportFiles: draft.supportFiles,
+            requirements: draft.requirements,
+            variables: draft.variables
+        )
+        _ = try fileStore.repair(document, at: path)
+        _ = try reconcile()
+    }
+
     public func save(action: Action) throws {
         let path = try index.path(for: action.id)
         var document: RecipeDocument

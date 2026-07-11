@@ -87,6 +87,39 @@ public struct RecipeParser {
         return RecipeRecord(document: document, action: action, url: url, contentHash: Self.hash(data))
     }
 
+    public func repairDraft(url: URL) throws -> RecipeDocument {
+        let text = try String(contentsOf: url, encoding: .utf8)
+        return repairDraft(text: text)
+    }
+
+    public func repairDraft(text: String) -> RecipeDocument {
+        let lines = text.components(separatedBy: .newlines)
+        let name = scalar("name", lines: lines) ?? URL(fileURLWithPath: "recipe").deletingPathExtension().lastPathComponent
+        let trigger: String
+        if let direct = scalar("trigger", lines: lines), !direct.isEmpty {
+            trigger = direct
+        } else {
+            let extensions = nestedList(section: "trigger", key: "fileExtension", lines: lines)
+            trigger = extensions.isEmpty
+                ? "extension in {\"*\"}"
+                : TriggerSerializer().serialize(.condition(field: "extension", operator: .in, value: .collection(extensions)))
+        }
+        let command = nestedScalar(section: "cmd", key: "exec", lines: lines) ?? ""
+        return RecipeDocument(
+            id: scalar("id", lines: lines),
+            name: name,
+            description: scalar("description", lines: lines) ?? "",
+            version: scalar("version", lines: lines),
+            enabled: (scalar("enabled", lines: lines) ?? "true").lowercased() != "false",
+            trigger: trigger,
+            command: command,
+            successMessage: scalar("successMessage", lines: lines),
+            supportFiles: topLevelList("files", lines: lines),
+            requirements: topLevelList("requirements", lines: lines),
+            variables: (try? RecipeVariableParser().parseVariables(lines: lines)).flatMap { $0.isEmpty ? nil : $0 }
+        )
+    }
+
     public func parse(text: String) throws -> RecipeDocument {
         let lines = text.components(separatedBy: .newlines)
         guard let name = scalar("name", lines: lines), !name.isEmpty else { throw RecipeError.missingField("name") }
@@ -308,6 +341,21 @@ public final class RecipeFileStore {
         return try parser.parse(url: url)
     }
 
+    public func repair(_ document: RecipeDocument, at url: URL) throws -> RecipeRecord {
+        try ensureInsideRoot(url)
+        let fm = FileManager.default
+        let existing = try String(contentsOf: url, encoding: .utf8)
+        let text = RecipeRepairTextEditor().update(existing: existing, document: document)
+        _ = try parser.parse(text: text)
+        let permissions = (try? fm.attributesOfItem(atPath: url.path)[.posixPermissions]) as? NSNumber
+        let temporary = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+        try Data(text.utf8).write(to: temporary, options: .atomic)
+        if let permissions { try fm.setAttributes([.posixPermissions: permissions], ofItemAtPath: temporary.path) }
+        _ = try parser.parse(text: String(decoding: Data(contentsOf: temporary), as: UTF8.self))
+        _ = try fm.replaceItemAt(url, withItemAt: temporary)
+        return try parser.parse(url: url)
+    }
+
     public func create(_ document: RecipeDocument, category: String = "local") throws -> RecipeRecord {
         let slug = Self.slug(document.name)
         let folder = root.appendingPathComponent(category).appendingPathComponent(slug)
@@ -338,6 +386,57 @@ public final class RecipeFileStore {
     }
 }
 
+
+private struct RecipeRepairTextEditor {
+    private let editableKeys = ["name", "trigger", "cmd", "successMessage"]
+
+    func update(existing: String, document: RecipeDocument) -> String {
+        var lines = existing.components(separatedBy: .newlines)
+        if lines.last == "" { lines.removeLast() }
+        let serializer = RecipeSerializer()
+        let replacements: [String: [String]] = [
+            "name": ["name: \(serializer.quote(document.name))"],
+            "trigger": ["trigger: \(serializer.quote(document.trigger))"],
+            "cmd": commandBlock(document.command),
+            "successMessage": document.successMessage.map { ["successMessage: \(serializer.quote($0))"] } ?? []
+        ]
+
+        for key in editableKeys.reversed() {
+            if let range = topLevelRange(for: key, in: lines) {
+                let replacement = replacements[key] ?? []
+                if replacement.isEmpty { lines.removeSubrange(range) }
+                else { lines.replaceSubrange(range, with: replacement) }
+            }
+        }
+        for key in editableKeys where topLevelRange(for: key, in: lines) == nil {
+            guard let replacement = replacements[key], !replacement.isEmpty else { continue }
+            if !lines.isEmpty, lines.last?.isEmpty == false { lines.append("") }
+            lines.append(contentsOf: replacement)
+        }
+        while lines.last?.isEmpty == true { lines.removeLast() }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    private func commandBlock(_ command: String) -> [String] {
+        let serializer = RecipeSerializer()
+        if command.contains("\n") {
+            return ["cmd:", "  exec: |"] + command.components(separatedBy: .newlines).map { "    \($0)" }
+        }
+        return ["cmd:", "  exec: \(serializer.quote(command))"]
+    }
+
+    private func topLevelRange(for key: String, in lines: [String]) -> Range<Int>? {
+        guard let start = lines.firstIndex(where: {
+            $0.indent == 0 && ($0.trimmed == "\(key):" || $0.trimmed.hasPrefix("\(key): "))
+        }) else { return nil }
+        var end = start + 1
+        while end < lines.count {
+            if !lines[end].trimmed.isEmpty && lines[end].indent == 0 { break }
+            end += 1
+        }
+        return start..<end
+    }
+}
 
 private struct RecipeTextEditor {
     private let knownKeys = ["id", "name", "description", "version", "enabled", "variables", "trigger", "cmd", "successMessage", "files", "requirements"]

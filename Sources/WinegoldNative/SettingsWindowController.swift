@@ -94,6 +94,7 @@ class SettingsViewController: NSViewController {
     private var successMessageField: NSTextField!
     private var commandTextView: NSTextView!
     private var selectedActionID: UUID?
+    private var selectedRecipeIssuePath: URL?
     private var actions: [Action] = []
     private var recipeIssues: [RecipeIndexEntry] = []
     private var issuePopup: NSPopUpButton!
@@ -419,6 +420,7 @@ class SettingsViewController: NSViewController {
     }
 
     private func loadAction(_ action: Action) {
+        selectedRecipeIssuePath = nil
         selectedActionID = action.id
         nameField.stringValue = action.name
         triggerEditor.stringValue = action.triggerExpression ?? extensionExpression(action.acceptedExtensions)
@@ -689,6 +691,7 @@ class SettingsViewController: NSViewController {
 
     private func clearForm() {
         selectedActionID = nil
+        selectedRecipeIssuePath = nil
         nameField.stringValue = ""
         triggerEditor.stringValue = "extension in {\"*\"}"
         successMessageField.stringValue = ""
@@ -819,14 +822,20 @@ class SettingsViewController: NSViewController {
         }
 
         do {
-            if let recipeCoordinator {
+            if let issuePath = selectedRecipeIssuePath, let recipeCoordinator {
+                try recipeCoordinator.repairInvalidRecipe(at: issuePath, action: action)
+                selectedRecipeIssuePath = nil
+                reloadActions()
+            } else if let recipeCoordinator {
                 try recipeCoordinator.save(action: action)
+                reloadActions(select: action.id)
             } else if existing == nil {
                 try actionStore.createAction(action)
+                reloadActions(select: action.id)
             } else {
                 try actionStore.updateAction(action)
+                reloadActions(select: action.id)
             }
-            reloadActions(select: action.id)
         } catch {
             showMessage("Save failed: \(error.localizedDescription)")
         }
@@ -855,7 +864,25 @@ class SettingsViewController: NSViewController {
     }
 
     @objc private func recipeIssueChanged() {
-        issueLabel.stringValue = selectedRecipeIssue()?.parseError ?? ""
+        guard let issue = selectedRecipeIssue() else {
+            issueLabel.stringValue = ""
+            return
+        }
+        issueLabel.stringValue = issue.parseError ?? ""
+        let path = URL(fileURLWithPath: issue.path)
+        guard let draft = try? recipeCoordinator?.repairDraft(at: path) else { return }
+        selectedActionID = nil
+        selectedRecipeIssuePath = path
+        nameField.stringValue = draft.name
+        triggerEditor.stringValue = draft.trigger
+        successMessageField.stringValue = draft.successMessage ?? ""
+        commandTextView.string = draft.command
+        needsSetupBadge?.isHidden = true
+        configurationStack?.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let note = NSTextField(labelWithString: "Repair this recipe, then Save.")
+        note.font = .systemFont(ofSize: 12)
+        note.textColor = .systemOrange
+        configurationStack?.addArrangedSubview(note)
     }
 
     private func selectedRecipeIssue() -> RecipeIndexEntry? {
