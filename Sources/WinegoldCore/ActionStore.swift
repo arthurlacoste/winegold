@@ -12,7 +12,7 @@ public struct ActionStore {
     }
 
     private var actionColumns: String {
-        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at"
+        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at, category"
     }
 
     public func listActions() throws -> [Action] {
@@ -33,7 +33,7 @@ public struct ActionStore {
         return actions
     }
 
-    public func upsertDerivedRecipe(_ action: Action, externalID: String, path: String, hash: String) throws {
+    public func upsertDerivedRecipe(_ action: Action, externalID: String, path: String, hash: String, category: String?) throws {
         let claimLegacy = try db.prepare("UPDATE actions SET external_id=?, source_kind='recipe' WHERE id=? AND external_id IS NULL")
         claimLegacy.bindText(externalID, at: 1)
         claimLegacy.bindText(action.id.uuidString, at: 2)
@@ -50,8 +50,8 @@ public struct ActionStore {
             INSERT INTO actions (id, name, description, icon_name, enabled, accepted_extensions, accepted_utis,
             trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template,
             success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at,
-            source_kind, external_id, recipe_path, recipe_hash, available)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recipe', ?, ?, ?, 1)
+            source_kind, external_id, recipe_path, recipe_hash, available, category)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recipe', ?, ?, ?, 1, ?)
             ON CONFLICT(external_id) DO UPDATE SET id=excluded.id, name=excluded.name, description=excluded.description,
             icon_name=excluded.icon_name, enabled=excluded.enabled, accepted_extensions=excluded.accepted_extensions,
             accepted_utis=excluded.accepted_utis, trigger_expression=excluded.trigger_expression,
@@ -59,12 +59,13 @@ public struct ActionStore {
             working_directory_template=excluded.working_directory_template, output_path_template=excluded.output_path_template,
             success_message=excluded.success_message, requires_confirmation=excluded.requires_confirmation,
             timeout_seconds=excluded.timeout_seconds, updated_at=excluded.updated_at, recipe_path=excluded.recipe_path,
-            recipe_hash=excluded.recipe_hash, available=1
+            recipe_hash=excluded.recipe_hash, available=1, category=excluded.category
         """)
         bindAction(derived, to: stmt)
         stmt.bindText(externalID, at: 20)
         stmt.bindText(path, at: 21)
         stmt.bindText(hash, at: 22)
+        if let category { stmt.bindText(category, at: 23) } else { stmt.bindNull(at: 23) }
         _ = stmt.step()
     }
 
@@ -179,6 +180,7 @@ public struct ActionStore {
             id: UUID(uuidString: stmt.columnText(at: 0)) ?? UUID(),
             name: stmt.columnText(at: 1),
             description: stmt.columnText(at: 2),
+            category: stmt.columnIsNull(at: 19) ? nil : stmt.columnText(at: 19),
             iconName: stmt.columnIsNull(at: 3) ? nil : stmt.columnText(at: 3),
             enabled: stmt.columnInt(at: 4) != 0,
             acceptedExtensions: extsStr.isEmpty ? [] : extsStr.components(separatedBy: ","),

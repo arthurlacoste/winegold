@@ -89,7 +89,7 @@ final class RecipeTests: XCTestCase {
 
         let summary = try RecipeInstaller(root: temporaryDirectory()).inspect(recipe)
 
-        XCTAssertEqual(summary.warnings, ["Likely missing helper: missing.py"])
+        XCTAssertEqual(summary.warnings, ["Missing support file: missing.py", "Undeclared helper reference: missing.py"])
     }
 
     func testFolderInstallerCopiesBundleAndSkipsSymlinksAndDependencies() throws {
@@ -121,6 +121,279 @@ final class RecipeTests: XCTestCase {
         XCTAssertEqual(installed.count, 1)
         XCTAssertTrue(installed[0].url.lastPathComponent.hasSuffix(".wg.yml"))
         XCTAssertEqual(summary.recipeNames, ["Copy"])
+    }
+
+    func testParserReadsDeclaredFilesAndRequirements() throws {
+        let text = """
+        name: Test
+        trigger: 'extension equals "txt"'
+        cmd:
+          exec: 'python3 scripts/run.py {input}'
+        files:
+          - scripts/run.py
+          - config/default.json
+        requirements:
+          - python3
+          - pillow>=10
+        """
+
+        let document = try RecipeParser().parse(text: text)
+
+        XCTAssertEqual(document.supportFiles, ["scripts/run.py", "config/default.json"])
+        XCTAssertEqual(document.requirements, ["python3", "pillow>=10"])
+    }
+
+    func testSettingsStyleSavePreservesCommentsUnknownFieldsMetadataAndPermissions() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        let url = root.appendingPathComponent("tools/demo.wg.yml")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let original = """
+        # Keep this comment
+        id: winegold.demo
+        name: Demo
+        description: Original
+        version: 2.4.0
+        enabled: true
+        customField:
+          nested: keep-me
+        trigger: 'extension equals "txt"'
+        cmd:
+          exec: 'echo {input}'
+        files:
+          - scripts/helper.py
+        requirements:
+          - python3
+        """ + "\n"
+        try Data(original.utf8).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o640], ofItemAtPath: url.path)
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        try coordinator.reconcile()
+        var action = try XCTUnwrap(ActionStore(db: db).listActions().first)
+        action.name = "Edited"
+        action.description = "Changed"
+        action.argumentsTemplate = ["-lc", "printf '%s' '{input}'"]
+
+        try coordinator.save(action: action)
+
+        let updated = try String(contentsOf: url)
+        XCTAssertTrue(updated.contains("# Keep this comment"))
+        XCTAssertTrue(updated.contains("customField:\n  nested: keep-me"))
+        XCTAssertTrue(updated.contains("version: '2.4.0'"))
+        XCTAssertTrue(updated.contains("  - 'scripts/helper.py'"))
+        XCTAssertTrue(updated.contains("  - 'python3'"))
+        XCTAssertTrue(updated.contains("name: 'Edited'"))
+        let permissions = try XCTUnwrap((try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions]) as? NSNumber)
+        XCTAssertEqual(permissions.intValue, 0o640)
+    }
+
+    func testDeclaredNestedSupportFileIsCopiedWithoutUndeclaredWarning() throws {
+        let sourceRoot = temporaryDirectory()
+        let recipe = sourceRoot.appendingPathComponent("tool.wg.yml")
+        try FileManager.default.createDirectory(at: sourceRoot.appendingPathComponent("scripts"), withIntermediateDirectories: true)
+        try Data("print('ok')".utf8).write(to: sourceRoot.appendingPathComponent("scripts/run.py"))
+        let text = """
+        id: winegold.tool
+        name: Tool
+        enabled: true
+        trigger: 'extension equals "txt"'
+        cmd:
+          exec: 'python3 scripts/run.py {input}'
+        files:
+          - scripts/run.py
+        """ + "\n"
+        try Data(text.utf8).write(to: recipe)
+
+        let summary = try RecipeInstaller(root: temporaryDirectory()).install(recipe)
+
+        XCTAssertTrue(summary.warnings.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: summary.destination.appendingPathComponent("scripts/run.py").path))
+    }
+
+    func testUnsafeDeclaredSupportPathIsRejected() throws {
+        let sourceRoot = temporaryDirectory()
+        let recipe = sourceRoot.appendingPathComponent("unsafe.wg.yml")
+        let text = """
+        name: Unsafe
+        trigger: 'extension equals "txt"'
+        cmd:
+          exec: 'echo {input}'
+        files:
+          - ../secret.txt
+        """ + "\n"
+        try Data(text.utf8).write(to: recipe)
+
+        XCTAssertThrowsError(try RecipeInstaller(root: temporaryDirectory()).inspect(recipe))
+    }
+
+    func testHashChangeIsDetectedWhenMetadataAndSizeMatch() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        let url = root.appendingPathComponent("same.wg.yml")
+        try writeRecipe(url, id: "winegold.same", name: "Test")
+        let originalDate = try url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        try coordinator.reconcile()
+
+        try writeRecipe(url, id: "winegold.same", name: "Best")
+        if let originalDate { try FileManager.default.setAttributes([.modificationDate: originalDate], ofItemAtPath: url.path) }
+        try coordinator.reconcile()
+
+        XCTAssertEqual(try ActionStore(db: db).listActions().first?.name, "Best")
+    }
+
+    func testMissingDerivedActionIsRebuiltFromUnchangedRecipe() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        let url = root.appendingPathComponent("rebuild.wg.yml")
+        try writeRecipe(url, id: "winegold.rebuild", name: "Rebuild")
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        try coordinator.reconcile()
+        try db.execute("DELETE FROM actions")
+
+        try coordinator.reconcile()
+
+        XCTAssertEqual(try ActionStore(db: db).listActions().map(\.name), ["Rebuild"])
+    }
+
+    func testGeneratedIDWriteStabilizesWithoutRewriteLoop() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        let url = root.appendingPathComponent("local.wg.yml")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let text = "name: Local\ntrigger: 'extension equals \"txt\"'\ncmd:\n  exec: 'echo {input}'\n"
+        try Data(text.utf8).write(to: url)
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+
+        try coordinator.reconcile()
+        let firstData = try Data(contentsOf: url)
+        let firstDate = try XCTUnwrap(url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+        Thread.sleep(forTimeInterval: 0.05)
+        try coordinator.reconcile()
+
+        XCTAssertEqual(try Data(contentsOf: url), firstData)
+        XCTAssertEqual(try url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate, firstDate)
+    }
+
+    func testWatcherObservesExistingNestedDirectory() throws {
+        let root = temporaryDirectory().appendingPathComponent("recipes")
+        let nested = root.appendingPathComponent("deep/category")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let callback = expectation(description: "nested watcher callback")
+        callback.assertForOverFulfill = false
+        let watcher = RecipeWatcher(root: root) { callback.fulfill() }
+        try watcher.start()
+        defer { watcher.stop() }
+
+        try Data("change".utf8).write(to: nested.appendingPathComponent("touch.txt"))
+
+        wait(for: [callback], timeout: 2.0)
+    }
+
+    func testNestedFolderBecomesDerivedCategory() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        try writeRecipe(root.appendingPathComponent("personal/images/resize.wg.yml"), id: "winegold.category", name: "Resize")
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+
+        try RecipeCoordinator(root: root, db: db).reconcile()
+
+        XCTAssertEqual(try ActionStore(db: db).listActions().first?.category, "personal/images")
+    }
+
+    func testDuplicateNamesRemainDistinctByRecipeID() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        try writeRecipe(root.appendingPathComponent("one.wg.yml"), id: "winegold.one", name: "Duplicate")
+        try writeRecipe(root.appendingPathComponent("two.wg.yml"), id: "winegold.two", name: "Duplicate")
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+
+        try RecipeCoordinator(root: root, db: db).reconcile()
+
+        let actions = try ActionStore(db: db).listActions()
+        XCTAssertEqual(actions.count, 2)
+        XCTAssertNotEqual(actions[0].id, actions[1].id)
+    }
+
+    func testExternalDeletionAndRestorationPreserveLocalOrder() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        let url = root.appendingPathComponent("restore.wg.yml")
+        try writeRecipe(url, id: "winegold.restore", name: "Restore")
+        let original = try Data(contentsOf: url)
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        try coordinator.reconcile()
+        var action = try XCTUnwrap(ActionStore(db: db).listActions().first)
+        action.displayOrder = 73
+        try ActionStore(db: db).updateAction(action)
+
+        try FileManager.default.removeItem(at: url)
+        try coordinator.reconcile()
+        XCTAssertTrue(try ActionStore(db: db).listActions().isEmpty)
+
+        try original.write(to: url)
+        try coordinator.reconcile()
+        XCTAssertEqual(try ActionStore(db: db).listActions().first?.displayOrder, 73)
+    }
+
+    func testCoordinatorRecordsInstallationProvenance() throws {
+        let temp = temporaryDirectory()
+        let source = temp.appendingPathComponent("source.wg.yml")
+        try writeRecipe(source, id: "winegold.provenance", name: "Provenance")
+        let root = temp.appendingPathComponent("recipes")
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+
+        _ = try coordinator.install(source)
+
+        let entry = try XCTUnwrap(coordinator.entries().first)
+        XCTAssertEqual(entry.installedFrom, source.resolvingSymlinksInPath().standardizedFileURL.path)
+        XCTAssertNotNil(entry.installedAt)
+    }
+
+    func testWatcherObservesAtomicReplacementInNestedDirectory() throws {
+        let root = temporaryDirectory().appendingPathComponent("recipes")
+        let nested = root.appendingPathComponent("nested")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let destination = nested.appendingPathComponent("recipe.wg.yml")
+        try writeRecipe(destination)
+        let callback = expectation(description: "atomic replacement callback")
+        callback.assertForOverFulfill = false
+        let watcher = RecipeWatcher(root: root) { callback.fulfill() }
+        try watcher.start()
+        defer { watcher.stop() }
+
+        let replacement = nested.appendingPathComponent("replacement.tmp")
+        try Data("replacement".utf8).write(to: replacement)
+        _ = try FileManager.default.replaceItemAt(destination, withItemAt: replacement)
+
+        wait(for: [callback], timeout: 2.0)
+    }
+
+    func testStandaloneInstallerDetectsNestedUndeclaredHelper() throws {
+        let sourceRoot = temporaryDirectory()
+        let recipe = sourceRoot.appendingPathComponent("nested-helper.wg.yml")
+        try FileManager.default.createDirectory(at: sourceRoot.appendingPathComponent("scripts"), withIntermediateDirectories: true)
+        try Data("print('ok')".utf8).write(to: sourceRoot.appendingPathComponent("scripts/run.py"))
+        try writeRecipe(recipe, command: "python3 scripts/run.py {input}")
+
+        let summary = try RecipeInstaller(root: temporaryDirectory()).inspect(recipe)
+
+        XCTAssertTrue(summary.copiedFiles.contains("scripts/run.py"))
+        XCTAssertEqual(summary.warnings, ["Undeclared helper reference: scripts/run.py"])
     }
 
     private func writeRecipe(_ url: URL, id: String = "winegold.test", name: String = "Test", command: String = "echo {input}") throws {

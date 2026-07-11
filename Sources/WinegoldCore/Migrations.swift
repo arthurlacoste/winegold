@@ -63,14 +63,17 @@ public struct Migrations {
                 modification_time TEXT NOT NULL,
                 file_size TEXT NOT NULL,
                 status TEXT NOT NULL,
-                parse_error TEXT
+                parse_error TEXT,
+                installed_from TEXT,
+                installed_at TEXT
             )
         """)
 
         try ensureRecipeColumns()
+        try ensureRecipeIndexColumns()
         let version = try currentVersion()
         if version == 0 {
-            try db.execute("INSERT INTO schema_version (version) VALUES (5)")
+            try db.execute("INSERT INTO schema_version (version) VALUES (7)")
         } else {
             if version < 2 {
                 try db.execute("ALTER TABLE actions ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
@@ -89,6 +92,14 @@ public struct Migrations {
                 try addRecipeColumns()
                 try db.execute("INSERT INTO schema_version (version) VALUES (5)")
             }
+            if version < 6 {
+                try ensureRecipeColumns()
+                try db.execute("INSERT INTO schema_version (version) VALUES (6)")
+            }
+            if version < 7 {
+                try ensureRecipeIndexColumns()
+                try db.execute("INSERT INTO schema_version (version) VALUES (7)")
+            }
         }
     }
 
@@ -99,11 +110,18 @@ public struct Migrations {
         if !columns.contains("recipe_path") { try db.execute("ALTER TABLE actions ADD COLUMN recipe_path TEXT") }
         if !columns.contains("recipe_hash") { try db.execute("ALTER TABLE actions ADD COLUMN recipe_hash TEXT") }
         if !columns.contains("available") { try db.execute("ALTER TABLE actions ADD COLUMN available INTEGER NOT NULL DEFAULT 1") }
+        if !columns.contains("category") { try db.execute("ALTER TABLE actions ADD COLUMN category TEXT") }
         try db.execute("DROP INDEX IF EXISTS actions_external_id_idx")
         try db.execute("CREATE UNIQUE INDEX IF NOT EXISTS actions_external_id_idx ON actions(external_id)")
     }
 
     private func addRecipeColumns() throws { try ensureRecipeColumns() }
+
+    private func ensureRecipeIndexColumns() throws {
+        let columns = try tableColumns("recipe_index")
+        if !columns.contains("installed_from") { try db.execute("ALTER TABLE recipe_index ADD COLUMN installed_from TEXT") }
+        if !columns.contains("installed_at") { try db.execute("ALTER TABLE recipe_index ADD COLUMN installed_at TEXT") }
+    }
 
     private func tableColumns(_ table: String) throws -> Set<String> {
         let stmt = try db.prepare("PRAGMA table_info(\(table))")

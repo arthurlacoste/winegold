@@ -5,6 +5,7 @@ public struct Action: Identifiable, Codable, Equatable {
     public var name: String
     public var runtimeNameTemplate: String?
     public var description: String
+    public var category: String?
     public var iconName: String?
     public var enabled: Bool
 
@@ -32,6 +33,7 @@ public struct Action: Identifiable, Codable, Equatable {
         name: String,
         runtimeNameTemplate: String? = nil,
         description: String = "",
+        category: String? = nil,
         iconName: String? = nil,
         enabled: Bool = true,
         acceptedExtensions: [String] = [],
@@ -53,6 +55,7 @@ public struct Action: Identifiable, Codable, Equatable {
         self.name = name
         self.runtimeNameTemplate = runtimeNameTemplate
         self.description = description
+        self.category = category
         self.iconName = iconName
         self.enabled = enabled
         self.acceptedExtensions = acceptedExtensions

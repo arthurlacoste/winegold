@@ -485,44 +485,68 @@ class ActionPanelViewController: NSViewController {
         }
 
         let rowHeight: CGFloat = 58
-        let containerHeight = CGFloat(visibleActions.count) * rowHeight
-        let container = PanelActionListView(frame: NSRect(x: padding, y: y, width: w, height: containerHeight))
-        contentView.addSubview(container)
-
-        let validator = ActionValidator()
-        for (index, action) in visibleActions.enumerated() {
-            let status = validator.validate(action)
-            let card = ActionCardView(
-                action: action,
-                status: status,
-                isActive: state.activeActionId == action.id,
-                isGroupedRow: true,
-                onDrop: { [weak self] droppedFiles in
-                    let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
-                    logMsg("[PanelVC] onDrop action=\(action.name) files=\(files.map { $0.lastPathComponent })")
-                    guard !files.isEmpty else { return }
-                    self?.startRun(action: action, files: files)
-                },
-                onToggleFavorite: { [weak self] action in
-                    self?.onToggleFavorite(action)
-                },
-                onMoveBefore: { [weak self] source, target in
-                    self?.onMoveAction(source, target)
+        let hasCategories = visibleActions.contains { $0.category != nil }
+        var grouped: [(name: String?, actions: [Action])] = []
+        if hasCategories {
+            for action in visibleActions {
+                let name = action.category ?? "General"
+                if let index = grouped.firstIndex(where: { $0.name == name }) {
+                    grouped[index].actions.append(action)
+                } else {
+                    grouped.append((name, [action]))
                 }
-            )
-            card.frame = NSRect(x: 0, y: CGFloat(index) * rowHeight, width: w, height: rowHeight)
-            container.addSubview(card)
-            cardViews.append(card)
-
-            if index < visibleActions.count - 1 {
-                let separator = NSView(frame: NSRect(x: 0, y: CGFloat(index + 1) * rowHeight, width: w, height: 1))
-                separator.wantsLayer = true
-                separator.layer?.backgroundColor = WinegoldTheme.separator(in: view).cgColor
-                container.addSubview(separator)
             }
+        } else {
+            grouped = [(nil, visibleActions)]
         }
 
-        y += containerHeight + 12
+        let validator = ActionValidator()
+        for group in grouped {
+            if let category = group.name {
+                let categoryLabel = sectionLabel(category.uppercased())
+                categoryLabel.font = .systemFont(ofSize: 10, weight: .semibold)
+                categoryLabel.frame = NSRect(x: padding + 8, y: y, width: w - 16, height: 16)
+                contentView.addSubview(categoryLabel)
+                y += 18
+            }
+
+            let containerHeight = CGFloat(group.actions.count) * rowHeight
+            let container = PanelActionListView(frame: NSRect(x: padding, y: y, width: w, height: containerHeight))
+            contentView.addSubview(container)
+
+            for (index, action) in group.actions.enumerated() {
+                let status = validator.validate(action)
+                let card = ActionCardView(
+                    action: action,
+                    status: status,
+                    isActive: state.activeActionId == action.id,
+                    isGroupedRow: true,
+                    onDrop: { [weak self] droppedFiles in
+                        let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
+                        logMsg("[PanelVC] onDrop action=\(action.name) files=\(files.map { $0.lastPathComponent })")
+                        guard !files.isEmpty else { return }
+                        self?.startRun(action: action, files: files)
+                    },
+                    onToggleFavorite: { [weak self] action in
+                        self?.onToggleFavorite(action)
+                    },
+                    onMoveBefore: { [weak self] source, target in
+                        self?.onMoveAction(source, target)
+                    }
+                )
+                card.frame = NSRect(x: 0, y: CGFloat(index) * rowHeight, width: w, height: rowHeight)
+                container.addSubview(card)
+                cardViews.append(card)
+
+                if index < group.actions.count - 1 {
+                    let separator = NSView(frame: NSRect(x: 0, y: CGFloat(index + 1) * rowHeight, width: w, height: 1))
+                    separator.wantsLayer = true
+                    separator.layer?.backgroundColor = WinegoldTheme.separator(in: view).cgColor
+                    container.addSubview(separator)
+                }
+            }
+            y += containerHeight + 12
+        }
     }
 
     private func addLoading(actionName: String, y: CGFloat, w: CGFloat) -> CGFloat {

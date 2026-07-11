@@ -18,12 +18,14 @@ public enum RecipeInstallationError: LocalizedError {
     case noRecipes
     case unsupportedSource(String)
     case symlink(String)
+    case unsafeSupportPath(String)
 
     public var errorDescription: String? {
         switch self {
         case .noRecipes: return "No .wg.yml recipes were found."
         case .unsupportedSource(let name): return "Unsupported recipe source: \(name)"
         case .symlink(let name): return "Symlinks are not installed: \(name)"
+        case .unsafeSupportPath(let path): return "Support file must be a safe relative path: \(path)"
         }
     }
 }
@@ -69,8 +71,12 @@ public struct RecipeInstaller {
         } else {
             try FileManager.default.createDirectory(at: summary.destination, withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: source, to: summary.destination.appendingPathComponent(source.lastPathComponent))
-            for helper in helperURLs(for: try parser.parse(url: source), source: source) where FileManager.default.fileExists(atPath: helper.path) {
-                try FileManager.default.copyItem(at: helper, to: summary.destination.appendingPathComponent(helper.lastPathComponent))
+            let record = try parser.parse(url: source)
+            for helper in try supportURLs(for: record, source: source) where FileManager.default.fileExists(atPath: helper.path) {
+                let relative = relativePath(helper, from: source.deletingLastPathComponent())
+                let target = summary.destination.appendingPathComponent(relative)
+                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try FileManager.default.copyItem(at: helper, to: target)
             }
         }
         return summary
@@ -98,13 +104,17 @@ public struct RecipeInstaller {
 
     private func inspectStandaloneRecipe(_ source: URL) throws -> RecipeInstallationSummary {
         let record = try parser.parse(url: source)
-        let helpers = helperURLs(for: record, source: source)
+        let declared = try declaredSupportURLs(for: record, source: source)
+        let detected = detectedHelperURLs(for: record, source: source)
+        let helpers = uniqueURLs(declared + detected)
         let missing = helpers.filter { !FileManager.default.fileExists(atPath: $0.path) }
-        let warnings = missing.map { "Likely missing helper: \($0.lastPathComponent)" }
+        let undeclared = detected.filter { candidate in !declared.contains { $0.standardizedFileURL == candidate.standardizedFileURL } }
+        var warnings = missing.map { "Missing support file: \(relativePath($0, from: source.deletingLastPathComponent()))" }
+        warnings += undeclared.map { "Undeclared helper reference: \(relativePath($0, from: source.deletingLastPathComponent()))" }
         return RecipeInstallationSummary(
             destination: uniqueDestination(named: RecipeFileStore.slug(record.document.name)),
             recipeNames: [record.document.name],
-            copiedFiles: [source.lastPathComponent] + helpers.filter { FileManager.default.fileExists(atPath: $0.path) }.map(\.lastPathComponent),
+            copiedFiles: [source.lastPathComponent] + helpers.filter { FileManager.default.fileExists(atPath: $0.path) }.map { relativePath($0, from: source.deletingLastPathComponent()) },
             warnings: warnings
         )
     }
@@ -114,9 +124,28 @@ public struct RecipeInstaller {
         return RecipeInstallationSummary(destination: uniqueDestination(named: RecipeFileStore.slug(action.name)), recipeNames: [action.name], copiedFiles: ["\(RecipeFileStore.slug(action.name)).wg.yml"], warnings: ["Legacy .add.yml will be converted to .wg.yml."])
     }
 
-    private func helperURLs(for record: RecipeRecord, source: URL) -> [URL] {
+    private func supportURLs(for record: RecipeRecord, source: URL) throws -> [URL] {
+        uniqueURLs(try declaredSupportURLs(for: record, source: source) + detectedHelperURLs(for: record, source: source))
+    }
+
+    private func declaredSupportURLs(for record: RecipeRecord, source: URL) throws -> [URL] {
+        try record.document.supportFiles.map { relative in
+            guard !relative.isEmpty, !relative.hasPrefix("/"), !relative.split(separator: "/").contains("..") else {
+                throw RecipeInstallationError.unsafeSupportPath(relative)
+            }
+            let url = source.deletingLastPathComponent().appendingPathComponent(relative).standardizedFileURL
+            let base = source.deletingLastPathComponent().standardizedFileURL.path + "/"
+            guard url.path.hasPrefix(base) else { throw RecipeInstallationError.unsafeSupportPath(relative) }
+            if (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true {
+                throw RecipeInstallationError.symlink(relative)
+            }
+            return url
+        }
+    }
+
+    private func detectedHelperURLs(for record: RecipeRecord, source: URL) -> [URL] {
         let command = record.document.command
-        let pattern = #"(?<![/A-Za-z0-9_.-])([A-Za-z0-9_.-]+\.(?:py|sh|js|mjs|cjs|rb|pl|php|lua|swift))(?![A-Za-z0-9_.-])"#
+        let pattern = #"(?<![/A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:py|sh|js|mjs|cjs|rb|pl|php|lua|swift))(?![A-Za-z0-9_.-])"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let range = NSRange(command.startIndex..., in: command)
         let names = regex.matches(in: command, range: range).compactMap { match -> String? in
@@ -124,6 +153,11 @@ public struct RecipeInstaller {
             return String(command[swiftRange])
         }
         return Array(Set(names)).sorted().map { source.deletingLastPathComponent().appendingPathComponent($0) }
+    }
+
+    private func uniqueURLs(_ urls: [URL]) -> [URL] {
+        var seen = Set<String>()
+        return urls.filter { seen.insert($0.standardizedFileURL.path).inserted }
     }
 
     private func copyDirectory(_ source: URL, to destination: URL) throws {

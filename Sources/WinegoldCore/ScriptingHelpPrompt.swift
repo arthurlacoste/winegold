@@ -25,7 +25,7 @@ public enum ScriptingHelpPrompt {
         Command:
         \(safeCommand)
 
-        Return a corrected .add.yml script and explain briefly what changed.
+        Return a corrected .wg.yml recipe and explain briefly what changed.
         Use only placeholders documented above.
         """
     }

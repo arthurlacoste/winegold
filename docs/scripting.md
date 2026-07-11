@@ -122,6 +122,8 @@ enabled
 trigger
 cmd.exec
 successMessage
+files
+requirements
 ```
 
 `name` is required. Local recipes may omit `id`; Winegold generates one and writes it back atomically. Commands run with the recipe file's directory as their working directory.
@@ -168,3 +170,23 @@ Drag a `.wg.yml` file or a folder containing recipes into Winegold. Winegold sho
 A standalone recipe gets its own folder. Relative helper references such as `resize.py` are copied from beside the recipe when found, and missing helpers produce a warning. Folder installation preserves ordinary nested files while skipping symlinks, hidden folders, dependency folders, caches, and build output.
 
 Settings shows invalid recipe files and their parse errors. Use **Reveal** to locate the selected recipe or invalid file in Finder.
+
+
+## Supporting files and requirements
+
+A standalone recipe can declare local files that must be copied with it:
+
+```yml
+files:
+  - scripts/resize.py
+  - config/default.json
+requirements:
+  - python3
+  - pillow>=10
+```
+
+Support paths must be relative to the recipe, stay inside its source folder, and cannot be symlinks. Winegold also detects common relative script references in `cmd.exec` and warns when they are missing or undeclared.
+
+Recipe subfolders become local action categories. The category and manual display order stay in SQLite; they are not written into the recipe.
+
+Settings updates known recipe fields atomically while preserving unknown top-level YAML fields, comments, version, declared files, requirements, and file permissions where practical. Exports always use `.wg.yml`.

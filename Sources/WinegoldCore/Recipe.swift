@@ -10,8 +10,10 @@ public struct RecipeDocument: Equatable {
     public var trigger: String
     public var command: String
     public var successMessage: String?
+    public var supportFiles: [String]
+    public var requirements: [String]
 
-    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil) {
+    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = []) {
         self.id = id
         self.name = name
         self.description = description
@@ -20,6 +22,8 @@ public struct RecipeDocument: Equatable {
         self.trigger = trigger
         self.command = command
         self.successMessage = successMessage
+        self.supportFiles = supportFiles
+        self.requirements = requirements
     }
 }
 
@@ -104,7 +108,9 @@ public struct RecipeParser {
             enabled: enabled,
             trigger: trigger,
             command: command,
-            successMessage: scalar("successMessage", lines: lines)
+            successMessage: scalar("successMessage", lines: lines),
+            supportFiles: topLevelList("files", lines: lines),
+            requirements: topLevelList("requirements", lines: lines)
         )
     }
 
@@ -118,7 +124,7 @@ public struct RecipeParser {
     private func scalar(_ key: String, lines: [String]) -> String? {
         for (index, raw) in lines.enumerated() where raw.indent == 0 {
             let trimmed = raw.trimmed
-            guard trimmed.hasPrefix("\(key):") else { continue }
+            guard trimmed == "\(key):" || trimmed.hasPrefix("\(key): ") else { continue }
             let value = trimmed.afterColon
             if value.isBlockMarker { return block(after: index, indent: raw.indent, lines: lines) }
             return value.unquoted
@@ -153,6 +159,19 @@ public struct RecipeParser {
         return values
     }
 
+
+    private func topLevelList(_ key: String, lines: [String]) -> [String] {
+        guard let start = lines.firstIndex(where: { $0.indent == 0 && $0.trimmed == "\(key):" }) else { return [] }
+        var values: [String] = []
+        for raw in lines.dropFirst(start + 1) {
+            if !raw.trimmed.isEmpty && raw.indent == 0 { break }
+            if raw.trimmed.hasPrefix("-") {
+                let value = String(raw.trimmed.dropFirst()).unquoted
+                if !value.isEmpty { values.append(value) }
+            }
+        }
+        return values
+    }
     private func block(after index: Int, indent: Int, lines: [String]) -> String {
         let candidates = lines.dropFirst(index + 1).prefix { $0.trimmed.isEmpty || $0.indent > indent }
         let minIndent = candidates.filter { !$0.trimmed.isEmpty }.map(\.indent).min() ?? 0
@@ -202,10 +221,23 @@ public struct RecipeSerializer {
             lines.append("  exec: \(quote(document.command))")
         }
         if let message = document.successMessage { lines.append("successMessage: \(quote(message))") }
+        appendList("files", values: document.supportFiles, to: &lines)
+        appendList("requirements", values: document.requirements, to: &lines)
         return lines.joined(separator: "\n") + "\n"
     }
 
-    private func quote(_ value: String) -> String { "'" + value.replacingOccurrences(of: "'", with: "''") + "'" }
+    public func updating(_ existing: String, with document: RecipeDocument) -> String {
+        RecipeTextEditor().update(existing: existing, document: document)
+    }
+
+    private func appendList(_ key: String, values: [String], to lines: inout [String]) {
+        guard !values.isEmpty else { return }
+        lines.append("")
+        lines.append("\(key):")
+        lines.append(contentsOf: values.map { "  - \(quote($0))" })
+    }
+
+    fileprivate func quote(_ value: String) -> String { "'" + value.replacingOccurrences(of: "'", with: "''") + "'" }
 }
 
 public struct RecipeFileSnapshot: Equatable {
@@ -249,16 +281,20 @@ public final class RecipeFileStore {
         try ensureInsideRoot(url)
         var persisted = document
         if persisted.id == nil { persisted.id = RecipeParser.generatedID() }
-        let text = serializer.serialize(persisted)
+        let fm = FileManager.default
+        let existingText = fm.fileExists(atPath: url.path) ? try String(contentsOf: url, encoding: .utf8) : nil
+        let text = existingText.map { serializer.updating($0, with: persisted) } ?? serializer.serialize(persisted)
         _ = try parser.parse(text: text)
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let permissions = (try? fm.attributesOfItem(atPath: url.path)[.posixPermissions]) as? NSNumber
         let temporary = url.deletingLastPathComponent().appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
         try Data(text.utf8).write(to: temporary, options: .atomic)
+        if let permissions { try fm.setAttributes([.posixPermissions: permissions], ofItemAtPath: temporary.path) }
         _ = try parser.parse(text: String(decoding: Data(contentsOf: temporary), as: UTF8.self))
-        if FileManager.default.fileExists(atPath: url.path) {
-            _ = try FileManager.default.replaceItemAt(url, withItemAt: temporary)
+        if fm.fileExists(atPath: url.path) {
+            _ = try fm.replaceItemAt(url, withItemAt: temporary)
         } else {
-            try FileManager.default.moveItem(at: temporary, to: url)
+            try fm.moveItem(at: temporary, to: url)
         }
         return try parser.parse(url: url)
     }
@@ -290,6 +326,69 @@ public final class RecipeFileStore {
         let raw = value.lowercased().unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
         let slug = String(raw).split(separator: "-").joined(separator: "-")
         return slug.isEmpty ? "recipe" : slug
+    }
+}
+
+
+private struct RecipeTextEditor {
+    private let knownKeys = ["id", "name", "description", "version", "enabled", "trigger", "cmd", "successMessage", "files", "requirements"]
+
+    func update(existing: String, document: RecipeDocument) -> String {
+        var lines = existing.components(separatedBy: .newlines)
+        if lines.last == "" { lines.removeLast() }
+        let replacements = blocks(for: document)
+
+        for key in knownKeys.reversed() {
+            if let range = topLevelRange(for: key, in: lines) {
+                if let replacement = replacements[key] { lines.replaceSubrange(range, with: replacement) }
+                else { lines.removeSubrange(range) }
+            }
+        }
+
+        for key in knownKeys where topLevelRange(for: key, in: lines) == nil {
+            guard let replacement = replacements[key] else { continue }
+            if !lines.isEmpty, lines.last?.isEmpty == false { lines.append("") }
+            lines.append(contentsOf: replacement)
+        }
+        while lines.last?.isEmpty == true { lines.removeLast() }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
+    private func blocks(for document: RecipeDocument) -> [String: [String]] {
+        let serializer = RecipeSerializer()
+        var values: [String: [String]] = [
+            "name": ["name: \(serializer.quote(document.name))"],
+            "enabled": ["enabled: \(document.enabled ? "true" : "false")"],
+            "trigger": ["trigger: \(serializer.quote(document.trigger))"],
+            "cmd": commandBlock(document.command)
+        ]
+        if let id = document.id { values["id"] = ["id: \(serializer.quote(id))"] }
+        if !document.description.isEmpty { values["description"] = ["description: \(serializer.quote(document.description))"] }
+        if let version = document.version { values["version"] = ["version: \(serializer.quote(version))"] }
+        if let message = document.successMessage { values["successMessage"] = ["successMessage: \(serializer.quote(message))"] }
+        if !document.supportFiles.isEmpty { values["files"] = ["files:"] + document.supportFiles.map { "  - \(serializer.quote($0))" } }
+        if !document.requirements.isEmpty { values["requirements"] = ["requirements:"] + document.requirements.map { "  - \(serializer.quote($0))" } }
+        return values
+    }
+
+    private func commandBlock(_ command: String) -> [String] {
+        let serializer = RecipeSerializer()
+        if command.contains("\n") { return ["cmd:", "  exec: |"] + command.components(separatedBy: .newlines).map { "    \($0)" } }
+        return ["cmd:", "  exec: \(serializer.quote(command))"]
+    }
+
+    private func topLevelRange(for key: String, in lines: [String]) -> Range<Int>? {
+        guard let start = lines.firstIndex(where: {
+            guard $0.indent == 0 else { return false }
+            return $0.trimmed == "\(key):" || $0.trimmed.hasPrefix("\(key): ")
+        }) else { return nil }
+        var end = start + 1
+        while end < lines.count {
+            let line = lines[end]
+            if !line.trimmed.isEmpty && line.indent == 0 { break }
+            end += 1
+        }
+        return start..<end
     }
 }
 

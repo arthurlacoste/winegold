@@ -69,7 +69,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let store = ActionStore(db: db)
             self.actionStore = store
 
-            try ensureDefaultActions(store: store)
+            try migrateLegacyDefaultRows(store: store)
 
             let recipeRoot = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".winegold/recipes", isDirectory: true)
@@ -77,6 +77,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let coordinator = RecipeCoordinator(root: recipeRoot, db: db)
             self.recipeCoordinator = coordinator
             try coordinator.reconcile()
+            try migrateDefaultRecipes(store: store, coordinator: coordinator)
+            try ensureDefaultRecipes(store: store, coordinator: coordinator)
             let watcher = RecipeWatcher(root: recipeRoot) { [weak self] in
                 guard let self else { return }
                 do {
@@ -98,7 +100,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func ensureDefaultActions(store: ActionStore) throws {
+    private func migrateLegacyDefaultRows(store: ActionStore) throws {
         let existing = try store.listActions()
         if let oldPrint = existing.first(where: { $0.name == "Print file path" }) {
             let updated = Action(
@@ -146,9 +148,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             try store.deleteDuplicateActionsByName(keeping: "Open Folder")
         }
 
-        let existingNames = Set(try store.listActions().map { $0.name })
+    }
+
+    private func migrateDefaultRecipes(store: ActionStore, coordinator: RecipeCoordinator) throws {
+        let migrations: [(oldName: String, newAction: Action)] = [
+            ("Install .add.yml script", DefaultActions.all.first { $0.name == DefaultActions.installRecipeName }!),
+            ("Print file path", DefaultActions.all.first { $0.name == "Print and clipboard" }!),
+            ("Ouvrir dossier", DefaultActions.all.first { $0.name == "Open Folder" }!)
+        ]
+        for migration in migrations {
+            guard let existing = try store.listActions().first(where: { $0.name == migration.oldName }) else { continue }
+            var updated = migration.newAction
+            updated.id = existing.id
+            updated.enabled = existing.enabled
+            updated.isFavorite = existing.isFavorite
+            updated.displayOrder = existing.displayOrder
+            updated.createdAt = existing.createdAt
+            updated.updatedAt = Date()
+            try coordinator.save(action: updated)
+        }
+    }
+
+    private func ensureDefaultRecipes(store: ActionStore, coordinator: RecipeCoordinator) throws {
+        let existingNames = Set(try store.listActions().map(\.name))
         for action in DefaultActions.all where !existingNames.contains(action.name) {
-            try store.createAction(action)
+            try coordinator.save(action: action)
         }
     }
 
@@ -323,8 +347,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func prioritizeInstallActionIfNeeded(_ actions: [Action], files: [URL]) -> [Action] {
         guard shouldAutoImportScripts(files) else { return actions }
         return actions.sorted { lhs, rhs in
-            if lhs.name == DefaultActions.installAddScriptName { return true }
-            if rhs.name == DefaultActions.installAddScriptName { return false }
+            if lhs.name == DefaultActions.installRecipeName { return true }
+            if rhs.name == DefaultActions.installRecipeName { return false }
             if lhs.name == "Print and clipboard" { return false }
             if rhs.name == "Print and clipboard" { return true }
             return lhs.name < rhs.name
@@ -353,7 +377,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let history = (try? runHistoryStore.recentRuns(limit: 10)) ?? []
         let savedHistory = savedRunStore.savedRuns(limit: 10)
 
-        if shouldAutoImportScripts(files), let installAction = actions.first(where: { $0.name == DefaultActions.installAddScriptName }) {
+        if shouldAutoImportScripts(files), let installAction = actions.first(where: { $0.name == DefaultActions.installRecipeName }) {
             logMsg("[AppDelegate] auto-importing script file(s): \(files.map { $0.lastPathComponent })")
             importScripts(files, using: installAction, runHistoryStore: runHistoryStore)
             return
@@ -551,7 +575,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         actionPanelWindow?.markActionTriggered()
         guard let runHistoryStore = runHistoryStore else { return }
 
-        if action.name == DefaultActions.installAddScriptName {
+        if action.name == DefaultActions.installRecipeName {
             importScripts(files, using: action, runHistoryStore: runHistoryStore)
             return
         }

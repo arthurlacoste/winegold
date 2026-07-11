@@ -1,7 +1,7 @@
 import Foundation
 
 public struct DefaultActions {
-    public static let installAddScriptName = "Install .add.yml script"
+    public static let installRecipeName = "Install Winegold recipe"
     public static let createScriptFromFileTypeName = "Create a new script from this type of file"
 
     public static let all: [Action] = [
@@ -24,8 +24,8 @@ public struct DefaultActions {
             outputPathTemplate: nil
         ),
         Action(
-            name: installAddScriptName,
-            description: "Import a Winegold .add.yml script as an action",
+            name: installRecipeName,
+            description: "Install a Winegold recipe file or folder",
             iconName: "plus.square.dashed",
             acceptedExtensions: ["yml", "yaml"],
             executablePath: "/bin/echo",

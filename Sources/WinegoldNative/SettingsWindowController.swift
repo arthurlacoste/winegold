@@ -1,6 +1,7 @@
 import Cocoa
 import WinegoldCore
 import WinegoldUI
+import UniformTypeIdentifiers
 
 class SettingsWindowController: NSWindowController {
     private let store: SettingsStore
@@ -351,7 +352,8 @@ class SettingsViewController: NSViewController {
         issueLabel.stringValue = recipeIssues.first?.parseError ?? ""
         actionPopup.removeAllItems()
         for action in actions {
-            actionPopup.addItem(withTitle: action.name)
+            let title = action.category.map { "\($0) / \(action.name)" } ?? action.name
+            actionPopup.addItem(withTitle: title)
             actionPopup.lastItem?.representedObject = action.id.uuidString
         }
 
@@ -459,14 +461,15 @@ class SettingsViewController: NSViewController {
     }
 
     private func yamlString(for action: Action) -> String {
-        let command = shellCommand(for: action)
-        let trigger = action.triggerExpression ?? extensionExpression(action.acceptedExtensions)
-        return """
-        name: \(yamlScalar(action.name))
-        trigger: \(yamlTrigger(trigger))
-        cmd:
-          exec: \(yamlExec(command))\(yamlSuccessMessage(action.successMessage))
-        """
+        RecipeSerializer().serialize(RecipeDocument(
+            id: action.id.uuidString,
+            name: action.name,
+            description: action.description,
+            enabled: action.enabled,
+            trigger: action.triggerExpression ?? extensionExpression(action.acceptedExtensions),
+            command: shellCommand(for: action),
+            successMessage: action.successMessage
+        ))
     }
 
     private func yamlTrigger(_ trigger: String) -> String {
@@ -610,11 +613,10 @@ class SettingsViewController: NSViewController {
 
     @objc private func importYAML() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = []
+        panel.allowedContentTypes = ["yml", "yaml"].compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.allowedFileTypes = ["yml", "yaml"]
         guard panel.runModal() == .OK else { return }
 
         let importer = LegacyActionImporter()
@@ -647,7 +649,7 @@ class SettingsViewController: NSViewController {
         }
         let panel = NSSavePanel()
         panel.title = "Export Winegold YAML"
-        panel.nameFieldStringValue = "\(filenameSlug(action.name)).add.yml"
+        panel.nameFieldStringValue = "\(filenameSlug(action.name)).wg.yml"
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
