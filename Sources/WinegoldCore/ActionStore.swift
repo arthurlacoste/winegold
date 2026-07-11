@@ -12,7 +12,7 @@ public struct ActionStore {
     }
 
     private var actionColumns: String {
-        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, executable_path, arguments_template, working_directory_template, output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at"
+        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at"
     }
 
     public func listActions() throws -> [Action] {
@@ -36,9 +36,9 @@ public struct ActionStore {
     public func createAction(_ action: Action) throws {
         let stmt = try db.prepare("""
             INSERT INTO actions (id, name, description, icon_name, enabled, accepted_extensions,
-            accepted_utis, executable_path, arguments_template, working_directory_template,
+            accepted_utis, trigger_expression, executable_path, arguments_template, working_directory_template,
             output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """)
         bindAction(action, to: stmt)
         _ = stmt.step()
@@ -56,6 +56,7 @@ public struct ActionStore {
                 enabled: action.enabled,
                 acceptedExtensions: action.acceptedExtensions,
                 acceptedUTIs: action.acceptedUTIs,
+                triggerExpression: action.triggerExpression,
                 executablePath: action.executablePath,
                 argumentsTemplate: action.argumentsTemplate,
                 workingDirectoryTemplate: action.workingDirectoryTemplate,
@@ -87,7 +88,7 @@ public struct ActionStore {
     public func updateAction(_ action: Action) throws {
         let stmt = try db.prepare("""
             UPDATE actions SET name=?, description=?, icon_name=?, enabled=?, accepted_extensions=?,
-            accepted_utis=?, executable_path=?, arguments_template=?, working_directory_template=?,
+            accepted_utis=?, trigger_expression=?, executable_path=?, arguments_template=?, working_directory_template=?,
             output_path_template=?, success_message=?, requires_confirmation=?, timeout_seconds=?, is_favorite=?,
             display_order=?, created_at=?, updated_at=? WHERE id=?
         """)
@@ -137,7 +138,7 @@ public struct ActionStore {
     private func rowToAction(_ stmt: Statement) throws -> Action {
         let extsStr = stmt.columnText(at: 5)
         let utisStr = stmt.columnText(at: 6)
-        let argsStr = stmt.columnText(at: 8)
+        let argsStr = stmt.columnText(at: 9)
 
         return Action(
             id: UUID(uuidString: stmt.columnText(at: 0)) ?? UUID(),
@@ -147,17 +148,18 @@ public struct ActionStore {
             enabled: stmt.columnInt(at: 4) != 0,
             acceptedExtensions: extsStr.isEmpty ? [] : extsStr.components(separatedBy: ","),
             acceptedUTIs: utisStr.isEmpty ? [] : utisStr.components(separatedBy: ","),
-            executablePath: stmt.columnText(at: 7),
-            argumentsTemplate: decodeArgumentsTemplate(argsStr, executablePath: stmt.columnText(at: 7)),
-            workingDirectoryTemplate: stmt.columnIsNull(at: 9) ? nil : stmt.columnText(at: 9),
-            outputPathTemplate: stmt.columnIsNull(at: 10) ? nil : stmt.columnText(at: 10),
-            successMessage: stmt.columnIsNull(at: 11) ? nil : stmt.columnText(at: 11),
-            requiresConfirmation: stmt.columnInt(at: 12) != 0,
-            timeoutSeconds: stmt.columnInt(at: 13),
-            isFavorite: stmt.columnInt(at: 14) != 0,
-            displayOrder: stmt.columnInt(at: 15),
-            createdAt: dateFormatter.date(from: stmt.columnText(at: 16)) ?? Date(),
-            updatedAt: dateFormatter.date(from: stmt.columnText(at: 17)) ?? Date()
+            triggerExpression: stmt.columnIsNull(at: 7) ? nil : stmt.columnText(at: 7),
+            executablePath: stmt.columnText(at: 8),
+            argumentsTemplate: decodeArgumentsTemplate(argsStr, executablePath: stmt.columnText(at: 8)),
+            workingDirectoryTemplate: stmt.columnIsNull(at: 10) ? nil : stmt.columnText(at: 10),
+            outputPathTemplate: stmt.columnIsNull(at: 11) ? nil : stmt.columnText(at: 11),
+            successMessage: stmt.columnIsNull(at: 12) ? nil : stmt.columnText(at: 12),
+            requiresConfirmation: stmt.columnInt(at: 13) != 0,
+            timeoutSeconds: stmt.columnInt(at: 14),
+            isFavorite: stmt.columnInt(at: 15) != 0,
+            displayOrder: stmt.columnInt(at: 16),
+            createdAt: dateFormatter.date(from: stmt.columnText(at: 17)) ?? Date(),
+            updatedAt: dateFormatter.date(from: stmt.columnText(at: 18)) ?? Date()
         )
     }
 
@@ -168,7 +170,7 @@ public struct ActionStore {
 
     private func bindActionForUpdate(_ action: Action, to stmt: Statement) {
         bindActionFields(action, to: stmt, startingAt: 1)
-        stmt.bindText(action.id.uuidString, at: 18)
+        stmt.bindText(action.id.uuidString, at: 19)
     }
 
     private func encodeArgumentsTemplate(_ arguments: [String]) -> String {
@@ -205,28 +207,29 @@ public struct ActionStore {
         stmt.bindInt(action.enabled ? 1 : 0, at: start + 3)
         stmt.bindText(action.acceptedExtensions.joined(separator: ","), at: start + 4)
         stmt.bindText(action.acceptedUTIs.joined(separator: ","), at: start + 5)
-        stmt.bindText(action.executablePath, at: start + 6)
-        stmt.bindText(encodeArgumentsTemplate(action.argumentsTemplate), at: start + 7)
+        if let trigger = action.triggerExpression { stmt.bindText(trigger, at: start + 6) } else { stmt.bindNull(at: start + 6) }
+        stmt.bindText(action.executablePath, at: start + 7)
+        stmt.bindText(encodeArgumentsTemplate(action.argumentsTemplate), at: start + 8)
         if let wd = action.workingDirectoryTemplate {
-            stmt.bindText(wd, at: start + 8)
-        } else {
-            stmt.bindNull(at: start + 8)
-        }
-        if let out = action.outputPathTemplate {
-            stmt.bindText(out, at: start + 9)
+            stmt.bindText(wd, at: start + 9)
         } else {
             stmt.bindNull(at: start + 9)
         }
-        if let message = action.successMessage {
-            stmt.bindText(message, at: start + 10)
+        if let out = action.outputPathTemplate {
+            stmt.bindText(out, at: start + 10)
         } else {
             stmt.bindNull(at: start + 10)
         }
-        stmt.bindInt(action.requiresConfirmation ? 1 : 0, at: start + 11)
-        stmt.bindInt(action.timeoutSeconds, at: start + 12)
-        stmt.bindInt(action.isFavorite ? 1 : 0, at: start + 13)
-        stmt.bindInt(action.displayOrder, at: start + 14)
-        stmt.bindText(dateFormatter.string(from: action.createdAt), at: start + 15)
-        stmt.bindText(dateFormatter.string(from: action.updatedAt), at: start + 16)
+        if let message = action.successMessage {
+            stmt.bindText(message, at: start + 11)
+        } else {
+            stmt.bindNull(at: start + 11)
+        }
+        stmt.bindInt(action.requiresConfirmation ? 1 : 0, at: start + 12)
+        stmt.bindInt(action.timeoutSeconds, at: start + 13)
+        stmt.bindInt(action.isFavorite ? 1 : 0, at: start + 14)
+        stmt.bindInt(action.displayOrder, at: start + 15)
+        stmt.bindText(dateFormatter.string(from: action.createdAt), at: start + 16)
+        stmt.bindText(dateFormatter.string(from: action.updatedAt), at: start + 17)
     }
 }

@@ -23,7 +23,16 @@ public struct LegacyActionImporter {
         let extensions = listValues(afterPath: ["trigger", "fileExtension"], in: text)
             .map { $0.trimmedUnquoted.lowercased() }
             .filter { !$0.isEmpty }
-        guard !extensions.isEmpty else { throw ImportError.missingField("trigger.fileExtension") }
+        let expressionSource = triggerExpression(in: text)
+        let trigger: String
+        if let expressionSource, !expressionSource.isEmpty {
+            let parsed = try TriggerParser().parse(expressionSource)
+            trigger = TriggerSerializer().serialize(parsed)
+        } else if !extensions.isEmpty {
+            trigger = TriggerSerializer().serialize(.condition(field: "extension", operator: .in, value: .collection(extensions)))
+        } else {
+            throw ImportError.missingField("trigger")
+        }
 
         guard let command = scalarValue(forPath: ["cmd", "exec"], in: text)?.trimmedUnquoted, !command.isEmpty else {
             throw ImportError.missingField("cmd.exec")
@@ -41,6 +50,7 @@ public struct LegacyActionImporter {
             iconName: "terminal",
             enabled: true,
             acceptedExtensions: extensions,
+            triggerExpression: trigger,
             executablePath: "/bin/zsh",
             argumentsTemplate: ["-lc", translatedCommand],
             workingDirectoryTemplate: nil,
@@ -49,6 +59,21 @@ public struct LegacyActionImporter {
             requiresConfirmation: false,
             timeoutSeconds: 120
         )
+    }
+
+    private func triggerExpression(in text: String) -> String? {
+        let lines = text.lines
+        guard let index = lines.firstIndex(where: { !$0.hasIndent && $0.trimmed.hasPrefix("trigger:") }) else { return nil }
+        let inline = lines[index].valueAfterColon
+        if inline.isYAMLBlockScalar { return blockScalarValue(after: index, keyIndent: lines[index].indentCount, in: lines) }
+        if !inline.isEmpty { return inline.trimmedUnquoted }
+        guard index + 1 < lines.count else { return nil }
+        let next = lines[index + 1]
+        if next.trimmed.hasPrefix("fileExtension:") { return nil }
+        if next.trimmed.isYAMLBlockScalar {
+            return blockScalarValue(after: index + 1, keyIndent: next.indentCount, in: lines)
+        }
+        return nil
     }
 
     private func translateLegacyPlaceholders(_ command: String) -> String {

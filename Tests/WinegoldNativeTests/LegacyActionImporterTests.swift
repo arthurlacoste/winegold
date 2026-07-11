@@ -2,6 +2,33 @@ import XCTest
 import WinegoldCore
 
 final class LegacyActionImporterTests: XCTestCase {
+    func testImportsExpressionTrigger() throws {
+        let yaml = """
+        name: URL notes
+        trigger: >
+          isURL or (extension in {"md" "txt"} and inside contains "TODO")
+        cmd:
+          exec: echo "{input}"
+        """
+        let action = try LegacyActionImporter().importLegacyYAML(yaml)
+        XCTAssertEqual(action.triggerExpression, "isURL or extension in {\"md\" \"txt\"} and inside contains \"TODO\"")
+        XCTAssertTrue(action.acceptedExtensions.isEmpty)
+    }
+
+    func testLegacyTriggerIsNormalizedToExpression() throws {
+        let yaml = """
+        name: Image
+        trigger:
+          fileExtension:
+            - jpg
+            - png
+        cmd:
+          exec: echo ok
+        """
+        let action = try LegacyActionImporter().importLegacyYAML(yaml)
+        XCTAssertEqual(action.triggerExpression, "extension in {\"jpg\" \"png\"}")
+    }
+
     func testImportsLegacyAddYAML() throws {
         let yaml = """
         name: Bords blanc

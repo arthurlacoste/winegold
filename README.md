@@ -124,9 +124,9 @@ WinegoldNative/
 
 ## Current limitations
 
-- Extension matching only, no UTI/MIME matching yet.
 - No automatic folder watching triggers yet.
-- Imported `.add.yml` supports only `name`, `trigger.fileExtension`, and `cmd.exec`.
+- `inside` supports UTF-8 local files up to 1 MiB; no PDF/DOCX extraction or OCR.
+- Imported `.add.yml` supports `name`, expression `trigger`, `cmd.exec`, and `successMessage`.
 - No `before`, `after`, `eval`, or `autolaunch` support yet.
 - Multi-file drags are matched together, but command execution is still one file per run.
 - No notification center integration yet.
@@ -134,7 +134,6 @@ WinegoldNative/
 ## Roadmap
 
 - Native `before.exec` / `after.open` / `after.notification` support.
-- UTI matching.
 - Automatic folder/file triggers.
 - More preset actions: WebP, resize, PDF compress.
 - Dark mode polish.

@@ -56,8 +56,11 @@ class ActionCardView: NSView {
             layer?.backgroundColor = WinegoldTheme.cardBackground(in: self).cgColor
             configureIcon(systemName: iconName, tint: .secondaryLabelColor)
             configureTitle(action.name, weight: .bold, color: .controlTextColor)
-            let exts = action.acceptedExtensions.contains("*") ? "all files" : action.acceptedExtensions.joined(separator: ", ")
-            configureSubtitle(exts)
+            let trigger = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let subtitle = trigger?.isEmpty == false
+                ? trigger!
+                : (action.acceptedExtensions.contains("*") ? "all files" : action.acceptedExtensions.joined(separator: ", "))
+            configureSubtitle(subtitle)
             configureFavoriteButton()
             configureRunCard()
         case .missingDependency(let reason), .configError(let reason):

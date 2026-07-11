@@ -86,4 +86,21 @@ final class ActionMatcherTests: XCTestCase {
         let result = matcher.matchingActions(for: [], actions: [action])
         XCTAssertTrue(result.isEmpty)
     }
+
+    func testExpressionTriggerMatchesURLAndTextKinds() {
+        var action = makeAction(extensions: [])
+        action.triggerExpression = "isURL or (isText and text contains \"todo\")"
+        let url = DraggedItem(executionURL: URL(fileURLWithPath: "/tmp/url"), kind: .url, rawURL: "https://example.com")
+        let text = DraggedItem(executionURL: URL(fileURLWithPath: "/tmp/text"), kind: .text, rawText: "TODO now")
+        XCTAssertEqual(matcher.matchingActions(forItems: [url], actions: [action]), [action])
+        XCTAssertEqual(matcher.matchingActions(forItems: [text], actions: [action]), [action])
+    }
+
+    func testExpressionTriggerRequiresEveryDraggedItemToMatch() {
+        var action = makeAction(extensions: [])
+        action.triggerExpression = "extension equals \"png\""
+        let png = DraggedItem(executionURL: URL(fileURLWithPath: "/tmp/a.png"), kind: .file)
+        let jpg = DraggedItem(executionURL: URL(fileURLWithPath: "/tmp/a.jpg"), kind: .file)
+        XCTAssertTrue(matcher.matchingActions(forItems: [png, jpg], actions: [action]).isEmpty)
+    }
 }
