@@ -99,8 +99,9 @@ class SettingsViewController: NSViewController {
     private var recipeIssues: [RecipeIndexEntry] = []
     private var issuePopup: NSPopUpButton!
     private var issueLabel: NSTextField!
-    private var configurationStack: NSStackView?
+    private var configurationView: ConfigurationVariablesView?
     private var needsSetupBadge: NSTextField?
+    private var configurationOriginY: CGFloat = 0
     private var settingsContentView: FlippedSettingsView!
 
     init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
@@ -308,28 +309,38 @@ class SettingsViewController: NSViewController {
 
         let configTitle = NSTextField(labelWithString: "Configuration")
         configTitle.font = .boldSystemFont(ofSize: 17)
-        configTitle.frame = NSRect(x: padding, y: y, width: 220, height: 24)
-        settingsContentView.addSubview(configTitle)
 
         needsSetupBadge = NSTextField(labelWithString: "Needs setup")
-        needsSetupBadge!.font = .systemFont(ofSize: 11, weight: .medium)
+        needsSetupBadge!.font = .systemFont(ofSize: 11, weight: .semibold)
         needsSetupBadge!.textColor = .white
+        needsSetupBadge!.alignment = .center
         needsSetupBadge!.wantsLayer = true
         needsSetupBadge!.layer?.backgroundColor = NSColor.systemOrange.cgColor
-        needsSetupBadge!.layer?.cornerRadius = 4
-        needsSetupBadge!.frame = NSRect(x: padding + 140, y: y + 3, width: 80, height: 18)
-        needsSetupBadge!.alignment = .center
+        needsSetupBadge!.layer?.cornerRadius = 6
         needsSetupBadge!.isHidden = true
-        settingsContentView.addSubview(needsSetupBadge!)
-        y += 32
+        needsSetupBadge!.translatesAutoresizingMaskIntoConstraints = false
+        needsSetupBadge!.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        needsSetupBadge!.widthAnchor.constraint(equalToConstant: 92).isActive = true
 
-        configurationStack = NSStackView(frame: NSRect(x: padding + 110, y: y, width: w - 110, height: 200))
-        configurationStack!.orientation = .vertical
-        configurationStack!.alignment = .leading
-        configurationStack!.spacing = 8
-        configurationStack!.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        settingsContentView.addSubview(configurationStack!)
-        y += 220
+        let headerSpacer = NSView()
+        let configHeader = NSStackView(views: [configTitle, needsSetupBadge!, headerSpacer])
+        configHeader.orientation = .horizontal
+        configHeader.alignment = .centerY
+        configHeader.spacing = 12
+        configHeader.frame = NSRect(x: padding, y: y, width: w, height: 28)
+        settingsContentView.addSubview(configHeader)
+        y += 40
+
+        let variablesView = ConfigurationVariablesView(frame: NSRect(x: padding + 110, y: y, width: w - 110, height: 220))
+        variablesView.translatesAutoresizingMaskIntoConstraints = true
+        variablesView.autoresizingMask = [.width]
+        variablesView.onValueChanged = { [weak self] name, value in self?.saveVariable(named: name, value: value) }
+        variablesView.onSetupSecret = { [weak self] name in self?.setupVariable(named: name) }
+        variablesView.onRemoveValue = { [weak self] name in self?.removeVariable(named: name) }
+        configurationView = variablesView
+        configurationOriginY = y
+        settingsContentView.addSubview(variablesView)
+        y += 240
     }
 
     private func addDivider(y: CGFloat, x: CGFloat, width: CGFloat) {
@@ -430,156 +441,74 @@ class SettingsViewController: NSViewController {
     }
 
     private func refreshConfiguration(for action: Action) {
-        guard let stack = configurationStack else { return }
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        guard let configurationView else { return }
         needsSetupBadge?.isHidden = true
 
-        guard let recipeCoordinator, let variableStore, let keychainStore else {
-            let label = NSTextField(labelWithString: "No variables.")
-            label.font = .systemFont(ofSize: 12)
-            label.textColor = .tertiaryLabelColor
-            stack.addArrangedSubview(label)
-            return
-        }
-
-        guard let variables = recipeCoordinator.recipeVariables(for: action.id),
+        guard let recipeCoordinator, let variableStore, let keychainStore,
+              let variables = recipeCoordinator.recipeVariables(for: action.id),
               let externalID = recipeCoordinator.recipeExternalID(for: action.id) else {
-            let label = NSTextField(labelWithString: "No variables.")
-            label.font = .systemFont(ofSize: 12)
-            label.textColor = .tertiaryLabelColor
-            stack.addArrangedSubview(label)
+            configurationView.apply([])
+            resizeConfigurationView()
             return
         }
 
         let resolver = RecipeVariableResolver(variableStore: variableStore, keychainStore: keychainStore)
         let resolved = resolver.resolve(variables: variables, externalID: externalID, appEnvironment: ProcessInfo.processInfo.environment)
         let setupStatus = resolver.setupStatus(variables: variables, externalID: externalID, appEnvironment: ProcessInfo.processInfo.environment)
-        let consentMgr = RecipeConsentManager(variableStore: variableStore, keychainStore: keychainStore)
-        let warnings = consentMgr.consentWarnings(variables: variables, externalID: externalID)
+        let warnings = RecipeConsentManager(variableStore: variableStore, keychainStore: keychainStore)
+            .consentWarnings(variables: variables, externalID: externalID)
 
-        if case .needsSetup = setupStatus {
-            needsSetupBadge?.isHidden = false
+        if case .needsSetup = setupStatus { needsSetupBadge?.isHidden = false }
+
+        let rows = variables.map { variable in
+            ConfigurationVariablePresentation(
+                name: variable.name,
+                label: variable.label,
+                value: resolved[variable.name] ?? variable.defaultValue ?? "",
+                source: configurationSource(variable: variable, externalID: externalID),
+                isSecret: variable.secret,
+                isRequired: variable.required,
+                isConfigured: resolved[variable.name] != nil,
+                canRemove: !variable.secret && variableStore.readOverride(externalID: externalID, variableName: variable.name) != nil,
+                warning: warnings[variable.name]
+            )
         }
-
-        for variable in variables {
-            let row = buildVariableRow(variable: variable, resolved: resolved, externalID: externalID, warnings: warnings)
-            stack.addArrangedSubview(row)
-        }
-
-        stack.frame.size.height = stack.arrangedSubviews.reduce(CGFloat(0)) { $0 + $1.frame.height + 8 }
+        configurationView.apply(rows)
+        resizeConfigurationView()
     }
 
-    private func buildVariableRow(variable: RecipeVariable, resolved: [String: String], externalID: String, warnings: [String: String]) -> NSView {
-        let rowHeight: CGFloat = variable.secret ? 56 : 32
-        let row = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: rowHeight))
-
-        let label = NSTextField(labelWithString: variable.label)
-        label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.textColor = .secondaryLabelColor
-        label.frame = NSRect(x: 0, y: rowHeight - 18, width: 160, height: 16)
-        row.addSubview(label)
-
-        if variable.required {
-            let req = NSTextField(labelWithString: "Required")
-            req.font = .systemFont(ofSize: 9, weight: .medium)
-            req.textColor = .systemOrange
-            req.frame = NSRect(x: 164, y: rowHeight - 17, width: 52, height: 14)
-            row.addSubview(req)
+    private func resizeConfigurationView() {
+        guard let configurationView else { return }
+        configurationView.layoutSubtreeIfNeeded()
+        let height = max(32, configurationView.intrinsicContentSize.height)
+        configurationView.frame = NSRect(
+            x: configurationView.frame.minX,
+            y: configurationOriginY,
+            width: configurationView.frame.width,
+            height: height
+        )
+        let requiredHeight = configurationOriginY + height + 28
+        if settingsContentView.frame.height < requiredHeight {
+            settingsContentView.frame.size.height = requiredHeight
         }
-
-        if let warning = warnings[variable.name] {
-            let warn = NSTextField(wrappingLabelWithString: warning)
-            warn.font = .systemFont(ofSize: 10)
-            warn.textColor = .systemOrange
-            warn.frame = NSRect(x: 0, y: -4, width: 400, height: 14)
-            row.addSubview(warn)
-        }
-
-        if variable.secret {
-            let masked = NSTextField(labelWithString: resolved[variable.name] != nil ? "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}" : "Not set")
-            masked.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-            masked.textColor = resolved[variable.name] != nil ? .labelColor : .tertiaryLabelColor
-            masked.frame = NSRect(x: 0, y: rowHeight - 38, width: 200, height: 18)
-            row.addSubview(masked)
-
-            let source = configSourceLabel(variable: variable, resolved: resolved, externalID: externalID)
-            source.frame = NSRect(x: 204, y: rowHeight - 38, width: 80, height: 18)
-            row.addSubview(source)
-
-            let replaceButton = NSButton(title: resolved[variable.name] != nil ? "Replace secret" : "Set up", target: self, action: #selector(setupVariable(_:)))
-            replaceButton.bezelStyle = .rounded
-            replaceButton.controlSize = .small
-            replaceButton.tag = configTagFor(variable: variable)
-            replaceButton.frame = NSRect(x: 290, y: rowHeight - 40, width: 100, height: 22)
-            row.addSubview(replaceButton)
-
-            if resolved[variable.name] != nil {
-                let removeButton = NSButton(title: "Remove", target: self, action: #selector(removeVariable(_:)))
-                removeButton.bezelStyle = .rounded
-                removeButton.controlSize = .small
-                removeButton.tag = configTagFor(variable: variable)
-                removeButton.frame = NSRect(x: 0, y: rowHeight - 56, width: 70, height: 18)
-                row.addSubview(removeButton)
-            }
-        } else {
-            let valueField = NSTextField(frame: NSRect(x: 0, y: rowHeight - 28, width: 240, height: 22))
-            valueField.stringValue = resolved[variable.name] ?? variable.defaultValue ?? ""
-            valueField.placeholderString = variable.defaultValue ?? "Value"
-            valueField.font = .systemFont(ofSize: 11)
-            valueField.tag = configTagFor(variable: variable)
-            valueField.target = self
-            valueField.action = #selector(variableFieldChanged(_:))
-            row.addSubview(valueField)
-
-            let source = configSourceLabel(variable: variable, resolved: resolved, externalID: externalID)
-            source.frame = NSRect(x: 244, y: rowHeight - 26, width: 80, height: 18)
-            row.addSubview(source)
-
-            if resolved[variable.name] != nil && variable.defaultValue == nil {
-                let removeButton = NSButton(title: "Remove", target: self, action: #selector(removeVariable(_:)))
-                removeButton.bezelStyle = .rounded
-                removeButton.controlSize = .small
-                removeButton.tag = configTagFor(variable: variable)
-                removeButton.frame = NSRect(x: 330, y: rowHeight - 28, width: 70, height: 22)
-                row.addSubview(removeButton)
-            }
-        }
-
-        return row
     }
 
-    private func configSourceLabel(variable: RecipeVariable, resolved: [String: String], externalID: String) -> NSTextField {
-        let text: String
+    private func configurationSource(variable: RecipeVariable, externalID: String) -> String {
         if variable.secret {
             let privateKey = RecipeVariableResolver.privateSecretStorageKey(variable: variable.name, externalID: externalID)
-            if keychainStore?.read(key: privateKey) != nil {
-                text = "Winegold"
-            } else if let sharedKey = variable.key,
-                      variableStore?.consentStatus(key: sharedKey, externalID: externalID) == true,
-                      keychainStore?.read(key: RecipeVariableResolver.sharedSecretStorageKey(sharedKey)) != nil {
-                text = "Winegold"
-            } else if let envVal = ProcessInfo.processInfo.environment[variable.name], !envVal.isEmpty {
-                text = "Inherited environment"
-            } else {
-                text = "Not set"
+            if keychainStore?.read(key: privateKey) != nil { return "Winegold" }
+            if let sharedKey = variable.key,
+               variableStore?.consentStatus(key: sharedKey, externalID: externalID) == true,
+               keychainStore?.read(key: RecipeVariableResolver.sharedSecretStorageKey(sharedKey)) != nil {
+                return "Winegold"
             }
-        } else if variableStore?.readOverride(externalID: externalID, variableName: variable.name) != nil {
-            text = "Winegold"
-        } else if let envVal = ProcessInfo.processInfo.environment[variable.name], !envVal.isEmpty {
-            text = "Inherited environment"
-        } else if variable.defaultValue != nil {
-            text = "YAML default"
-        } else {
-            text = "Not set"
+            if ProcessInfo.processInfo.environment[variable.name]?.isEmpty == false { return "Environment" }
+            return "Not set"
         }
-        let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 10)
-        label.textColor = .tertiaryLabelColor
-        return label
-    }
-
-    private func configTagFor(variable: RecipeVariable) -> Int {
-        variable.name.hashValue & 0x7FFFFFFF
+        if variableStore?.readOverride(externalID: externalID, variableName: variable.name) != nil { return "Winegold" }
+        if ProcessInfo.processInfo.environment[variable.name]?.isEmpty == false { return "Environment" }
+        if variable.defaultValue != nil { return "YAML default" }
+        return "Not set"
     }
 
     private func promptForSecret(label: String) -> String? {
@@ -596,14 +525,14 @@ class SettingsViewController: NSViewController {
         return value.isEmpty ? nil : value
     }
 
-    @objc private func setupVariable(_ sender: NSButton) {
+    private func setupVariable(named variableName: String) {
         guard let actionID = selectedActionID,
               let recipeCoordinator,
               let variableStore,
               let keychainStore,
               let variables = recipeCoordinator.recipeVariables(for: actionID),
               let externalID = recipeCoordinator.recipeExternalID(for: actionID),
-              let variable = variables.first(where: { configTagFor(variable: $0) == sender.tag }),
+              let variable = variables.first(where: { $0.name == variableName }),
               variable.secret else { return }
 
         if let sharedKey = variable.key {
@@ -635,7 +564,6 @@ class SettingsViewController: NSViewController {
             guard let value = promptForSecret(label: variable.label) else { return }
             variableStore.savePrivateSecret(externalID: externalID, variableName: variable.name, value: value, keychainStore: keychainStore)
         }
-
         finishConfigurationChange(actionID: actionID)
     }
 
@@ -649,32 +577,28 @@ class SettingsViewController: NSViewController {
         }
     }
 
-    @objc private func variableFieldChanged(_ sender: NSTextField) {
+    private func saveVariable(named variableName: String, value: String) {
         guard let actionID = selectedActionID,
               let recipeCoordinator,
               let variableStore,
-              let variables = recipeCoordinator.recipeVariables(for: actionID),
               let externalID = recipeCoordinator.recipeExternalID(for: actionID) else { return }
-        let variable = variables.first { configTagFor(variable: $0) == sender.tag }
-        guard let variable else { return }
-
-        let value = sender.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        if value.isEmpty {
-            variableStore.deleteOverride(externalID: externalID, variableName: variable.name)
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            variableStore.deleteOverride(externalID: externalID, variableName: variableName)
         } else {
-            variableStore.writeOverride(externalID: externalID, variableName: variable.name, value: value)
+            variableStore.writeOverride(externalID: externalID, variableName: variableName, value: trimmed)
         }
         finishConfigurationChange(actionID: actionID)
     }
 
-    @objc private func removeVariable(_ sender: NSButton) {
+    private func removeVariable(named variableName: String) {
         guard let actionID = selectedActionID,
               let recipeCoordinator,
               let variableStore,
               let keychainStore,
               let variables = recipeCoordinator.recipeVariables(for: actionID),
               let externalID = recipeCoordinator.recipeExternalID(for: actionID),
-              let variable = variables.first(where: { configTagFor(variable: $0) == sender.tag }) else { return }
+              let variable = variables.first(where: { $0.name == variableName }) else { return }
 
         if variable.secret {
             let privateKey = RecipeVariableResolver.privateSecretStorageKey(variable: variable.name, externalID: externalID)
@@ -878,11 +802,8 @@ class SettingsViewController: NSViewController {
         successMessageField.stringValue = draft.successMessage ?? ""
         commandTextView.string = draft.command
         needsSetupBadge?.isHidden = true
-        configurationStack?.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        let note = NSTextField(labelWithString: "Repair this recipe, then Save.")
-        note.font = .systemFont(ofSize: 12)
-        note.textColor = .systemOrange
-        configurationStack?.addArrangedSubview(note)
+        configurationView?.apply([])
+        resizeConfigurationView()
     }
 
     private func selectedRecipeIssue() -> RecipeIndexEntry? {
