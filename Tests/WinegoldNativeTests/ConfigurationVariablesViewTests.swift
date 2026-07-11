@@ -77,12 +77,14 @@ final class ConfigurationVariablesViewTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
 
         let label = try XCTUnwrap(view.control(identifier: "configuration-label:UPLOAD_TOKEN"))
-        let required = try XCTUnwrap(view.control(identifier: "configuration-required:UPLOAD_TOKEN"))
-        let secret = try XCTUnwrap(view.control(identifier: "configuration-secret:UPLOAD_TOKEN"))
+        let required = try XCTUnwrap(view.view(identifier: "configuration-required:UPLOAD_TOKEN"))
+        let secret = try XCTUnwrap(view.view(identifier: "configuration-secret:UPLOAD_TOKEN"))
         let value = try XCTUnwrap(view.control(identifier: "configuration-value:UPLOAD_TOKEN"))
         let action = try XCTUnwrap(view.control(identifier: "configuration-action:UPLOAD_TOKEN"))
 
-        let centers = [label, required, secret, value, action].map { $0.convert($0.bounds, to: view).midY }
+        XCTAssertTrue(value is NSSecureTextField)
+        XCTAssertLessThan(required.convert(required.bounds, to: view).midY, label.convert(label.bounds, to: view).midY)
+        let centers = [secret, value, action].map { $0.convert($0.bounds, to: view).midY }
         for center in centers.dropFirst() {
             XCTAssertEqual(center, centers[0], accuracy: 2.0)
         }
@@ -104,5 +106,9 @@ private extension NSView {
 
     func control(identifier: String) -> NSControl? {
         subviewsRecursive.compactMap { $0 as? NSControl }.first { $0.identifier?.rawValue == identifier }
+    }
+
+    func view(identifier: String) -> NSView? {
+        subviewsRecursive.first { $0.identifier?.rawValue == identifier }
     }
 }
