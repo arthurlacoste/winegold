@@ -5,13 +5,15 @@ import WinegoldUI
 class SettingsWindowController: NSWindowController {
     private let store: SettingsStore
     private let actionStore: ActionStore
+    private let recipeCoordinator: RecipeCoordinator?
     private let onLaunchAtLoginChanged: (Bool) -> Void
     private let onShortcutChanged: () -> Void
     private let onPanelSideChanged: (PanelSide) -> Void
 
-    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
+    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
         self.store = store
         self.actionStore = actionStore
+        self.recipeCoordinator = recipeCoordinator
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
         self.onShortcutChanged = onShortcutChanged
         self.onPanelSideChanged = onPanelSideChanged
@@ -30,6 +32,7 @@ class SettingsWindowController: NSWindowController {
         let vc = SettingsViewController(
             store: store,
             actionStore: actionStore,
+            recipeCoordinator: recipeCoordinator,
             onLaunchAtLoginChanged: onLaunchAtLoginChanged,
             onShortcutChanged: onShortcutChanged,
             onPanelSideChanged: onPanelSideChanged
@@ -63,6 +66,7 @@ class SettingsWindowController: NSWindowController {
 class SettingsViewController: NSViewController {
     private var store: SettingsStore
     private let actionStore: ActionStore
+    private let recipeCoordinator: RecipeCoordinator?
     private let onLaunchAtLoginChanged: (Bool) -> Void
     private let onShortcutChanged: () -> Void
     private let onPanelSideChanged: (PanelSide) -> Void
@@ -79,9 +83,10 @@ class SettingsViewController: NSViewController {
     private var selectedActionID: UUID?
     private var actions: [Action] = []
 
-    init(store: SettingsStore, actionStore: ActionStore, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
+    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
         self.store = store
         self.actionStore = actionStore
+        self.recipeCoordinator = recipeCoordinator
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
         self.onShortcutChanged = onShortcutChanged
         self.onPanelSideChanged = onPanelSideChanged
@@ -532,7 +537,9 @@ class SettingsViewController: NSViewController {
         }
 
         do {
-            if existing == nil {
+            if let recipeCoordinator {
+                try recipeCoordinator.save(action: action)
+            } else if existing == nil {
                 try actionStore.createAction(action)
             } else {
                 try actionStore.updateAction(action)
@@ -546,7 +553,11 @@ class SettingsViewController: NSViewController {
     @objc private func deleteAction() {
         guard let selectedActionID else { return }
         do {
-            try actionStore.deleteAction(id: selectedActionID)
+            if let recipeCoordinator {
+                try recipeCoordinator.delete(actionID: selectedActionID)
+            } else {
+                try actionStore.deleteAction(id: selectedActionID)
+            }
             reloadActions()
         } catch {
             showMessage("Delete failed: \(error.localizedDescription)")
@@ -568,8 +579,11 @@ class SettingsViewController: NSViewController {
             for url in panel.urls {
                 let imported = try importer.importActions(from: url)
                 for action in imported {
-                    _ = try actionStore.upsertActionByName(action)
-                    try actionStore.deleteDuplicateActionsByName(keeping: action.name)
+                    if let recipeCoordinator { try recipeCoordinator.save(action: action) }
+                    else {
+                        _ = try actionStore.upsertActionByName(action)
+                        try actionStore.deleteDuplicateActionsByName(keeping: action.name)
+                    }
                     importedNames.append(action.name)
                 }
             }

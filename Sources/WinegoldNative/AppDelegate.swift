@@ -19,6 +19,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var actionPanelWindow: ActionPanelWindow?
     private var settingsWC: SettingsWindowController?
     private var database: Database?
+    private var recipeCoordinator: RecipeCoordinator?
+    private var recipeWatcher: RecipeWatcher?
     private var globalHotKey: GlobalHotKey?
     private weak var showPanelMenuItem: NSMenuItem?
 
@@ -57,6 +59,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.actionStore = store
 
             try ensureDefaultActions(store: store)
+
+            let recipeRoot = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".winegold/recipes", isDirectory: true)
+            try LegacyRecipeMigrator(db: db, root: recipeRoot).migrateIfNeeded()
+            let coordinator = RecipeCoordinator(root: recipeRoot, db: db)
+            self.recipeCoordinator = coordinator
+            try coordinator.reconcile()
+            let watcher = RecipeWatcher(root: recipeRoot) { [weak self] in
+                guard let self else { return }
+                do {
+                    try self.recipeCoordinator?.reconcile()
+                    DispatchQueue.main.async {
+                        self.settingsWC?.refreshActions()
+                        self.refreshPanelActions()
+                    }
+                } catch {
+                    logMsg("[AppDelegate] recipe reconcile failed: \(error.localizedDescription)")
+                }
+            }
+            try watcher.start()
+            self.recipeWatcher = watcher
 
             self.runHistoryStore = RunHistoryStore(db: db)
         } catch {
@@ -241,6 +264,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWC = SettingsWindowController(
                 store: settingsStore,
                 actionStore: actionStore,
+                recipeCoordinator: recipeCoordinator,
                 onLaunchAtLoginChanged: { enabled in
                     if #available(macOS 13, *) {
                         let svc = LoginItemService()
@@ -444,9 +468,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     var created: [String] = []
                     var updated: [String] = []
                     for imported in importedActions {
-                        let didCreate = try actionStore.upsertActionByName(imported)
-                        try actionStore.deleteDuplicateActionsByName(keeping: imported.name)
-                        if didCreate { created.append(imported.name) } else { updated.append(imported.name) }
+                        if let recipeCoordinator {
+                            let existed = try actionStore.listActions().contains { $0.name == imported.name }
+                            try recipeCoordinator.save(action: imported)
+                            if existed { updated.append(imported.name) } else { created.append(imported.name) }
+                        } else {
+                            let didCreate = try actionStore.upsertActionByName(imported)
+                            try actionStore.deleteDuplicateActionsByName(keeping: imported.name)
+                            if didCreate { created.append(imported.name) } else { updated.append(imported.name) }
+                        }
                     }
                     let createdLine = created.isEmpty ? "" : "Created: \(created.joined(separator: ", "))\n"
                     let updatedLine = updated.isEmpty ? "" : "Updated: \(updated.joined(separator: ", "))\n"
@@ -556,8 +586,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             var batchHadFailure = false
             for (offset, file) in files.enumerated() {
                 let resolvedActionName = resolver.resolve(template: action.runtimeNameTemplate ?? action.name, for: file)
-                let args = resolver.resolve(argumentsTemplate: action.argumentsTemplate, for: file)
                 let wd = resolver.resolve(workingDirectoryTemplate: action.workingDirectoryTemplate, for: file)
+                let args = resolver.resolve(argumentsTemplate: action.argumentsTemplate, for: file)
+                    .map { $0.replacingOccurrences(of: "{recipeDir}", with: wd ?? "") }
 
                 let request = CommandExecutionRequest(
                     executablePath: action.executablePath,

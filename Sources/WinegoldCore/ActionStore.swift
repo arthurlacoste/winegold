@@ -16,7 +16,7 @@ public struct ActionStore {
     }
 
     public func listActions() throws -> [Action] {
-        let stmt = try db.prepare("SELECT \(actionColumns) FROM actions ORDER BY is_favorite DESC, display_order ASC, name ASC")
+        let stmt = try db.prepare("SELECT \(actionColumns) FROM actions WHERE available = 1 ORDER BY is_favorite DESC, display_order ASC, name ASC")
         var actions: [Action] = []
         while stmt.step() {
             actions.append(try rowToAction(stmt))
@@ -25,12 +25,47 @@ public struct ActionStore {
     }
 
     public func listEnabledActions() throws -> [Action] {
-        let stmt = try db.prepare("SELECT \(actionColumns) FROM actions WHERE enabled = 1 ORDER BY is_favorite DESC, display_order ASC, name ASC")
+        let stmt = try db.prepare("SELECT \(actionColumns) FROM actions WHERE enabled = 1 AND available = 1 ORDER BY is_favorite DESC, display_order ASC, name ASC")
         var actions: [Action] = []
         while stmt.step() {
             actions.append(try rowToAction(stmt))
         }
         return actions
+    }
+
+    public func upsertDerivedRecipe(_ action: Action, externalID: String, path: String, hash: String) throws {
+        let claimLegacy = try db.prepare("UPDATE actions SET external_id=?, source_kind='recipe' WHERE id=? AND external_id IS NULL")
+        claimLegacy.bindText(externalID, at: 1)
+        claimLegacy.bindText(action.id.uuidString, at: 2)
+        _ = claimLegacy.step()
+        let existing = try db.prepare("SELECT is_favorite, display_order, created_at FROM actions WHERE external_id=?")
+        existing.bindText(externalID, at: 1)
+        var derived = action
+        if existing.step() {
+            derived.isFavorite = existing.columnInt(at: 0) != 0
+            derived.displayOrder = existing.columnInt(at: 1)
+            derived.createdAt = dateFormatter.date(from: existing.columnText(at: 2)) ?? action.createdAt
+        }
+        let stmt = try db.prepare("""
+            INSERT INTO actions (id, name, description, icon_name, enabled, accepted_extensions, accepted_utis,
+            trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template,
+            success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at,
+            source_kind, external_id, recipe_path, recipe_hash, available)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recipe', ?, ?, ?, 1)
+            ON CONFLICT(external_id) DO UPDATE SET id=excluded.id, name=excluded.name, description=excluded.description,
+            icon_name=excluded.icon_name, enabled=excluded.enabled, accepted_extensions=excluded.accepted_extensions,
+            accepted_utis=excluded.accepted_utis, trigger_expression=excluded.trigger_expression,
+            executable_path=excluded.executable_path, arguments_template=excluded.arguments_template,
+            working_directory_template=excluded.working_directory_template, output_path_template=excluded.output_path_template,
+            success_message=excluded.success_message, requires_confirmation=excluded.requires_confirmation,
+            timeout_seconds=excluded.timeout_seconds, updated_at=excluded.updated_at, recipe_path=excluded.recipe_path,
+            recipe_hash=excluded.recipe_hash, available=1
+        """)
+        bindAction(derived, to: stmt)
+        stmt.bindText(externalID, at: 20)
+        stmt.bindText(path, at: 21)
+        stmt.bindText(hash, at: 22)
+        _ = stmt.step()
     }
 
     public func createAction(_ action: Action) throws {

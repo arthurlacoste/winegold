@@ -1,11 +1,17 @@
 # Writing Winegold scripts
 
-Winegold scripts are local YAML files ending in `.add.yml`. Drag one into Winegold or import it from Settings.
+Winegold recipes are local YAML files ending in `.wg.yml`. They live under `~/.winegold/recipes/`, including ordinary nested category folders. Winegold watches this folder and keeps SQLite only as a derived index.
+
+Legacy `.add.yml` files can still be imported. They are converted to `.wg.yml`; new recipes and exports use only `.wg.yml`.
 
 ## Minimal example
 
 ```yml
+id: winegold.copy-text-path
 name: Copy text file path
+description: Copy a text file path.
+version: 1.0.0
+enabled: true
 trigger: extension equals "txt"
 cmd:
   exec: 'printf "%s" "{input}" | pbcopy'
@@ -98,6 +104,7 @@ Winegold runs `cmd.exec` as `/bin/zsh -lc <command>`.
 {scheme} {host} {urlPath} {query} {fragment}
 {text}          raw dragged text
 {desktop} {downloads} {timestamp}
+{recipeDir}     absolute directory containing the `.wg.yml` file
 ```
 
 Unavailable placeholders remain unchanged. Quote file paths in shell commands. Avoid injecting `{inside}` or `{text}` directly into shell syntax when content may be untrusted.
@@ -107,15 +114,21 @@ Unavailable placeholders remain unchanged. Quote file paths in shell commands. A
 Supported fields:
 
 ```txt
+id
 name
+description
+version
+enabled
 trigger
 cmd.exec
 successMessage
 ```
 
+`name` is required. Local recipes may omit `id`; Winegold generates one and writes it back atomically. Commands run with the recipe file's directory as their working directory.
+
 `successMessage` is optional and appears only after success. Unknown YAML fields are ignored.
 
-New exports always use expression triggers. Winegold still imports the older `trigger.fileExtension` list and normalizes it internally, but do not use that form for new scripts.
+New exports always use `.wg.yml` and expression triggers. Winegold still imports the older `trigger.fileExtension` list and normalizes it internally, but do not use that form for new scripts.
 
 ## Examples
 
