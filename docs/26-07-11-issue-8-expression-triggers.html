@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Issue 8 — Expression triggers</title>
+  <style>
+    body { font: 16px/1.5 -apple-system, sans-serif; max-width: 920px; margin: 40px auto; padding: 0 24px; color: #202124; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, monospace; }
+    pre { background: #111827; color: #d1fae5; padding: 18px; border-radius: 10px; overflow: auto; }
+    h1, h2 { line-height: 1.2; } .ok { color: #087f5b; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Issue #8 — Expression-based triggers</h1>
+  <p><strong>Date:</strong> 2026-07-11. <strong>Context:</strong> replace extension-only matching with typed, local, deterministic expressions shared by YAML, Settings, and runtime.</p>
+
+  <h2>What changed</h2>
+  <ul>
+    <li>Typed recursive AST, lexer, parser, serializer, validator, and evaluator.</li>
+    <li>Nested <code>and</code>, <code>or</code>, and <code>not</code>; string, collection, numeric, regex, presence, and case-sensitive operators.</li>
+    <li>Dragged file, directory, raw URL, and plain text contexts with metadata and URL components.</li>
+    <li>1 MiB safe limit for local UTF-8 <code>inside</code>; no network content fetch.</li>
+    <li>SQLite <code>trigger_expression</code> migration while preserving legacy extension data.</li>
+    <li>Recursive Settings builder, generated preview, direct editing, and visible syntax/type errors.</li>
+    <li>Expression-only new YAML exports and legacy <code>fileExtension</code> import normalization.</li>
+  </ul>
+
+  <h2>Why</h2>
+  <p>One lightweight condition remains easy to configure. Advanced actions can now match nested combinations without executing arbitrary Swift or shell during matching.</p>
+
+  <h2>Files</h2>
+  <p>Core: <code>DraggedItem.swift</code>, <code>TriggerExpression.swift</code>, <code>ActionMatcher.swift</code>, <code>ActionStore.swift</code>, <code>Migrations.swift</code>, <code>LegacyActionImporter.swift</code>, <code>ActionTemplateResolver.swift</code>.</p>
+  <p>UI: <code>TriggerEditorView.swift</code>, <code>SettingsWindowController.swift</code>, <code>DragFileReader.swift</code>, <code>ActionCardView.swift</code>.</p>
+  <p>Tests/docs: <code>TriggerExpressionTests.swift</code>, <code>DraggedItemTests.swift</code>, matcher/store/importer tests, <code>docs/scripting.md</code>, <code>README.md</code>.</p>
+
+  <h2>Test capture</h2>
+  <pre><span class="ok">PASS</span> swift test
+Executed 80 tests, with 0 failures (0 unexpected)
+
+<span class="ok">PASS</span> swift build --build-system native
+Build complete
+
+<span class="ok">PASS</span> local launch: ./build-and-run.sh
+WinegoldNative process started successfully
+
+UI screenshot: unavailable because macOS denied Assistive Access to osascript.
+No production deployment exists for this local-first macOS app.</pre>
+
+  <h2>Risks and useful context</h2>
+  <ul>
+    <li>Multi-item drags retain existing semantics: every item must match an action.</li>
+    <li>Legacy actions continue matching <code>accepted_extensions</code> until saved/exported with an expression.</li>
+    <li>Raw URL/text payloads still use local content-addressed files internally so the existing execution flow stays compatible.</li>
+    <li>Unavailable trigger values return false. Unknown execution placeholders remain visible instead of becoming empty silently.</li>
+  </ul>
+
+  <h2>Progression axes</h2>
+  <ol>
+    <li>Add the separate drag-into-Settings expression tester requested by the issue.</li>
+    <li>Add an AppKit snapshot harness that does not require Accessibility permission.</li>
+    <li>Add richer collection operators for Finder tag subsets.</li>
+    <li>Add expression autocomplete and inline documentation.</li>
+    <li>Measure matching latency on very large multi-file drags.</li>
+  </ol>
+</body>
+</html>

@@ -10,6 +10,7 @@ public struct Action: Identifiable, Codable, Equatable {
 
     public var acceptedExtensions: [String]
     public var acceptedUTIs: [String]
+    public var triggerExpression: String?
 
     public var executablePath: String
     public var argumentsTemplate: [String]
@@ -35,6 +36,7 @@ public struct Action: Identifiable, Codable, Equatable {
         enabled: Bool = true,
         acceptedExtensions: [String] = [],
         acceptedUTIs: [String] = [],
+        triggerExpression: String? = nil,
         executablePath: String,
         argumentsTemplate: [String] = [],
         workingDirectoryTemplate: String? = nil,
@@ -55,6 +57,7 @@ public struct Action: Identifiable, Codable, Equatable {
         self.enabled = enabled
         self.acceptedExtensions = acceptedExtensions
         self.acceptedUTIs = acceptedUTIs
+        self.triggerExpression = triggerExpression
         self.executablePath = executablePath
         self.argumentsTemplate = argumentsTemplate
         self.workingDirectoryTemplate = workingDirectoryTemplate

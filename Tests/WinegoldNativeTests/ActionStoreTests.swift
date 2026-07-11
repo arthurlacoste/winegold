@@ -64,6 +64,7 @@ final class ActionStoreTests: XCTestCase {
             enabled: true,
             acceptedExtensions: ["jpg", "png"],
             acceptedUTIs: ["public.image"],
+            triggerExpression: "extension in {\"jpg\" \"png\"}",
             executablePath: "/opt/homebrew/bin/magick",
             argumentsTemplate: ["{input}", "-quality", "85", "{basename}.webp"],
             workingDirectoryTemplate: "{parent}",
@@ -82,6 +83,7 @@ final class ActionStoreTests: XCTestCase {
         XCTAssertEqual(loaded.iconName, original.iconName)
         XCTAssertEqual(loaded.acceptedExtensions, original.acceptedExtensions)
         XCTAssertEqual(loaded.acceptedUTIs, original.acceptedUTIs)
+        XCTAssertEqual(loaded.triggerExpression, original.triggerExpression)
         XCTAssertEqual(loaded.executablePath, original.executablePath)
         XCTAssertEqual(loaded.argumentsTemplate, original.argumentsTemplate)
         XCTAssertEqual(loaded.workingDirectoryTemplate, original.workingDirectoryTemplate)

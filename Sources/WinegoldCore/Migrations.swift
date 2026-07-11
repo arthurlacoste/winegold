@@ -17,6 +17,7 @@ public struct Migrations {
                 enabled INTEGER NOT NULL,
                 accepted_extensions TEXT NOT NULL,
                 accepted_utis TEXT NOT NULL,
+                trigger_expression TEXT,
                 executable_path TEXT NOT NULL,
                 arguments_template TEXT NOT NULL,
                 working_directory_template TEXT,
@@ -55,7 +56,7 @@ public struct Migrations {
 
         let version = try currentVersion()
         if version == 0 {
-            try db.execute("INSERT INTO schema_version (version) VALUES (3)")
+            try db.execute("INSERT INTO schema_version (version) VALUES (4)")
         } else {
             if version < 2 {
                 try db.execute("ALTER TABLE actions ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
@@ -65,6 +66,10 @@ public struct Migrations {
             if version < 3 {
                 try db.execute("ALTER TABLE actions ADD COLUMN success_message TEXT")
                 try db.execute("INSERT INTO schema_version (version) VALUES (3)")
+            }
+            if version < 4 {
+                try db.execute("ALTER TABLE actions ADD COLUMN trigger_expression TEXT")
+                try db.execute("INSERT INTO schema_version (version) VALUES (4)")
             }
         }
     }

@@ -16,7 +16,7 @@ class SettingsWindowController: NSWindowController {
         self.onPanelSideChanged = onPanelSideChanged
 
         let window = SettingsWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -72,7 +72,7 @@ class SettingsViewController: NSViewController {
     private var panelSideControl: NSSegmentedControl!
     private var actionPopup: NSPopUpButton!
     private var nameField: NSTextField!
-    private var extensionsField: NSTextField!
+    private var triggerEditor: TriggerEditorView!
     private var successMessageField: NSTextField!
     private var commandTextView: NSTextView!
     private var selectedActionID: UUID?
@@ -90,7 +90,7 @@ class SettingsViewController: NSViewController {
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
 
     override func loadView() {
-        view = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 680))
+        view = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 900))
         view.wantsLayer = true
         view.layer?.backgroundColor = WinegoldTheme.panelBackground(in: view).cgColor
     }
@@ -210,11 +210,10 @@ class SettingsViewController: NSViewController {
         view.addSubview(nameField)
         y += 38
 
-        addFormLabel("Extensions", x: padding, y: y)
-        extensionsField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
-        extensionsField.placeholderString = "jpg, png, webp or *"
-        view.addSubview(extensionsField)
-        y += 38
+        addFormLabel("Trigger", x: padding, y: y)
+        triggerEditor = TriggerEditorView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 210))
+        view.addSubview(triggerEditor)
+        y += 220
 
         addFormLabel("On success", x: padding, y: y)
         successMessageField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
@@ -223,13 +222,13 @@ class SettingsViewController: NSViewController {
         y += 38
 
         addFormLabel("Command", x: padding, y: y)
-        let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 220))
+        let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 145))
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
         scroll.borderType = .bezelBorder
 
-        commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 220))
+        commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 145))
         commandTextView.font = NSFont(name: "Menlo", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
         commandTextView.isRichText = false
         commandTextView.importsGraphics = false
@@ -242,7 +241,7 @@ class SettingsViewController: NSViewController {
         commandTextView.string = ""
         scroll.documentView = commandTextView
         view.addSubview(scroll)
-        y += 236
+        y += 160
 
         let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}.")
         placeholderHelp.font = .systemFont(ofSize: 11)
@@ -281,9 +280,8 @@ class SettingsViewController: NSViewController {
     func prepareNewScriptTemplate(for files: [URL]) {
         clearForm()
         let extensions = inferredExtensions(from: files)
-        let extensionLabel = extensions.joined(separator: ", ")
         nameField.stringValue = defaultScriptName(for: extensions)
-        extensionsField.stringValue = extensionLabel.isEmpty ? "*" : extensionLabel
+        triggerEditor.stringValue = extensionExpression(extensions)
         successMessageField.stringValue = ""
         commandTextView.string = defaultScriptCommand(for: extensions)
         nameField.becomeFirstResponder()
@@ -339,7 +337,7 @@ class SettingsViewController: NSViewController {
     private func loadAction(_ action: Action) {
         selectedActionID = action.id
         nameField.stringValue = action.name
-        extensionsField.stringValue = action.acceptedExtensions.joined(separator: ", ")
+        triggerEditor.stringValue = action.triggerExpression ?? extensionExpression(action.acceptedExtensions)
         successMessageField.stringValue = action.successMessage ?? ""
         commandTextView.string = shellCommand(for: action)
     }
@@ -347,7 +345,7 @@ class SettingsViewController: NSViewController {
     private func clearForm() {
         selectedActionID = nil
         nameField.stringValue = ""
-        extensionsField.stringValue = "*"
+        triggerEditor.stringValue = "extension in {\"*\"}"
         successMessageField.stringValue = ""
         commandTextView.string = ""
     }
@@ -368,9 +366,10 @@ class SettingsViewController: NSViewController {
         let name = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         let command = commandText.trimmingCharacters(in: .whitespacesAndNewlines)
         let extensions = currentExtensions()
+        let trigger = triggerEditor.stringValue
         let successMessage = normalizedSuccessMessage()
 
-        guard !name.isEmpty, !command.isEmpty, !extensions.isEmpty else { return nil }
+        guard !name.isEmpty, !command.isEmpty, (try? TriggerParser().parse(trigger)) != nil else { return nil }
 
         return Action(
             id: existing?.id ?? UUID(),
@@ -380,6 +379,7 @@ class SettingsViewController: NSViewController {
             enabled: existing?.enabled ?? true,
             acceptedExtensions: extensions,
             acceptedUTIs: existing?.acceptedUTIs ?? [],
+            triggerExpression: trigger,
             executablePath: "/bin/zsh",
             argumentsTemplate: ["-lc", command],
             workingDirectoryTemplate: existing?.workingDirectoryTemplate,
@@ -415,8 +415,7 @@ class SettingsViewController: NSViewController {
         let lines = text.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
         return lines.contains { $0.hasPrefix("name:") }
-            && lines.contains("trigger:")
-            && lines.contains { $0.hasPrefix("fileextension:") }
+            && lines.contains { $0.hasPrefix("trigger:") }
             && lines.contains("cmd:")
             && lines.contains { $0.hasPrefix("exec:") }
     }
@@ -429,16 +428,18 @@ class SettingsViewController: NSViewController {
 
     private func yamlString(for action: Action) -> String {
         let command = shellCommand(for: action)
-        let extensions = action.acceptedExtensions.isEmpty ? ["*"] : action.acceptedExtensions
-        let extLines = extensions.map { "    - \(yamlScalar($0))" }.joined(separator: "\n")
+        let trigger = action.triggerExpression ?? extensionExpression(action.acceptedExtensions)
         return """
         name: \(yamlScalar(action.name))
-        trigger:
-          fileExtension:
-        \(extLines)
+        trigger: \(yamlTrigger(trigger))
         cmd:
           exec: \(yamlExec(command))\(yamlSuccessMessage(action.successMessage))
         """
+    }
+
+    private func yamlTrigger(_ trigger: String) -> String {
+        guard trigger.contains("\n") || trigger.count > 80 else { return yamlScalar(trigger) }
+        return ">\n" + trigger.split(separator: "\n", omittingEmptySubsequences: false).map { "  \($0)" }.joined(separator: "\n")
     }
 
 
@@ -483,10 +484,15 @@ class SettingsViewController: NSViewController {
     }
 
     private func currentExtensions() -> [String] {
-        extensionsField.stringValue
-            .components(separatedBy: CharacterSet(charactersIn: ", \n\t"))
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            .filter { !$0.isEmpty }
+        guard let parsed = try? TriggerParser().parse(triggerEditor.stringValue),
+              case let .condition(field, op, value) = parsed, field == "extension", op == .in,
+              case let .collection(values) = value else { return [] }
+        return values
+    }
+
+    private func extensionExpression(_ extensions: [String]) -> String {
+        let values = extensions.isEmpty ? ["*"] : extensions
+        return TriggerSerializer().serialize(.condition(field: "extension", operator: .in, value: .collection(values)))
     }
 
     private func helpPromptFromForm() -> String {
@@ -520,7 +526,7 @@ class SettingsViewController: NSViewController {
     @objc private func saveAction() {
         let existing = selectedActionID.flatMap { id in actions.first { $0.id == id } }
         guard let action = formAction(existing: existing) else {
-            showMessage("Name, extensions and command are required.")
+            showMessage("Name, a valid trigger, and command are required.")
             return
         }
 
@@ -576,7 +582,7 @@ class SettingsViewController: NSViewController {
 
     @objc private func exportYAML() {
         guard let action = currentEditedAction() else {
-            showMessage("Name, extensions and command are required before exporting.")
+            showMessage("Name, a valid trigger, and command are required before exporting.")
             return
         }
         let panel = NSSavePanel()

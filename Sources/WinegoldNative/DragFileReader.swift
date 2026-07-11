@@ -46,11 +46,20 @@ enum DragFileReader {
                 continue
             }
 
-            if let html = nonEmptyString(item.string(forType: .html)) {
+            let preferred = item.types.first { supportedTypes.contains($0) }
+            if preferred == .URL,
+               let raw = nonEmptyString(item.string(forType: .URL)),
+               looksLikeWebURL(raw),
+               let url = createTemporaryDragFile(contents: raw, preferredExtension: "url", prefix: "dragged-url") {
+                urls.append(url)
+                continue
+            }
+
+            if let text = nonEmptyString(item.string(forType: .string) ?? item.string(forType: .html)) {
                 if let url = createTemporaryDragFile(
-                    contents: html,
-                    preferredExtension: "html",
-                    prefix: "dragged-html"
+                    contents: text,
+                    preferredExtension: "txt",
+                    prefix: "dragged-text"
                 ) {
                     urls.append(url)
                 }
@@ -98,11 +107,10 @@ enum DragFileReader {
     }
 
     private static func generatedFilesFromTextPasteboard(_ pasteboard: NSPasteboard) -> [URL] {
-        if let html = pasteboard.string(forType: .html), !html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return [createTemporaryDragFile(contents: html, preferredExtension: "html", prefix: "dragged-html")].compactMap { $0 }
-        }
-
         guard let text = pasteboard.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            if let html = pasteboard.string(forType: .html)?.trimmingCharacters(in: .whitespacesAndNewlines), !html.isEmpty {
+                return [createTemporaryDragFile(contents: html, preferredExtension: "txt", prefix: "dragged-text")].compactMap { $0 }
+            }
             return []
         }
 

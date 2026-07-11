@@ -5,14 +5,24 @@ public struct ActionMatcher {
 
     public func matchingActions(for files: [URL], actions: [Action]) -> [Action] {
         guard !files.isEmpty else { return [] }
+        let items = files.map { DraggedItem(executionURL: $0) }
+        return matchingActions(forItems: items, actions: actions)
+    }
 
+    public func matchingActions(forItems items: [DraggedItem], actions: [Action]) -> [Action] {
+        guard !items.isEmpty else { return [] }
         let enabled = actions.filter { $0.enabled }
         return enabled.filter { action in
+            if let source = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines), !source.isEmpty {
+                guard let expression = try? TriggerParser().parse(source) else { return false }
+                return items.allSatisfy { TriggerEvaluator().evaluate(expression, values: $0.values) }
+            }
             let acceptedExtensions = normalizedExtensions(action.acceptedExtensions)
             guard !acceptedExtensions.isEmpty else { return false }
             if acceptedExtensions.contains("*") { return true }
 
-            return files.allSatisfy { file in
+            return items.allSatisfy { item in
+                let file = item.executionURL
                 let ext = file.pathExtension.lowercased()
                 return acceptedExtensions.contains(ext)
             }

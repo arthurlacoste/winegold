@@ -1,245 +1,149 @@
 # Writing Winegold scripts
 
-Winegold scripts are small YAML files that create actions in the app.
-
-Use the `.add.yml` extension.
-
-Drag a `.add.yml` file into Winegold to import it.
+Winegold scripts are local YAML files ending in `.add.yml`. Drag one into Winegold or import it from Settings.
 
 ## Minimal example
 
 ```yml
-name: Copy file path
-trigger:
-  fileExtension:
-    - txt
+name: Copy text file path
+trigger: extension equals "txt"
 cmd:
-  exec: 'echo "{input}" | pbcopy'
+  exec: 'printf "%s" "{input}" | pbcopy'
 ```
 
-## Supported YAML
+`trigger` is one readable expression. The same expression is used by imported/exported scripts, the Settings builder, and direct expression editing.
 
-Supported fields:
+## Nested expressions
 
 ```yml
-name: My action
-trigger:
-  fileExtension:
-    - jpg
-    - png
+name: Find notes or URLs
+trigger: >
+  isURL or
+  (extension in {"md" "txt"} and inside contains "TODO")
 cmd:
-  exec: 'echo "{input}"'
-successMessage: 'Created {filename}'
+  exec: 'printf "%s" "{input}"'
+successMessage: 'Matched {kind}'
 ```
+
+Use parentheses with `and`, `or`, and `not`:
 
 ```txt
-name
-trigger.fileExtension
-cmd.exec
-successMessage
+not (extension equals "png" or size greaterThan 1000000)
 ```
 
-`successMessage` is optional. It is displayed only when the command succeeds. It supports the same placeholders as `name` and `cmd.exec`. When omitted or empty, Winegold keeps the default completion message.
+Matching is case-insensitive unless the operator ends in `Case`.
 
-Unsupported fields are ignored.
+## Fields
 
-Imported scripts run as native actions with:
+Common fields and matching placeholders share names:
 
 ```txt
-/bin/zsh -lc <cmd.exec>
+input parent parentName filename basename extension dotExtension
+inside desktop downloads timestamp
+kind mimeType uti size finderTags
+url scheme host urlPath query fragment
+text
 ```
 
-## File extensions
-
-Use one or more extensions:
-
-```yml
-trigger:
-  fileExtension:
-    - webp
-    - png
-```
-
-Use `*` for all files:
-
-```yml
-trigger:
-  fileExtension:
-    - '*'
-```
-
-Write extensions without the dot.
-
-## Completion message
-
-Use `successMessage` to replace the default `Done` label after a successful action:
-
-```yml
-name: Convert {filename}
-trigger:
-  fileExtension:
-    - webp
-cmd:
-  exec: 'sips -s format jpeg "{input}" --out "{parent}/{basename}.jpg"'
-successMessage: 'Created {basename}.jpg'
-```
-
-The message is not shown for failed, timed-out, or cancelled commands.
-
-## Placeholders
-
-Winegold replaces these placeholders when the action runs:
+Boolean shortcuts:
 
 ```txt
-{input}         full file path
-{inputPath}     full file path, alias of {input}
+isFile isDirectory isURL isText
+```
+
+`kind` is `file`, `directory`, `url`, or `text`. A field unavailable for the dragged item makes its condition `false`. `inside` reads only UTF-8 local files up to 1 MiB. It never downloads URL contents. PDF, DOCX, OCR, and other extraction are not performed.
+
+URL drags keep the raw URL. Plain dragged text is available through `text`; it is not treated as file contents.
+
+## Operators
+
+```txt
+equals contains startsWith endsWith matches
+in notIn exists
+greaterThan greaterThanOrEqual lessThan lessThanOrEqual
+equalsCase containsCase startsWithCase endsWithCase
+```
+
+Examples:
+
+```txt
+extension in {"jpg" "jpeg" "png"}
+filename matches /TODO-[0-9]+/i
+finderTags contains "review"
+size lessThanOrEqual 5000000
+host endsWith "example.com"
+kind equals "directory"
+```
+
+## Commands and placeholders
+
+Winegold runs `cmd.exec` as `/bin/zsh -lc <command>`.
+
+```txt
+{input}         path for files/directories, raw value for URL/text
+{inputPath}     local execution path
 {parent}        parent folder
+{parentName}    parent folder name
 {filename}      file name with extension
 {basename}      file name without extension
 {extension}     extension without dot
 {dotExtension}  extension with dot
-{inside}        UTF-8 file contents
-{desktop}       Desktop folder
-{downloads}     Downloads folder
-{timestamp}     current timestamp, yyyy-MM-dd_HHmmss
+{inside}        UTF-8 file contents, maximum 1 MiB
+{kind}          file, directory, url, or text
+{mimeType}      MIME type when available
+{uti}           Uniform Type Identifier when available
+{size}          file size in bytes
+{finderTags}    comma-separated Finder tags
+{url}           raw dragged URL
+{scheme} {host} {urlPath} {query} {fragment}
+{text}          raw dragged text
+{desktop} {downloads} {timestamp}
 ```
 
-Use these placeholders only.
+Unavailable placeholders remain unchanged. Quote file paths in shell commands. Avoid injecting `{inside}` or `{text}` directly into shell syntax when content may be untrusted.
 
-## Quoting rules
+## YAML fields
 
-Use single quotes around the YAML `exec` value.
+Supported fields:
 
-Use double quotes around file path placeholders inside the shell command.
+```txt
+name
+trigger
+cmd.exec
+successMessage
+```
 
-Good:
+`successMessage` is optional and appears only after success. Unknown YAML fields are ignored.
+
+New exports always use expression triggers. Winegold still imports the older `trigger.fileExtension` list and normalizes it internally, but do not use that form for new scripts.
+
+## Examples
+
+Convert images:
 
 ```yml
+name: Convert image to JPEG
+trigger: extension in {"webp" "png"}
 cmd:
-  exec: 'cd "{parent}" && echo "{input}"'
+  exec: 'sips -s format jpeg "{input}" --out "{parent}/{basename}.jpg"'
 ```
 
-For long commands, use a YAML block scalar:
+Open a dragged URL host:
 
 ```yml
+name: Copy example URL
+trigger: isURL and host endsWith "example.com"
+cmd:
+  exec: 'printf "%s" "{url}" | pbcopy'
+```
+
+Process small Markdown notes:
+
+```yml
+name: Process TODO note
+trigger: extension equals "md" and size lessThan 1048576 and inside contains "TODO"
 cmd:
   exec: |
     cd "{parent}"
-    echo "{input}"
-```
-
-## Example: convert WebP to JPEG
-
-```yml
-name: Convert WebP to JPEG
-trigger:
-  fileExtension:
-    - webp
-cmd:
-  exec: 'cd "{parent}" && sips -s format jpeg "{input}" --out "{basename}.jpg"'
-```
-
-## Example: create a resized copy
-
-```yml
-name: Resize image to 1000px
-trigger:
-  fileExtension:
-    - jpg
-    - jpeg
-    - png
-    - webp
-cmd:
-  exec: 'cd "{parent}" && mkdir -p resized && sips -Z 1000 "{input}" --out "resized/{filename}"'
-```
-
-## Example: translate Markdown with Pi and Ollama
-
-```yml
-name: Translate MD to English with Pi
-trigger:
-  fileExtension:
-    - md
-cmd:
-  exec: 'pi --print --no-session --no-approve --provider ollama --model gemma4:e2b --tools read,write "Read the Markdown file at this absolute path: {input}. Translate it to English. Write the translated Markdown to this absolute path: {parent}/{basename}.en.md."'
-```
-
-For long local AI commands, keep the command non-interactive.
-
-Use flags like `--print`, `--no-session`, and `--no-approve` when the tool supports them.
-
-## Example: upload a file with curl and copy Markdown
-
-This example uses an `uploadfile` server exposing `api.php`.
-
-The endpoint accepts `multipart/form-data` with a file field named `file`.
-
-It returns JSON by default. Add `?format=markdown`, `?format=url`, or `?format=html` to get plain text output for CLI scripts.
-
-```yml
-name: Upload file and copy Markdown
-trigger:
-  fileExtension:
-    - jpg
-    - jpeg
-    - png
-    - webp
-    - gif
-    - pdf
-cmd:
-  exec: 'curl -fsS -H "Authorization: Bearer CHANGE_ME_TO_A_SECRET_TOKEN" -F "file=@{input}" "https://example.com/api.php?format=markdown" | pbcopy'
-```
-
-Use the same one-line curl directly in a terminal:
-
-```sh
-curl -fsS -H "Authorization: Bearer CHANGE_ME_TO_A_SECRET_TOKEN" -F "file=@/absolute/path/file.png" "https://example.com/api.php?format=markdown"
-```
-
-## Script authoring tips
-
-Keep commands short and explicit.
-
-Quote every file path placeholder.
-
-Use a YAML block scalar for multiline shell commands:
-
-```yml
-cmd:
-  exec: |
-    first command
-    second command
-```
-
-Remember that Winegold runs `cmd.exec` with `/bin/zsh -lc`.
-
-Avoid injecting `{inside}` directly into a shell argument when the file may contain quotes, HTML, JSON, dollar signs, backticks, or other shell syntax. Prefer reading `{input}` from Python, Node, or another tool and building the request payload safely.
-
-Good for simple text:
-
-```yml
-cmd:
-  exec: 'printf "%s" "{inside}" | pbcopy'
-```
-
-Safer for structured or multiline content:
-
-```yml
-cmd:
-  exec: |
-    python3 -c '
-    from pathlib import Path
-    print(Path("{input}").read_text())
-    '
-```
-
-Use `&&` when the next step must run only after the previous command succeeds.
-
-Use `|` when piping output into another command.
-
-Write generated files with an absolute path based on `{parent}`:
-
-```yml
-cmd:
-  exec: 'some-command "{input}" > "{parent}/{basename}.out.txt"'
+    printf "%s\n" "{filename}"
 ```
