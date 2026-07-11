@@ -23,6 +23,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var recipeWatcher: RecipeWatcher?
     private var globalHotKey: GlobalHotKey?
     private weak var showPanelMenuItem: NSMenuItem?
+    private var variableStore: RecipeVariableStore?
+    private var keychainStore: KeychainSecretStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logMsg("[AppDelegate] app started")
@@ -74,7 +76,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let recipeRoot = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".winegold/recipes", isDirectory: true)
             try LegacyRecipeMigrator(db: db, root: recipeRoot).migrateIfNeeded()
-            let coordinator = RecipeCoordinator(root: recipeRoot, db: db)
+            let vStore = RecipeVariableStore(db: db)
+            self.variableStore = vStore
+            let kStore = KeychainSecretStore()
+            self.keychainStore = kStore
+            let coordinator = RecipeCoordinator(root: recipeRoot, db: db, variableStore: vStore, keychainStore: kStore)
             self.recipeCoordinator = coordinator
             try coordinator.reconcile()
             try migrateDefaultRecipes(store: store, coordinator: coordinator)
@@ -300,6 +306,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 store: settingsStore,
                 actionStore: actionStore,
                 recipeCoordinator: recipeCoordinator,
+                variableStore: variableStore,
+                keychainStore: keychainStore,
                 onLaunchAtLoginChanged: { enabled in
                     if #available(macOS 13, *) {
                         let svc = LoginItemService()
@@ -320,6 +328,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 onPanelSideChanged: { [weak self] side in
                     self?.screenEdgeService?.setSide(side)
                     self?.actionPanelWindow?.move(to: side, animated: true)
+                },
+                onConfigurationChanged: { [weak self] in
+                    self?.refreshPanelActions()
                 }
             )
         }
@@ -535,11 +546,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func failureDebugText(
         existingStderr: String,
         action: Action,
-        request: CommandExecutionRequest
+        request: CommandExecutionRequest,
+        secretValues: [String] = []
     ) -> String {
+        let redactor = SecretRedactor()
         let templateArguments = action.argumentsTemplate.enumerated().map { index, argument in
             let lineCount = argument.components(separatedBy: .newlines).count
-            let preview = redactSecrets(argument.count > 2_000 ? String(argument.prefix(2_000)) + "\n…" : argument)
+            let preview = redactor.redact(argument.count > 2_000 ? String(argument.prefix(2_000)) + "\n\u{2026}" : argument, secretValues: secretValues)
             return "Argument template [\(index)] (\(lineCount) line(s), \(argument.count) chars):\n\(preview)"
         }.joined(separator: "\n\n")
 
@@ -561,14 +574,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         """
 
         return existingStderr.trimmingCharacters(in: .newlines) + debug + "\n"
-    }
-
-    private func redactSecrets(_ value: String) -> String {
-        value.replacingOccurrences(
-            of: #"(?i)(Authorization:\s*(?:Bearer|DeepL-Auth-Key)\s+)[^\s\"]+"#,
-            with: "$1[REDACTED]",
-            options: .regularExpression
-        )
     }
 
     private func runAction(_ action: Action, files: [URL]) {
@@ -598,6 +603,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let runner = CommandRunner()
         let resolver = ActionTemplateResolver()
+        let recipeVars = recipeCoordinator?.resolveRecipeVariables(for: action.id)
+        let recipeEnvironment = recipeVars?.environment
+        let secretValues = recipeVars?.secretValues ?? []
 
         actionPanelWindow?.beginRun(actionName: action.name, files: files)
 
@@ -609,12 +617,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let args = resolver.resolve(argumentsTemplate: action.argumentsTemplate, for: file)
                     .map { $0.replacingOccurrences(of: "{recipeDir}", with: wd ?? "") }
 
-                let request = CommandExecutionRequest(
+                var request = CommandExecutionRequest(
                     executablePath: action.executablePath,
                     arguments: args,
                     workingDirectory: wd,
                     timeoutSeconds: action.timeoutSeconds
                 )
+                if let recipeEnvironment, !recipeEnvironment.isEmpty {
+                    request.environment = recipeEnvironment
+                }
+                let redactor = SecretRedactor()
+                let redactedRequest = redactor.redactCommand(request, secretValues: secretValues)
                 let fileIndex = offset + 1
 
                 await MainActor.run {
@@ -623,22 +636,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         file: file,
                         fileIndex: fileIndex,
                         fileCount: files.count,
-                        request: request
+                        request: redactedRequest
                     )
                 }
 
                 let startedAt = Date()
                 var result = await runner.run(request: request, onOutput: { [weak self] stdout, stderr in
                     guard Date().timeIntervalSince(startedAt) >= 0.3 else { return }
+                    let rStdout = secretValues.isEmpty ? stdout : redactor.redact(stdout, secretValues: secretValues)
+                    let rStderr = secretValues.isEmpty ? stderr : redactor.redact(stderr, secretValues: secretValues)
                     Task { @MainActor in
                         self?.actionPanelWindow?.updateRunningProgress(
                             actionName: resolvedActionName,
                             file: file,
                             fileIndex: fileIndex,
                             fileCount: files.count,
-                            request: request,
-                            stdout: stdout,
-                            stderr: stderr
+                            request: redactedRequest,
+                            stdout: rStdout,
+                            stderr: rStderr
                         )
                     }
                 })
@@ -651,11 +666,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     result.completionMessage = message.isEmpty ? nil : message
                 }
 
+                if !secretValues.isEmpty {
+                    result.stdout = redactor.redact(result.stdout, secretValues: secretValues)
+                    result.stderr = redactor.redact(result.stderr, secretValues: secretValues)
+                }
+
                 if result.status != .success {
                     result.stderr = failureDebugText(
                         existingStderr: result.stderr,
                         action: action,
-                        request: request
+                        request: redactedRequest,
+                        secretValues: secretValues
                     )
                 }
 

@@ -119,6 +119,7 @@ name
 description
 version
 enabled
+variables
 trigger
 cmd.exec
 successMessage
@@ -131,6 +132,83 @@ requirements
 `successMessage` is optional and appears only after success. Unknown YAML fields are ignored.
 
 New recipes always use `.wg.yml` and expression triggers. Winegold still imports the older `trigger.fileExtension` list and normalizes it internally, but do not use that form for new scripts.
+
+## Variables
+
+Recipes can declare configurable variables that are injected as environment variables when the command runs. This keeps recipes clean and shareable without embedded tokens or machine-specific values.
+
+```yml
+variables:
+  UPLOAD_ENDPOINT:
+    label: Upload endpoint
+    default: https://example.com/api.php
+
+  UPLOAD_TOKEN:
+    label: Service token
+    secret: true
+    required: true
+    key: upload-service.token
+
+cmd:
+  exec: |
+    curl -fsS \
+      -H "Authorization: Bearer $UPLOAD_TOKEN" \
+      -F "file=@{input}" \
+      "$UPLOAD_ENDPOINT?format=url"
+```
+
+### Variable properties
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `label` | derived from name | Human-readable label shown in Settings |
+| `secret` | `false` | Store in macOS Keychain instead of SQLite |
+| `required` | `false` | When `true`, missing value marks the recipe as "Needs setup" |
+| `default` | (none) | Default value if not configured |
+| `key` | (none) | Shared key for values used by multiple recipes |
+
+### Value resolution
+
+Non-secret variables resolve in order:
+
+1. Winegold SQLite override
+2. Environment inherited by the Winegold app
+3. YAML `default`
+4. missing
+
+Secret variables resolve in order:
+
+1. macOS Keychain value
+2. Environment inherited by the Winegold app
+3. missing
+
+Do not assume variables configured in an interactive shell are available to an app launched from Finder.
+
+### Setup state
+
+If a required value is missing, the recipe is marked "Needs setup" and hidden from the action panel. It appears in Settings with configuration fields to complete. The recipe becomes available automatically once all required values are configured.
+
+### Shared variables and consent
+
+Recipes can share a stored value through `key`:
+
+```yml
+variables:
+  OPENAI_API_KEY:
+    label: OpenAI API key
+    secret: true
+    required: true
+    key: openai.api-key
+```
+
+Two recipes may expose the same saved secret under different environment names. A newly installed recipe never gains silent access to an existing shared secret; a warning is shown requiring explicit approval.
+
+### Privacy
+
+- Secret values are never displayed in the UI, logs, history, or diagnostics
+- Secret values are never included in exported recipes
+- Commands are redacted with known secret values in output and error streams
+- Use "Replace secret" rather than "Reveal secret"
 
 ## Examples
 

@@ -27,6 +27,10 @@ public struct CommandExecutionRequest {
             .joined(separator: " ")
     }
 
+    public func redactedDisplayCommand(secretValues: [String]) -> String {
+        SecretRedactor().redactCommand(self, secretValues: secretValues).displayCommand
+    }
+
     private static func shellQuote(_ value: String) -> String {
         guard !value.isEmpty else { return "''" }
 

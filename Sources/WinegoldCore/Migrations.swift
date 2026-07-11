@@ -69,11 +69,28 @@ public struct Migrations {
             )
         """)
 
+        try db.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_variable_overrides (
+                external_id TEXT NOT NULL,
+                variable_name TEXT NOT NULL,
+                value TEXT NOT NULL,
+                PRIMARY KEY (external_id, variable_name)
+            )
+        """)
+
+        try db.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_variable_consent (
+                key TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                PRIMARY KEY (key, external_id)
+            )
+        """)
+
         try ensureRecipeColumns()
         try ensureRecipeIndexColumns()
         let version = try currentVersion()
         if version == 0 {
-            try db.execute("INSERT INTO schema_version (version) VALUES (7)")
+            try db.execute("INSERT INTO schema_version (version) VALUES (8)")
         } else {
             if version < 2 {
                 try db.execute("ALTER TABLE actions ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
@@ -100,6 +117,10 @@ public struct Migrations {
                 try ensureRecipeIndexColumns()
                 try db.execute("INSERT INTO schema_version (version) VALUES (7)")
             }
+            if version < 8 {
+                try ensureRecipeVariableTables()
+                try db.execute("INSERT INTO schema_version (version) VALUES (8)")
+            }
         }
     }
 
@@ -121,6 +142,24 @@ public struct Migrations {
         let columns = try tableColumns("recipe_index")
         if !columns.contains("installed_from") { try db.execute("ALTER TABLE recipe_index ADD COLUMN installed_from TEXT") }
         if !columns.contains("installed_at") { try db.execute("ALTER TABLE recipe_index ADD COLUMN installed_at TEXT") }
+    }
+
+    private func ensureRecipeVariableTables() throws {
+        try db.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_variable_overrides (
+                external_id TEXT NOT NULL,
+                variable_name TEXT NOT NULL,
+                value TEXT NOT NULL,
+                PRIMARY KEY (external_id, variable_name)
+            )
+        """)
+        try db.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_variable_consent (
+                key TEXT NOT NULL,
+                external_id TEXT NOT NULL,
+                PRIMARY KEY (key, external_id)
+            )
+        """)
     }
 
     private func tableColumns(_ table: String) throws -> Set<String> {

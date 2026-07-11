@@ -8,4 +8,8 @@ public struct ActionExporter {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(actions)
     }
+
+    public func exportRecipeDocument(_ document: RecipeDocument) -> RecipeDocument {
+        RecipeVariableExportFilter().filterForExport(document)
+    }
 }

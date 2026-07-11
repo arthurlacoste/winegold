@@ -12,8 +12,9 @@ public struct RecipeDocument: Equatable {
     public var successMessage: String?
     public var supportFiles: [String]
     public var requirements: [String]
+    public var variables: [RecipeVariable]?
 
-    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = []) {
+    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil) {
         self.id = id
         self.name = name
         self.description = description
@@ -24,6 +25,7 @@ public struct RecipeDocument: Equatable {
         self.successMessage = successMessage
         self.supportFiles = supportFiles
         self.requirements = requirements
+        self.variables = variables
     }
 }
 
@@ -100,6 +102,7 @@ public struct RecipeParser {
         default: throw RecipeError.invalidBoolean(enabledText)
         }
         _ = try TriggerParser().parse(trigger)
+        let variables = try RecipeVariableParser().parseVariables(lines: lines)
         return RecipeDocument(
             id: scalar("id", lines: lines),
             name: name,
@@ -110,7 +113,8 @@ public struct RecipeParser {
             command: command,
             successMessage: scalar("successMessage", lines: lines),
             supportFiles: topLevelList("files", lines: lines),
-            requirements: topLevelList("requirements", lines: lines)
+            requirements: topLevelList("requirements", lines: lines),
+            variables: variables.isEmpty ? nil : variables
         )
     }
 
@@ -210,6 +214,11 @@ public struct RecipeSerializer {
         if !document.description.isEmpty { lines.append("description: \(quote(document.description))") }
         if let version = document.version { lines.append("version: \(quote(version))") }
         lines.append("enabled: \(document.enabled ? "true" : "false")")
+        if let variables = document.variables, !variables.isEmpty {
+            let varText = RecipeVariableSerializer().serialize(variables)
+            lines.append("")
+            lines.append(varText.trimmingCharacters(in: .newlines))
+        }
         lines.append("")
         lines.append("trigger: \(quote(document.trigger))")
         lines.append("")
@@ -331,7 +340,7 @@ public final class RecipeFileStore {
 
 
 private struct RecipeTextEditor {
-    private let knownKeys = ["id", "name", "description", "version", "enabled", "trigger", "cmd", "successMessage", "files", "requirements"]
+    private let knownKeys = ["id", "name", "description", "version", "enabled", "variables", "trigger", "cmd", "successMessage", "files", "requirements"]
 
     func update(existing: String, document: RecipeDocument) -> String {
         var lines = existing.components(separatedBy: .newlines)
@@ -368,6 +377,10 @@ private struct RecipeTextEditor {
         if let message = document.successMessage { values["successMessage"] = ["successMessage: \(serializer.quote(message))"] }
         if !document.supportFiles.isEmpty { values["files"] = ["files:"] + document.supportFiles.map { "  - \(serializer.quote($0))" } }
         if !document.requirements.isEmpty { values["requirements"] = ["requirements:"] + document.requirements.map { "  - \(serializer.quote($0))" } }
+        if let variables = document.variables, !variables.isEmpty {
+            let varLines = RecipeVariableSerializer().serialize(variables).components(separatedBy: .newlines)
+            values["variables"] = varLines
+        }
         return values
     }
 
@@ -392,7 +405,7 @@ private struct RecipeTextEditor {
     }
 }
 
-private extension String {
+internal extension String {
     var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
     var indent: Int { prefix { $0 == " " || $0 == "\t" }.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) } }
     var afterColon: String { guard let colon = firstIndex(of: ":") else { return "" }; return String(self[index(after: colon)...]).trimmed }

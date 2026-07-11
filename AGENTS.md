@@ -40,6 +40,7 @@ Do not add big frameworks unless needed.
 
 Prefer small commits.
 
+If an issue number is mentioned in prompt, include it in the commit message.
 Run tests before every commit.
 
 Do not commit build artifacts.

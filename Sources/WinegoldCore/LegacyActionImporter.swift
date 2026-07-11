@@ -215,7 +215,6 @@ public enum ImportError: LocalizedError {
 
 private extension String {
     var lines: [String] { components(separatedBy: .newlines) }
-    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
     var hasIndent: Bool { hasPrefix(" ") || hasPrefix("\t") }
     var indentCount: Int {
         var count = 0

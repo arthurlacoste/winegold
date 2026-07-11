@@ -7,17 +7,23 @@ class SettingsWindowController: NSWindowController {
     private let store: SettingsStore
     private let actionStore: ActionStore
     private let recipeCoordinator: RecipeCoordinator?
+    private let variableStore: RecipeVariableStore?
+    private let keychainStore: KeychainSecretStore?
     private let onLaunchAtLoginChanged: (Bool) -> Void
     private let onShortcutChanged: () -> Void
     private let onPanelSideChanged: (PanelSide) -> Void
+    private let onConfigurationChanged: () -> Void
 
-    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
+    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
         self.store = store
         self.actionStore = actionStore
         self.recipeCoordinator = recipeCoordinator
+        self.variableStore = variableStore
+        self.keychainStore = keychainStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
         self.onShortcutChanged = onShortcutChanged
         self.onPanelSideChanged = onPanelSideChanged
+        self.onConfigurationChanged = onConfigurationChanged
 
         let window = SettingsWindow(
             contentRect: NSRect(x: 0, y: 0, width: 760, height: 900),
@@ -34,9 +40,12 @@ class SettingsWindowController: NSWindowController {
             store: store,
             actionStore: actionStore,
             recipeCoordinator: recipeCoordinator,
+            variableStore: variableStore,
+            keychainStore: keychainStore,
             onLaunchAtLoginChanged: onLaunchAtLoginChanged,
             onShortcutChanged: onShortcutChanged,
-            onPanelSideChanged: onPanelSideChanged
+            onPanelSideChanged: onPanelSideChanged,
+            onConfigurationChanged: onConfigurationChanged
         )
         window.contentViewController = vc
         window.onSaveShortcut = { [weak vc] in vc?.saveFromShortcut() }
@@ -68,9 +77,12 @@ class SettingsViewController: NSViewController {
     private var store: SettingsStore
     private let actionStore: ActionStore
     private let recipeCoordinator: RecipeCoordinator?
+    private let variableStore: RecipeVariableStore?
+    private let keychainStore: KeychainSecretStore?
     private let onLaunchAtLoginChanged: (Bool) -> Void
     private let onShortcutChanged: () -> Void
     private let onPanelSideChanged: (PanelSide) -> Void
+    private let onConfigurationChanged: () -> Void
 
     private var launchAtLoginCheckbox: NSButton!
     private var notificationsCheckbox: NSButton!
@@ -86,23 +98,35 @@ class SettingsViewController: NSViewController {
     private var recipeIssues: [RecipeIndexEntry] = []
     private var issuePopup: NSPopUpButton!
     private var issueLabel: NSTextField!
+    private var configurationStack: NSStackView?
+    private var needsSetupBadge: NSTextField?
+    private var settingsContentView: FlippedSettingsView!
 
-    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void) {
+    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
         self.store = store
         self.actionStore = actionStore
         self.recipeCoordinator = recipeCoordinator
+        self.variableStore = variableStore
+        self.keychainStore = keychainStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
         self.onShortcutChanged = onShortcutChanged
         self.onPanelSideChanged = onPanelSideChanged
+        self.onConfigurationChanged = onConfigurationChanged
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
 
     override func loadView() {
-        view = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 900))
-        view.wantsLayer = true
-        view.layer?.backgroundColor = WinegoldTheme.panelBackground(in: view).cgColor
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 760, height: 900))
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        settingsContentView = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 1180))
+        settingsContentView.wantsLayer = true
+        settingsContentView.layer?.backgroundColor = WinegoldTheme.panelBackground(in: settingsContentView).cgColor
+        scrollView.documentView = settingsContentView
+        view = scrollView
     }
 
     override func viewDidLoad() {
@@ -114,48 +138,48 @@ class SettingsViewController: NSViewController {
     private func buildUI() {
         let padding: CGFloat = 24
         var y: CGFloat = 22
-        let w = view.bounds.width - padding * 2
+        let w = settingsContentView.bounds.width - padding * 2
 
         let title = NSTextField(labelWithString: "Settings")
         title.font = .boldSystemFont(ofSize: 20)
         title.frame = NSRect(x: padding, y: y, width: 240, height: 28)
-        view.addSubview(title)
+        settingsContentView.addSubview(title)
         y += 42
 
         launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: self, action: #selector(launchAtLoginChanged))
         launchAtLoginCheckbox.state = store.launchAtLogin ? .on : .off
         launchAtLoginCheckbox.frame = NSRect(x: padding, y: y, width: 200, height: 24)
-        view.addSubview(launchAtLoginCheckbox)
+        settingsContentView.addSubview(launchAtLoginCheckbox)
 
         notificationsCheckbox = NSButton(checkboxWithTitle: "Show notifications", target: self, action: #selector(notificationsChanged))
         notificationsCheckbox.state = store.showNotifications ? .on : .off
         notificationsCheckbox.frame = NSRect(x: padding + 220, y: y, width: 200, height: 24)
-        view.addSubview(notificationsCheckbox)
+        settingsContentView.addSubview(notificationsCheckbox)
 
         let shortcutLabel = NSTextField(labelWithString: "Show panel shortcut")
         shortcutLabel.font = .systemFont(ofSize: 12)
         shortcutLabel.textColor = .secondaryLabelColor
         shortcutLabel.frame = NSRect(x: padding + 430, y: y + 3, width: 130, height: 18)
-        view.addSubview(shortcutLabel)
+        settingsContentView.addSubview(shortcutLabel)
 
         shortcutField = NSTextField(frame: NSRect(x: padding + 560, y: y - 1, width: 130, height: 24))
         shortcutField.stringValue = store.showPanelShortcut
         shortcutField.target = self
         shortcutField.action = #selector(shortcutChanged)
-        view.addSubview(shortcutField)
+        settingsContentView.addSubview(shortcutField)
 
         y += 42
 
         panelSideControl = NSSegmentedControl(labels: ["Left", "Right"], trackingMode: .selectOne, target: self, action: #selector(panelSideChanged))
         panelSideControl.selectedSegment = store.panelSide == .left ? 0 : 1
         panelSideControl.frame = NSRect(x: padding, y: y, width: 170, height: 26)
-        view.addSubview(panelSideControl)
+        settingsContentView.addSubview(panelSideControl)
 
         let panelSideLabel = NSTextField(labelWithString: "Bottom panel side")
         panelSideLabel.font = .systemFont(ofSize: 12)
         panelSideLabel.textColor = .secondaryLabelColor
         panelSideLabel.frame = NSRect(x: padding + 184, y: y + 4, width: 150, height: 18)
-        view.addSubview(panelSideLabel)
+        settingsContentView.addSubview(panelSideLabel)
         y += 40
         addDivider(y: y, x: padding, width: w)
         y += 24
@@ -163,84 +187,84 @@ class SettingsViewController: NSViewController {
         let scriptTitle = NSTextField(labelWithString: "Scripts / actions")
         scriptTitle.font = .boldSystemFont(ofSize: 17)
         scriptTitle.frame = NSRect(x: padding, y: y, width: 220, height: 24)
-        view.addSubview(scriptTitle)
+        settingsContentView.addSubview(scriptTitle)
 
         let hint = NSTextField(labelWithString: "Edit .wg.yml recipes. Files and folders can be installed here or by dragging them into Winegold.")
         hint.font = .systemFont(ofSize: 12)
         hint.textColor = .secondaryLabelColor
         hint.frame = NSRect(x: padding + 170, y: y + 3, width: w - 170, height: 20)
-        view.addSubview(hint)
+        settingsContentView.addSubview(hint)
         y += 38
 
         actionPopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 300, height: 28), pullsDown: false)
         actionPopup.target = self
         actionPopup.action = #selector(actionSelectionChanged)
-        view.addSubview(actionPopup)
+        settingsContentView.addSubview(actionPopup)
 
         let newButton = NSButton(title: "New", target: self, action: #selector(newAction))
         newButton.bezelStyle = .rounded
         newButton.frame = NSRect(x: padding + 312, y: y, width: 70, height: 28)
-        view.addSubview(newButton)
+        settingsContentView.addSubview(newButton)
 
         let saveButton = NSButton(title: "Save", target: self, action: #selector(saveAction))
         saveButton.bezelStyle = .rounded
         saveButton.frame = NSRect(x: padding + 392, y: y, width: 70, height: 28)
-        view.addSubview(saveButton)
+        settingsContentView.addSubview(saveButton)
 
         let deleteButton = NSButton(title: "Delete", target: self, action: #selector(deleteAction))
         deleteButton.bezelStyle = .rounded
         deleteButton.frame = NSRect(x: padding + 472, y: y, width: 78, height: 28)
-        view.addSubview(deleteButton)
+        settingsContentView.addSubview(deleteButton)
 
         let revealButton = NSButton(title: "Reveal", target: self, action: #selector(revealRecipe))
         revealButton.bezelStyle = .rounded
         revealButton.frame = NSRect(x: padding + 560, y: y, width: 72, height: 28)
-        view.addSubview(revealButton)
+        settingsContentView.addSubview(revealButton)
 
         let importButton = NSButton(title: "Install…", target: self, action: #selector(importYAML))
         importButton.bezelStyle = .rounded
         importButton.frame = NSRect(x: padding + 638, y: y, width: 82, height: 28)
-        view.addSubview(importButton)
+        settingsContentView.addSubview(importButton)
         y += 38
 
         issuePopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 300, height: 26), pullsDown: false)
         issuePopup.target = self
         issuePopup.action = #selector(recipeIssueChanged)
-        view.addSubview(issuePopup)
+        settingsContentView.addSubview(issuePopup)
         issueLabel = NSTextField(labelWithString: "")
         issueLabel.textColor = .systemRed
         issueLabel.font = .systemFont(ofSize: 11)
         issueLabel.lineBreakMode = .byTruncatingMiddle
         issueLabel.frame = NSRect(x: padding + 312, y: y + 3, width: w - 312, height: 20)
-        view.addSubview(issueLabel)
+        settingsContentView.addSubview(issueLabel)
         y += 36
 
         let promptButton = NSButton(title: "Help prompt", target: self, action: #selector(openHelpPrompt))
         promptButton.bezelStyle = .rounded
         promptButton.frame = NSRect(x: padding, y: y, width: 120, height: 28)
-        view.addSubview(promptButton)
+        settingsContentView.addSubview(promptButton)
 
         let helpLine = NSTextField(labelWithString: "Ask ChatGPT to improve the current recipe.")
         helpLine.font = .systemFont(ofSize: 12)
         helpLine.textColor = .secondaryLabelColor
         helpLine.frame = NSRect(x: padding + 134, y: y + 5, width: w - 134, height: 18)
-        view.addSubview(helpLine)
+        settingsContentView.addSubview(helpLine)
         y += 48
 
         addFormLabel("Name", x: padding, y: y)
         nameField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
-        view.addSubview(nameField)
+        settingsContentView.addSubview(nameField)
         y += 38
 
         addFormLabel("Trigger", x: padding, y: y)
         triggerEditor = TriggerEditorView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 210))
-        view.addSubview(triggerEditor)
+        settingsContentView.addSubview(triggerEditor)
         y += 220
 
         addFormLabel("On success", x: padding, y: y)
         successMessageField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
         successMessageField.placeholderString = "Optional, e.g. Created {basename}.jpg"
-        view.addSubview(successMessageField)
+        settingsContentView.addSubview(successMessageField)
         y += 38
 
         addFormLabel("Command", x: padding, y: y)
@@ -262,7 +286,7 @@ class SettingsViewController: NSViewController {
         commandTextView.isAutomaticDashSubstitutionEnabled = false
         commandTextView.string = ""
         scroll.documentView = commandTextView
-        view.addSubview(scroll)
+        settingsContentView.addSubview(scroll)
         y += 160
 
         let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}, {recipeDir}.")
@@ -270,20 +294,48 @@ class SettingsViewController: NSViewController {
         placeholderHelp.textColor = .tertiaryLabelColor
         placeholderHelp.lineBreakMode = .byWordWrapping
         placeholderHelp.frame = NSRect(x: padding + 110, y: y, width: w - 250, height: 36)
-        view.addSubview(placeholderHelp)
+        settingsContentView.addSubview(placeholderHelp)
 
         let docsButton = NSButton(title: "Open scripting docs", target: self, action: #selector(openScriptingDocs))
         docsButton.bezelStyle = .inline
         docsButton.frame = NSRect(x: padding + w - 130, y: y - 1, width: 130, height: 22)
-        view.addSubview(docsButton)
+        settingsContentView.addSubview(docsButton)
         y += 52
+
+        addDivider(y: y, x: padding, width: w)
+        y += 24
+
+        let configTitle = NSTextField(labelWithString: "Configuration")
+        configTitle.font = .boldSystemFont(ofSize: 17)
+        configTitle.frame = NSRect(x: padding, y: y, width: 220, height: 24)
+        settingsContentView.addSubview(configTitle)
+
+        needsSetupBadge = NSTextField(labelWithString: "Needs setup")
+        needsSetupBadge!.font = .systemFont(ofSize: 11, weight: .medium)
+        needsSetupBadge!.textColor = .white
+        needsSetupBadge!.wantsLayer = true
+        needsSetupBadge!.layer?.backgroundColor = NSColor.systemOrange.cgColor
+        needsSetupBadge!.layer?.cornerRadius = 4
+        needsSetupBadge!.frame = NSRect(x: padding + 140, y: y + 3, width: 80, height: 18)
+        needsSetupBadge!.alignment = .center
+        needsSetupBadge!.isHidden = true
+        settingsContentView.addSubview(needsSetupBadge!)
+        y += 32
+
+        configurationStack = NSStackView(frame: NSRect(x: padding + 110, y: y, width: w - 110, height: 200))
+        configurationStack!.orientation = .vertical
+        configurationStack!.alignment = .leading
+        configurationStack!.spacing = 8
+        configurationStack!.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
+        settingsContentView.addSubview(configurationStack!)
+        y += 220
     }
 
     private func addDivider(y: CGFloat, x: CGFloat, width: CGFloat) {
         let line = NSView(frame: NSRect(x: x, y: y, width: width, height: 1))
         line.wantsLayer = true
         line.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        view.addSubview(line)
+        settingsContentView.addSubview(line)
     }
 
     private func addFormLabel(_ text: String, x: CGFloat, y: CGFloat) {
@@ -291,7 +343,7 @@ class SettingsViewController: NSViewController {
         label.font = .systemFont(ofSize: 13, weight: .medium)
         label.textColor = .secondaryLabelColor
         label.frame = NSRect(x: x, y: y + 2, width: 100, height: 20)
-        view.addSubview(label)
+        settingsContentView.addSubview(label)
     }
 
     func refreshActions() {
@@ -338,7 +390,9 @@ class SettingsViewController: NSViewController {
     }
 
     private func reloadActions(select idToSelect: UUID? = nil) {
-        actions = (try? actionStore.listActions()) ?? []
+        let available = (try? actionStore.listActions()) ?? []
+        let needingSetup = (try? actionStore.listNeedingSetup()) ?? []
+        actions = available + needingSetup.filter { pending in !available.contains(where: { $0.id == pending.id }) }
         recipeIssues = ((try? recipeCoordinator?.entries()) ?? []).filter { $0.status == "invalid" }
         issuePopup.removeAllItems()
         issuePopup.addItem(withTitle: recipeIssues.isEmpty ? "No recipe errors" : "Recipe errors (\(recipeIssues.count))")
@@ -347,7 +401,8 @@ class SettingsViewController: NSViewController {
         issueLabel.stringValue = recipeIssues.first?.parseError ?? ""
         actionPopup.removeAllItems()
         for action in actions {
-            let title = action.category.map { "\($0) / \(action.name)" } ?? action.name
+            let baseTitle = action.category.map { "\($0) / \(action.name)" } ?? action.name
+            let title = needingSetup.contains(where: { $0.id == action.id }) ? "\(baseTitle) · Needs setup" : baseTitle
             actionPopup.addItem(withTitle: title)
             actionPopup.lastItem?.representedObject = action.id.uuidString
         }
@@ -369,6 +424,267 @@ class SettingsViewController: NSViewController {
         triggerEditor.stringValue = action.triggerExpression ?? extensionExpression(action.acceptedExtensions)
         successMessageField.stringValue = action.successMessage ?? ""
         commandTextView.string = shellCommand(for: action)
+        refreshConfiguration(for: action)
+    }
+
+    private func refreshConfiguration(for action: Action) {
+        guard let stack = configurationStack else { return }
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        needsSetupBadge?.isHidden = true
+
+        guard let recipeCoordinator, let variableStore, let keychainStore else {
+            let label = NSTextField(labelWithString: "No variables.")
+            label.font = .systemFont(ofSize: 12)
+            label.textColor = .tertiaryLabelColor
+            stack.addArrangedSubview(label)
+            return
+        }
+
+        guard let variables = recipeCoordinator.recipeVariables(for: action.id),
+              let externalID = recipeCoordinator.recipeExternalID(for: action.id) else {
+            let label = NSTextField(labelWithString: "No variables.")
+            label.font = .systemFont(ofSize: 12)
+            label.textColor = .tertiaryLabelColor
+            stack.addArrangedSubview(label)
+            return
+        }
+
+        let resolver = RecipeVariableResolver(variableStore: variableStore, keychainStore: keychainStore)
+        let resolved = resolver.resolve(variables: variables, externalID: externalID, appEnvironment: ProcessInfo.processInfo.environment)
+        let setupStatus = resolver.setupStatus(variables: variables, externalID: externalID, appEnvironment: ProcessInfo.processInfo.environment)
+        let consentMgr = RecipeConsentManager(variableStore: variableStore, keychainStore: keychainStore)
+        let warnings = consentMgr.consentWarnings(variables: variables, externalID: externalID)
+
+        if case .needsSetup = setupStatus {
+            needsSetupBadge?.isHidden = false
+        }
+
+        for variable in variables {
+            let row = buildVariableRow(variable: variable, resolved: resolved, externalID: externalID, warnings: warnings)
+            stack.addArrangedSubview(row)
+        }
+
+        stack.frame.size.height = stack.arrangedSubviews.reduce(CGFloat(0)) { $0 + $1.frame.height + 8 }
+    }
+
+    private func buildVariableRow(variable: RecipeVariable, resolved: [String: String], externalID: String, warnings: [String: String]) -> NSView {
+        let rowHeight: CGFloat = variable.secret ? 56 : 32
+        let row = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: rowHeight))
+
+        let label = NSTextField(labelWithString: variable.label)
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = .secondaryLabelColor
+        label.frame = NSRect(x: 0, y: rowHeight - 18, width: 160, height: 16)
+        row.addSubview(label)
+
+        if variable.required {
+            let req = NSTextField(labelWithString: "Required")
+            req.font = .systemFont(ofSize: 9, weight: .medium)
+            req.textColor = .systemOrange
+            req.frame = NSRect(x: 164, y: rowHeight - 17, width: 52, height: 14)
+            row.addSubview(req)
+        }
+
+        if let warning = warnings[variable.name] {
+            let warn = NSTextField(wrappingLabelWithString: warning)
+            warn.font = .systemFont(ofSize: 10)
+            warn.textColor = .systemOrange
+            warn.frame = NSRect(x: 0, y: -4, width: 400, height: 14)
+            row.addSubview(warn)
+        }
+
+        if variable.secret {
+            let masked = NSTextField(labelWithString: resolved[variable.name] != nil ? "\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}\u{2022}" : "Not set")
+            masked.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+            masked.textColor = resolved[variable.name] != nil ? .labelColor : .tertiaryLabelColor
+            masked.frame = NSRect(x: 0, y: rowHeight - 38, width: 200, height: 18)
+            row.addSubview(masked)
+
+            let source = configSourceLabel(variable: variable, resolved: resolved, externalID: externalID)
+            source.frame = NSRect(x: 204, y: rowHeight - 38, width: 80, height: 18)
+            row.addSubview(source)
+
+            let replaceButton = NSButton(title: resolved[variable.name] != nil ? "Replace secret" : "Set up", target: self, action: #selector(setupVariable(_:)))
+            replaceButton.bezelStyle = .rounded
+            replaceButton.controlSize = .small
+            replaceButton.tag = configTagFor(variable: variable)
+            replaceButton.frame = NSRect(x: 290, y: rowHeight - 40, width: 100, height: 22)
+            row.addSubview(replaceButton)
+
+            if resolved[variable.name] != nil {
+                let removeButton = NSButton(title: "Remove", target: self, action: #selector(removeVariable(_:)))
+                removeButton.bezelStyle = .rounded
+                removeButton.controlSize = .small
+                removeButton.tag = configTagFor(variable: variable)
+                removeButton.frame = NSRect(x: 0, y: rowHeight - 56, width: 70, height: 18)
+                row.addSubview(removeButton)
+            }
+        } else {
+            let valueField = NSTextField(frame: NSRect(x: 0, y: rowHeight - 28, width: 240, height: 22))
+            valueField.stringValue = resolved[variable.name] ?? variable.defaultValue ?? ""
+            valueField.placeholderString = variable.defaultValue ?? "Value"
+            valueField.font = .systemFont(ofSize: 11)
+            valueField.tag = configTagFor(variable: variable)
+            valueField.target = self
+            valueField.action = #selector(variableFieldChanged(_:))
+            row.addSubview(valueField)
+
+            let source = configSourceLabel(variable: variable, resolved: resolved, externalID: externalID)
+            source.frame = NSRect(x: 244, y: rowHeight - 26, width: 80, height: 18)
+            row.addSubview(source)
+
+            if resolved[variable.name] != nil && variable.defaultValue == nil {
+                let removeButton = NSButton(title: "Remove", target: self, action: #selector(removeVariable(_:)))
+                removeButton.bezelStyle = .rounded
+                removeButton.controlSize = .small
+                removeButton.tag = configTagFor(variable: variable)
+                removeButton.frame = NSRect(x: 330, y: rowHeight - 28, width: 70, height: 22)
+                row.addSubview(removeButton)
+            }
+        }
+
+        return row
+    }
+
+    private func configSourceLabel(variable: RecipeVariable, resolved: [String: String], externalID: String) -> NSTextField {
+        let text: String
+        if variable.secret {
+            let privateKey = RecipeVariableResolver.privateSecretStorageKey(variable: variable.name, externalID: externalID)
+            if keychainStore?.read(key: privateKey) != nil {
+                text = "Winegold"
+            } else if let sharedKey = variable.key,
+                      variableStore?.consentStatus(key: sharedKey, externalID: externalID) == true,
+                      keychainStore?.read(key: RecipeVariableResolver.sharedSecretStorageKey(sharedKey)) != nil {
+                text = "Winegold"
+            } else if let envVal = ProcessInfo.processInfo.environment[variable.name], !envVal.isEmpty {
+                text = "Inherited environment"
+            } else {
+                text = "Not set"
+            }
+        } else if variableStore?.readOverride(externalID: externalID, variableName: variable.name) != nil {
+            text = "Winegold"
+        } else if let envVal = ProcessInfo.processInfo.environment[variable.name], !envVal.isEmpty {
+            text = "Inherited environment"
+        } else if variable.defaultValue != nil {
+            text = "YAML default"
+        } else {
+            text = "Not set"
+        }
+        let label = NSTextField(labelWithString: text)
+        label.font = .systemFont(ofSize: 10)
+        label.textColor = .tertiaryLabelColor
+        return label
+    }
+
+    private func configTagFor(variable: RecipeVariable) -> Int {
+        variable.name.hashValue & 0x7FFFFFFF
+    }
+
+    private func promptForSecret(label: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = "Set up \(label)"
+        alert.informativeText = "Enter the required value. Winegold will store it in macOS Keychain."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        input.placeholderString = "Required value"
+        alert.accessoryView = input
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let value = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    @objc private func setupVariable(_ sender: NSButton) {
+        guard let actionID = selectedActionID,
+              let recipeCoordinator,
+              let variableStore,
+              let keychainStore,
+              let variables = recipeCoordinator.recipeVariables(for: actionID),
+              let externalID = recipeCoordinator.recipeExternalID(for: actionID),
+              let variable = variables.first(where: { configTagFor(variable: $0) == sender.tag }),
+              variable.secret else { return }
+
+        if let sharedKey = variable.key {
+            let sharedStorageKey = RecipeVariableResolver.sharedSecretStorageKey(sharedKey)
+            let sharedExists = keychainStore.read(key: sharedStorageKey) != nil
+            let hasConsent = variableStore.consentStatus(key: sharedKey, externalID: externalID)
+
+            if sharedExists && !hasConsent {
+                let alert = NSAlert()
+                alert.messageText = "Shared required value"
+                alert.informativeText = "This recipe requests access to your saved \"\(variable.label)\". You can approve access or enter a separate value for this recipe."
+                alert.addButton(withTitle: "Use saved value")
+                alert.addButton(withTitle: "Enter separate value")
+                alert.addButton(withTitle: "Cancel")
+                switch alert.runModal() {
+                case .alertFirstButtonReturn:
+                    variableStore.grantConsent(key: sharedKey, externalID: externalID)
+                case .alertSecondButtonReturn:
+                    guard let value = promptForSecret(label: variable.label) else { return }
+                    variableStore.savePrivateSecret(externalID: externalID, variableName: variable.name, value: value, keychainStore: keychainStore)
+                default:
+                    return
+                }
+            } else {
+                guard let value = promptForSecret(label: variable.label) else { return }
+                variableStore.saveSharedSecret(key: sharedKey, externalID: externalID, value: value, keychainStore: keychainStore)
+            }
+        } else {
+            guard let value = promptForSecret(label: variable.label) else { return }
+            variableStore.savePrivateSecret(externalID: externalID, variableName: variable.name, value: value, keychainStore: keychainStore)
+        }
+
+        finishConfigurationChange(actionID: actionID)
+    }
+
+    private func finishConfigurationChange(actionID: UUID) {
+        do {
+            try recipeCoordinator?.reconcile()
+            reloadActions(select: actionID)
+            onConfigurationChanged()
+        } catch {
+            showMessage("Configuration failed: \(error.localizedDescription)")
+        }
+    }
+
+    @objc private func variableFieldChanged(_ sender: NSTextField) {
+        guard let actionID = selectedActionID,
+              let recipeCoordinator,
+              let variableStore,
+              let variables = recipeCoordinator.recipeVariables(for: actionID),
+              let externalID = recipeCoordinator.recipeExternalID(for: actionID) else { return }
+        let variable = variables.first { configTagFor(variable: $0) == sender.tag }
+        guard let variable else { return }
+
+        let value = sender.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.isEmpty {
+            variableStore.deleteOverride(externalID: externalID, variableName: variable.name)
+        } else {
+            variableStore.writeOverride(externalID: externalID, variableName: variable.name, value: value)
+        }
+        finishConfigurationChange(actionID: actionID)
+    }
+
+    @objc private func removeVariable(_ sender: NSButton) {
+        guard let actionID = selectedActionID,
+              let recipeCoordinator,
+              let variableStore,
+              let keychainStore,
+              let variables = recipeCoordinator.recipeVariables(for: actionID),
+              let externalID = recipeCoordinator.recipeExternalID(for: actionID),
+              let variable = variables.first(where: { configTagFor(variable: $0) == sender.tag }) else { return }
+
+        if variable.secret {
+            let privateKey = RecipeVariableResolver.privateSecretStorageKey(variable: variable.name, externalID: externalID)
+            if keychainStore.read(key: privateKey) != nil {
+                keychainStore.delete(key: privateKey)
+            } else if let sharedKey = variable.key {
+                variableStore.revokeConsent(key: sharedKey, externalID: externalID)
+            }
+        } else {
+            variableStore.deleteOverride(externalID: externalID, variableName: variable.name)
+        }
+        finishConfigurationChange(actionID: actionID)
     }
 
     private func clearForm() {

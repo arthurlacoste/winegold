@@ -36,12 +36,12 @@ public struct RecipeIndexStore {
         return values
     }
 
-    public func validRecord(_ record: RecipeRecord, snapshot: RecipeFileSnapshot) throws {
+    public func validRecord(_ record: RecipeRecord, snapshot: RecipeFileSnapshot, needsSetup: Bool = false) throws {
         guard let externalID = record.document.id else { return }
         try db.execute("BEGIN IMMEDIATE TRANSACTION")
         do {
             let actionStore = ActionStore(db: db)
-            try actionStore.upsertDerivedRecipe(record.action, externalID: externalID, path: record.url.path, hash: record.contentHash, category: category(for: record.url))
+            try actionStore.upsertDerivedRecipe(record.action, externalID: externalID, path: record.url.path, hash: record.contentHash, category: category(for: record.url), available: !needsSetup)
             let stmt = try db.prepare("""
                 INSERT INTO recipe_index (recipe_path, external_id, content_hash, modification_time, file_size, status, parse_error)
                 VALUES (?, ?, ?, ?, ?, 'valid', NULL)
@@ -133,13 +133,17 @@ public final class RecipeCoordinator {
     private let parser: RecipeParser
     private let index: RecipeIndexStore
     private let fileStore: RecipeFileStore
+    private let variableStore: RecipeVariableStore?
+    private let keychainStore: KeychainSecretStore?
 
-    public init(root: URL, db: Database, scanner: RecipeScanner = RecipeScanner(), parser: RecipeParser = RecipeParser()) {
+    public init(root: URL, db: Database, scanner: RecipeScanner = RecipeScanner(), parser: RecipeParser = RecipeParser(), variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil) {
         self.root = root
         self.scanner = scanner
         self.parser = parser
         self.index = RecipeIndexStore(db: db, root: root)
         self.fileStore = RecipeFileStore(root: root)
+        self.variableStore = variableStore
+        self.keychainStore = keychainStore
     }
 
     @discardableResult public func reconcile() throws -> [RecipeIndexEntry] {
@@ -165,13 +169,32 @@ public final class RecipeCoordinator {
                 }
                 let refreshedValues = try snapshot.url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
                 let refreshed = RecipeFileSnapshot(url: snapshot.url, modificationDate: refreshedValues.contentModificationDate ?? snapshot.modificationDate, fileSize: Int64(refreshedValues.fileSize ?? Int(snapshot.fileSize)))
-                try index.validRecord(record, snapshot: refreshed)
+                let needsSetup = checkNeedsSetup(record: record)
+                try index.validRecord(record, snapshot: refreshed, needsSetup: needsSetup)
             } catch {
                 try index.invalid(snapshot: snapshot, error: error)
             }
         }
         try index.markMissing(paths: Set(snapshots.map { $0.url.path }))
         return try index.entries()
+    }
+
+    private func checkNeedsSetup(record: RecipeRecord) -> Bool {
+        guard let variables = record.document.variables, !variables.isEmpty else { return false }
+        guard let variableStore, let keychainStore else { return false }
+        let resolver = RecipeVariableResolver(variableStore: variableStore, keychainStore: keychainStore)
+        let status = resolver.setupStatus(variables: variables, externalID: record.document.id ?? "", appEnvironment: ProcessInfo.processInfo.environment)
+        if case .needsSetup = status { return true }
+        return false
+    }
+
+    public func setupStatus(for actionID: UUID) throws -> RecipeSetupStatus? {
+        guard let path = try index.path(for: actionID) else { return nil }
+        let record = try parser.parse(url: path)
+        guard let variables = record.document.variables, !variables.isEmpty else { return nil }
+        guard let variableStore, let keychainStore else { return .ready }
+        let resolver = RecipeVariableResolver(variableStore: variableStore, keychainStore: keychainStore)
+        return resolver.setupStatus(variables: variables, externalID: record.document.id ?? "", appEnvironment: ProcessInfo.processInfo.environment)
     }
 
     public func save(action: Action) throws {
@@ -204,6 +227,41 @@ public final class RecipeCoordinator {
     public func entries() throws -> [RecipeIndexEntry] { try index.entries() }
 
     public func path(for actionID: UUID) throws -> URL? { try index.path(for: actionID) }
+
+    public func resolveRecipeVariables(for actionID: UUID) -> (environment: [String: String], secretValues: [String])? {
+        guard let variableStore, let keychainStore else { return nil }
+        guard let path = try? index.path(for: actionID),
+              let record = try? parser.parse(url: path),
+              let variables = record.document.variables, !variables.isEmpty,
+              let externalID = record.document.id else { return nil }
+        let resolver = RecipeVariableResolver(variableStore: variableStore, keychainStore: keychainStore)
+        let environment = resolver.resolve(variables: variables, externalID: externalID, appEnvironment: ProcessInfo.processInfo.environment)
+        let secretValues = resolver.secretValues(variables: variables, externalID: externalID, appEnvironment: ProcessInfo.processInfo.environment)
+        return (environment, secretValues)
+    }
+
+    public func consentWarnings(for actionID: UUID) -> [String: String] {
+        guard let variableStore, let keychainStore else { return [:] }
+        guard let path = try? index.path(for: actionID),
+              let record = try? parser.parse(url: path),
+              let variables = record.document.variables, !variables.isEmpty,
+              let externalID = record.document.id else { return [:] }
+        return RecipeConsentManager(variableStore: variableStore, keychainStore: keychainStore)
+            .consentWarnings(variables: variables, externalID: externalID)
+    }
+
+    public func recipeVariables(for actionID: UUID) -> [RecipeVariable]? {
+        guard let path = try? index.path(for: actionID),
+              let record = try? parser.parse(url: path),
+              let variables = record.document.variables, !variables.isEmpty else { return nil }
+        return variables
+    }
+
+    public func recipeExternalID(for actionID: UUID) -> String? {
+        guard let path = try? index.path(for: actionID),
+              let record = try? parser.parse(url: path) else { return nil }
+        return record.document.id
+    }
 
     public func install(_ source: URL) throws -> RecipeInstallationSummary {
         let summary = try RecipeInstaller(root: root).install(source)
