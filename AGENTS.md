@@ -44,6 +44,10 @@ Run tests before every commit.
 
 Do not commit build artifacts.
 
+Do not create automatic development reports or bilan files.
+
+Keep test screenshots and PNG captures outside the repository, for example in `/tmp`.
+
 Keep user scripts data-driven when possible.
 
 When changing the script format, placeholders, importer, exporter, or other scripting core behavior, update `docs/scripting.md` in the same change.
