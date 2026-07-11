@@ -29,6 +29,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         setupGlobalHotKey()
         setupEdgeCatcher()
+        if ProcessInfo.processInfo.environment["WINEGOLD_UI_TEST_SHOW_PANEL"] == "1" {
+            DispatchQueue.main.async { [weak self] in
+                self?.showPanelFromShortcut()
+            }
+        }
     }
 
     private func setupDatabase() {

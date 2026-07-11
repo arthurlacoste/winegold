@@ -18,6 +18,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     private let compactFrameHeight: CGFloat = 132
     private let idleDropFrameHeight: CGFloat = 220
     private var staysOpenUntilExplicitClose = false
+    private var isModalInteractionActive = false
 
     init(
         screen: NSScreen,
@@ -239,6 +240,22 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         animateOutToRight()
     }
 
+    func beginModalInteraction() {
+        isModalInteractionActive = true
+        cancelPendingAutoHide()
+        stopAutoHideMonitor()
+        stopOutsideClickMonitor()
+    }
+
+    func endModalInteraction() {
+        isModalInteractionActive = false
+        makeKeyAndOrderFront(nil)
+        orderFrontRegardless()
+        guard !staysOpenUntilExplicitClose else { return }
+        startAutoHideMonitor()
+        startOutsideClickMonitor()
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers?.lowercased() == "w" {
             animateOutToRight()
@@ -279,7 +296,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     private func handleGlobalMouseDown() {
-        guard !staysOpenUntilExplicitClose, isVisible, !isAnimatingOut, !hasActiveFileDrag else { return }
+        guard allowsAutomaticDismissal else { return }
         let point = NSEvent.mouseLocation
         guard !frame.insetBy(dx: -2, dy: -2).contains(point) else { return }
 
@@ -291,12 +308,22 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        guard !staysOpenUntilExplicitClose, isVisible, !isAnimatingOut, !hasActiveFileDrag else { return }
+        guard allowsAutomaticDismissal else { return }
         if hasRunningAction, !panelState.isCompact {
             collapseToCompactStatus()
         } else if !hasRunningAction {
             animateOutToRight()
         }
+    }
+
+    private var allowsAutomaticDismissal: Bool {
+        PanelDismissalPolicy.allowsAutomaticDismissal(
+            staysOpen: staysOpenUntilExplicitClose,
+            isModalInteractionActive: isModalInteractionActive,
+            isVisible: isVisible,
+            isAnimatingOut: isAnimatingOut,
+            hasActiveFileDrag: hasActiveFileDrag
+        )
     }
 
     private func collapseToCompactStatus() {
@@ -415,7 +442,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     private func checkAutoHideMousePosition() {
-        guard isVisible, !isAnimatingOut, !actionTriggeredSinceShow, !hasActiveFileDrag else {
+        guard allowsAutomaticDismissal, !actionTriggeredSinceShow else {
             cancelPendingAutoHide()
             return
         }
@@ -433,7 +460,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingAutoHideWorkItem = nil
-            guard self.isVisible, !self.actionTriggeredSinceShow, !self.hasActiveFileDrag else { return }
+            guard self.allowsAutomaticDismissal, !self.actionTriggeredSinceShow else { return }
             let expandedFrame = self.frame.insetBy(dx: -20, dy: -20)
             guard !expandedFrame.contains(NSEvent.mouseLocation) else { return }
             self.animateOutToRight()

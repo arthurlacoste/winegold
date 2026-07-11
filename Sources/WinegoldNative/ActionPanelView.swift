@@ -352,9 +352,14 @@ class ActionPanelViewController: NSViewController {
 
     private func setDraggedFiles(_ files: [URL]) {
         guard !files.isEmpty else { return }
-        let signature = files.map { $0.path }.joined(separator: "\n")
-        let isSameDragPayload = signature == lastFilesSignature
-        if isSameDragPayload, state.lastResult == nil, state.runningActionName == nil { return }
+        let signature = PanelFileSelection.signature(for: files)
+        if PanelFileSelection.shouldIgnore(
+            files: files,
+            currentFiles: state.files,
+            lastSignature: lastFilesSignature,
+            hasResult: state.lastResult != nil,
+            isRunning: state.runningActionName != nil
+        ) { return }
         lastFilesSignature = signature
         dragPreviewFiles = []
         isDraggingFiles = false
@@ -944,8 +949,13 @@ class ActionPanelViewController: NSViewController {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        guard panel.runModal() == .OK else { return }
-        setDraggedFiles(panel.urls)
+        let panelWindow = view.window as? ActionPanelWindow
+        panelWindow?.beginModalInteraction()
+        let response = panel.runModal()
+        if response == .OK {
+            setDraggedFiles(panel.urls)
+        }
+        panelWindow?.endModalInteraction()
     }
 
     @objc private func toggleRecentRuns() {
