@@ -4,9 +4,11 @@ import CryptoKit
 public struct RemoteRecipeResponse: Sendable {
     public let data: Data
     public let statusCode: Int
-    public init(data: Data, statusCode: Int) {
+    public let finalURL: URL
+    public init(data: Data, statusCode: Int, finalURL: URL? = nil) {
         self.data = data
         self.statusCode = statusCode
+        self.finalURL = finalURL ?? URL(string: "https://invalid.local/")!
     }
 }
 
@@ -18,8 +20,8 @@ public struct URLSessionRecipeFetcher: RemoteRecipeFetching {
     public init() {}
     public func fetch(_ url: URL) async throws -> RemoteRecipeResponse {
         let (data, response) = try await URLSession.shared.data(from: url)
-        guard let http = response as? HTTPURLResponse else { throw RemoteRecipeError.invalidResponse }
-        return RemoteRecipeResponse(data: data, statusCode: http.statusCode)
+        guard let http = response as? HTTPURLResponse, let finalURL = http.url else { throw RemoteRecipeError.invalidResponse }
+        return RemoteRecipeResponse(data: data, statusCode: http.statusCode, finalURL: finalURL)
     }
 }
 
@@ -34,7 +36,8 @@ public enum RemoteRecipeError: LocalizedError, Equatable {
     case crossOrigin(String)
     case missingSupportFile(String)
     case destinationExists
-    case modified
+    case idConflict(String)
+    case catalogueInvalid
 
     public var errorDescription: String? {
         switch self {
@@ -47,8 +50,9 @@ public enum RemoteRecipeError: LocalizedError, Equatable {
         case .unsafeSupportPath(let path): return "Support file must be a safe relative path: \(path)"
         case .crossOrigin(let path): return "Support file escaped the recipe origin: \(path)"
         case .missingSupportFile(let path): return "Missing required support file: \(path)"
-        case .destinationExists: return "A recipe with this ID is already installed."
-        case .modified: return "The installed recipe has local modifications."
+        case .destinationExists: return "This recipe is already installed."
+        case .idConflict(let id): return "A different recipe already uses ID \(id)."
+        case .catalogueInvalid: return "The Winegold Recipes index is invalid."
         }
     }
 }
@@ -59,6 +63,9 @@ public struct RemoteRecipeInspection: Equatable {
     public let files: [String]
     public let missingCommands: [String]
     public let readmeAvailable: Bool
+    public var sharedVariableRequests: [String] {
+        document.variables?.compactMap { $0.key }.sorted() ?? []
+    }
 }
 
 public struct RecipeProvenance: Equatable {
@@ -72,6 +79,24 @@ public struct RecipeProvenance: Equatable {
     public let latestKnownVersion: String?
 }
 
+public enum InstalledRecipeState: String, Equatable {
+    case local = "Local"
+    case installed = "Installed"
+    case modified = "Modified"
+    case updateAvailable = "Update available"
+    case needsSetup = "Needs setup"
+    case invalid = "Invalid"
+}
+
+public struct InstalledRecipeStatus: Equatable {
+    public let state: InstalledRecipeState
+    public let source: String?
+    public let installedVersion: String?
+    public let latestVersion: String?
+    public let modifiedFiles: [String]
+    public let missingCommands: [String]
+}
+
 public enum RecipeUpdateConflictChoice {
     case keepCurrent
     case replace
@@ -83,6 +108,16 @@ public struct RecipeUpdateResult: Equatable {
     public let conflict: Bool
     public let diff: String?
     public let destination: URL
+}
+
+public struct RecipeCatalogueEntry: Codable, Equatable {
+    public let url: String
+    public init(url: String) { self.url = url }
+}
+
+public struct RecipeCatalogueIndex: Codable, Equatable {
+    public let recipes: [RecipeCatalogueEntry]
+    public init(recipes: [RecipeCatalogueEntry]) { self.recipes = recipes }
 }
 
 public struct RecipeProvenanceStore {
@@ -117,21 +152,19 @@ public struct RecipeProvenanceStore {
 
 public struct RecipeRequirementChecker {
     public init() {}
-
     public func missingCommands(_ commands: [String]) -> [String] {
         commands.filter { command in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             process.arguments = ["sh", "-lc", "command -v \"$1\" >/dev/null 2>&1", "winegold", command]
-            try? process.run()
-            process.waitUntilExit()
+            try? process.run(); process.waitUntilExit()
             return process.terminationStatus != 0
         }
     }
 }
 
 public final class RemoteRecipeInstaller {
-    private let root: URL
+    public let root: URL
     private let db: Database
     private let fetcher: RemoteRecipeFetching
     private let parser = RecipeParser()
@@ -139,10 +172,7 @@ public final class RemoteRecipeInstaller {
     private let fileManager: FileManager
 
     public init(root: URL, db: Database, fetcher: RemoteRecipeFetching = URLSessionRecipeFetcher(), fileManager: FileManager = .default) {
-        self.root = root
-        self.db = db
-        self.fetcher = fetcher
-        self.fileManager = fileManager
+        self.root = root; self.db = db; self.fetcher = fetcher; self.fileManager = fileManager
         self.provenanceStore = RecipeProvenanceStore(db: db)
     }
 
@@ -151,43 +181,132 @@ public final class RemoteRecipeInstaller {
         return RemoteRecipeInspection(document: package.document, sourceURL: url, files: package.files.keys.sorted(), missingCommands: RecipeRequirementChecker().missingCommands(package.document.requirements), readmeAvailable: package.readme != nil)
     }
 
-    @discardableResult
-    public func install(url: URL) async throws -> URL {
+    @discardableResult public func install(url: URL) async throws -> URL {
         let package = try await download(url: url)
         guard let id = package.document.id else { throw RemoteRecipeError.missingPublishedID }
         guard let version = package.document.version, !version.isEmpty else { throw RemoteRecipeError.missingPublishedVersion }
-        let destination = root.appendingPathComponent(RecipeFileStore.slug(id), isDirectory: true)
-        guard !fileManager.fileExists(atPath: destination.path) else { throw RemoteRecipeError.destinationExists }
+        let destination = destinationURL(recipeID: id)
+        if fileManager.fileExists(atPath: destination.path) {
+            if let existing = try provenanceStore.load(recipeID: id), existing.sourceURL == package.sourceURL.absoluteString { throw RemoteRecipeError.destinationExists }
+            throw RemoteRecipeError.idConflict(id)
+        }
         let staged = try stage(package: package)
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+        try db.execute("BEGIN IMMEDIATE TRANSACTION")
+        do {
+            try fileManager.moveItem(at: staged, to: destination)
+            try saveProvenance(package: package, destination: destination, version: version)
+            try db.execute("COMMIT")
+            return destination
+        } catch {
+            try? db.execute("ROLLBACK")
+            try? fileManager.removeItem(at: destination)
+            try? fileManager.removeItem(at: staged)
+            throw error
+        }
+    }
+
+    public func inspectCatalogue(indexURL: URL) async throws -> [RemoteRecipeInspection] {
+        let urls = try await catalogueRecipeURLs(indexURL: indexURL)
+        var inspections: [RemoteRecipeInspection] = []
+        for url in urls { inspections.append(try await inspect(url: url)) }
+        return inspections
+    }
+
+    public func installCatalogue(indexURL: URL) async throws -> [URL] {
+        let urls = try await catalogueRecipeURLs(indexURL: indexURL)
+        var installed: [URL] = []
+        do {
+            for url in urls { installed.append(try await install(url: url)) }
+            return installed
+        } catch {
+            for destination in installed { try? fileManager.removeItem(at: destination) }
+            throw error
+        }
+    }
+
+    public func installAsLocalCopy(url: URL) async throws -> URL {
+        var package = try await download(url: url)
+        package.document.id = "local.\(UUID().uuidString.lowercased())"
+        package.document.version = nil
+        let destination = root.appendingPathComponent(RecipeFileStore.slug(package.document.name) + "-local", isDirectory: true)
+        guard !fileManager.fileExists(atPath: destination.path) else { throw RemoteRecipeError.destinationExists }
+        let staged = try stage(package: package, serializeDocument: true)
+        try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
         try fileManager.moveItem(at: staged, to: destination)
-        try saveProvenance(package: package, destination: destination, version: version)
         return destination
+    }
+
+    private func catalogueRecipeURLs(indexURL: URL) async throws -> [URL] {
+        guard indexURL.scheme == "https" else { throw RemoteRecipeError.httpsRequired }
+        let response = try await fetcher.fetch(indexURL)
+        try validateFinalURL(response.finalURL, requested: indexURL, relative: indexURL.lastPathComponent)
+        guard response.statusCode == 200, let index = try? JSONDecoder().decode(RecipeCatalogueIndex.self, from: response.data) else { throw RemoteRecipeError.catalogueInvalid }
+        return try index.recipes.map { entry in
+            guard let url = URL(string: entry.url, relativeTo: indexURL)?.absoluteURL else { throw RemoteRecipeError.catalogueInvalid }
+            return url
+        }
+    }
+
+    public func checkForUpdate(recipeID: String) async throws -> InstalledRecipeStatus {
+        guard let provenance = try provenanceStore.load(recipeID: recipeID), let source = URL(string: provenance.sourceURL) else {
+            return InstalledRecipeStatus(state: .local, source: nil, installedVersion: nil, latestVersion: nil, modifiedFiles: [], missingCommands: [])
+        }
+        let package = try await download(url: source)
+        let latest = package.document.version
+        let modified = modifiedFiles(destination: destinationURL(recipeID: recipeID), provenance: provenance)
+        let missing = RecipeRequirementChecker().missingCommands(package.document.requirements)
+        let state: InstalledRecipeState
+        if !missing.isEmpty { state = .needsSetup }
+        else if !modified.isEmpty { state = .modified }
+        else if versionIsNewer(latest, than: provenance.installedVersion) { state = .updateAvailable }
+        else { state = .installed }
+        try provenanceStore.save(RecipeProvenance(recipeID: provenance.recipeID, sourceURL: provenance.sourceURL, installedVersion: provenance.installedVersion, installedAt: provenance.installedAt, yamlHash: provenance.yamlHash, fileHashes: provenance.fileHashes, lastUpdateCheck: ISO8601DateFormatter().string(from: Date()), latestKnownVersion: latest))
+        return InstalledRecipeStatus(state: state, source: provenance.sourceURL, installedVersion: provenance.installedVersion, latestVersion: latest, modifiedFiles: modified, missingCommands: missing)
+    }
+
+    public func localStatus(recipeID: String, requirements: [String] = []) throws -> InstalledRecipeStatus {
+        guard let provenance = try provenanceStore.load(recipeID: recipeID) else {
+            let missing = RecipeRequirementChecker().missingCommands(requirements)
+            return InstalledRecipeStatus(state: missing.isEmpty ? .local : .needsSetup, source: nil, installedVersion: nil, latestVersion: nil, modifiedFiles: [], missingCommands: missing)
+        }
+        let modified = modifiedFiles(destination: destinationURL(recipeID: recipeID), provenance: provenance)
+        let missing = RecipeRequirementChecker().missingCommands(requirements)
+        let state: InstalledRecipeState
+        if !missing.isEmpty { state = .needsSetup }
+        else if !modified.isEmpty { state = .modified }
+        else if versionIsNewer(provenance.latestKnownVersion, than: provenance.installedVersion) { state = .updateAvailable }
+        else { state = .installed }
+        return InstalledRecipeStatus(state: state, source: provenance.sourceURL, installedVersion: provenance.installedVersion, latestVersion: provenance.latestKnownVersion, modifiedFiles: modified, missingCommands: missing)
     }
 
     public func update(recipeID: String, choice: RecipeUpdateConflictChoice = .keepCurrent) async throws -> RecipeUpdateResult {
         guard let provenance = try provenanceStore.load(recipeID: recipeID), let source = URL(string: provenance.sourceURL) else { throw RemoteRecipeError.invalidResponse }
-        let destination = root.appendingPathComponent(RecipeFileStore.slug(recipeID), isDirectory: true)
-        let modified = localModificationDiff(destination: destination, provenance: provenance)
-        if let diff = modified, choice == .keepCurrent {
-            return RecipeUpdateResult(updated: false, conflict: true, diff: diff, destination: destination)
-        }
+        let destination = destinationURL(recipeID: recipeID)
         let package = try await download(url: source)
+        guard package.document.id == recipeID else { throw RemoteRecipeError.idConflict(package.document.id ?? "missing") }
         guard let version = package.document.version else { throw RemoteRecipeError.missingPublishedVersion }
+        let diff = contentDiff(destination: destination, package: package, provenance: provenance)
+        if diff != nil, choice == .keepCurrent { return RecipeUpdateResult(updated: false, conflict: true, diff: diff, destination: destination) }
         let oldEnabled = try currentEnabled(in: destination)
         let staged = try stage(package: package, enabledOverride: oldEnabled)
-        if modified != nil, choice == .duplicateCurrent {
+        if diff != nil, choice == .duplicateCurrent {
             let duplicate = uniqueDuplicateURL(for: destination)
             try fileManager.copyItem(at: destination, to: duplicate)
+            try rewriteDuplicateIDs(in: duplicate)
         }
         let backup = root.appendingPathComponent(".update-\(UUID().uuidString)")
-        try fileManager.moveItem(at: destination, to: backup)
+        try db.execute("BEGIN IMMEDIATE TRANSACTION")
         do {
+            try fileManager.moveItem(at: destination, to: backup)
             try fileManager.moveItem(at: staged, to: destination)
-            try fileManager.removeItem(at: backup)
             try saveProvenance(package: package, destination: destination, version: version)
-            return RecipeUpdateResult(updated: true, conflict: modified != nil, diff: modified, destination: destination)
+            try db.execute("COMMIT")
+            try fileManager.removeItem(at: backup)
+            return RecipeUpdateResult(updated: true, conflict: diff != nil, diff: diff, destination: destination)
         } catch {
+            try? db.execute("ROLLBACK")
+            try? fileManager.removeItem(at: destination)
             try? fileManager.moveItem(at: backup, to: destination)
             try? fileManager.removeItem(at: staged)
             throw error
@@ -207,22 +326,30 @@ public final class RemoteRecipeInstaller {
         guard url.scheme?.lowercased() == "https" else { throw RemoteRecipeError.httpsRequired }
         guard url.lastPathComponent.lowercased().hasSuffix(".wg.yml") else { throw RemoteRecipeError.invalidFilename }
         let response = try await fetcher.fetch(url)
+        try validateFinalURL(response.finalURL, requested: url, relative: url.lastPathComponent)
         guard response.statusCode == 200 else { throw RemoteRecipeError.httpStatus(response.statusCode, url.lastPathComponent) }
-        let text = String(decoding: response.data, as: UTF8.self)
-        let parsed = try parser.parse(text: text)
+        let parsed = try parser.parse(text: String(decoding: response.data, as: UTF8.self))
         guard parsed.id != nil else { throw RemoteRecipeError.missingPublishedID }
         guard parsed.version != nil else { throw RemoteRecipeError.missingPublishedVersion }
         var files: [String: Data] = [:]
         for relative in parsed.supportFiles {
             let fileURL = try resolvedSupportURL(relative, recipeURL: url)
             let result = try await fetcher.fetch(fileURL)
+            try validateFinalURL(result.finalURL, requested: fileURL, relative: relative)
             guard result.statusCode == 200 else { throw RemoteRecipeError.missingSupportFile(relative) }
             files[relative] = result.data
         }
         let readmeURL = url.deletingLastPathComponent().appendingPathComponent("README.md")
         let readmeResult = try? await fetcher.fetch(readmeURL)
-        let readme = readmeResult?.statusCode == 200 ? readmeResult?.data : nil
+        let readme = readmeResult.flatMap { result -> Data? in
+            guard result.statusCode == 200, (try? validateFinalURL(result.finalURL, requested: readmeURL, relative: "README.md")) != nil else { return nil }
+            return result.data
+        }
         return DownloadedPackage(document: parsed, recipeFilename: url.lastPathComponent, yaml: response.data, files: files, readme: readme, sourceURL: url)
+    }
+
+    private func validateFinalURL(_ finalURL: URL, requested: URL, relative: String) throws {
+        guard finalURL.scheme == requested.scheme, finalURL.host == requested.host, finalURL.port == requested.port else { throw RemoteRecipeError.crossOrigin(relative) }
     }
 
     private func resolvedSupportURL(_ relative: String, recipeURL: URL) throws -> URL {
@@ -235,16 +362,13 @@ public final class RemoteRecipeInstaller {
         return resolved
     }
 
-    private func stage(package: DownloadedPackage, enabledOverride: Bool? = nil) throws -> URL {
+    private func stage(package: DownloadedPackage, enabledOverride: Bool? = nil, serializeDocument: Bool = false) throws -> URL {
         let tempRoot = root.deletingLastPathComponent().appendingPathComponent(".winegold-stage-\(UUID().uuidString)", isDirectory: true)
         try fileManager.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         do {
             var yaml = package.yaml
-            if let enabledOverride {
-                var document = package.document
-                document.enabled = enabledOverride
-                yaml = Data(RecipeSerializer().serialize(document).utf8)
-            }
+            if serializeDocument { yaml = Data(RecipeSerializer().serialize(package.document).utf8) }
+            if let enabledOverride { var document = package.document; document.enabled = enabledOverride; yaml = Data(RecipeSerializer().serialize(document).utf8) }
             try yaml.write(to: tempRoot.appendingPathComponent(package.recipeFilename), options: .atomic)
             for (relative, data) in package.files {
                 let target = tempRoot.appendingPathComponent(relative)
@@ -253,10 +377,7 @@ public final class RemoteRecipeInstaller {
             }
             if let readme = package.readme { try readme.write(to: tempRoot.appendingPathComponent("README.md"), options: .atomic) }
             return tempRoot
-        } catch {
-            try? fileManager.removeItem(at: tempRoot)
-            throw error
-        }
+        } catch { try? fileManager.removeItem(at: tempRoot); throw error }
     }
 
     private func saveProvenance(package: DownloadedPackage, destination: URL, version: String) throws {
@@ -268,14 +389,48 @@ public final class RemoteRecipeInstaller {
         try provenanceStore.save(RecipeProvenance(recipeID: id, sourceURL: package.sourceURL.absoluteString, installedVersion: version, installedAt: ISO8601DateFormatter().string(from: Date()), yamlHash: hashes[package.recipeFilename] ?? "", fileHashes: hashes, lastUpdateCheck: nil, latestKnownVersion: version))
     }
 
-    private func localModificationDiff(destination: URL, provenance: RecipeProvenance) -> String? {
-        var changes: [String] = []
-        for (relative, installedHash) in provenance.fileHashes.sorted(by: { $0.key < $1.key }) {
+    private func modifiedFiles(destination: URL, provenance: RecipeProvenance) -> [String] {
+        provenance.fileHashes.keys.sorted().filter { relative in
             let url = destination.appendingPathComponent(relative)
-            guard fileManager.fileExists(atPath: url.path), let data = try? Data(contentsOf: url) else { changes.append("- missing: \(relative)"); continue }
-            if hash(data) != installedHash { changes.append("- modified: \(relative)") }
+            guard let data = try? Data(contentsOf: url) else { return true }
+            return hash(data) != provenance.fileHashes[relative]
         }
-        return changes.isEmpty ? nil : changes.joined(separator: "\n")
+    }
+
+    private func contentDiff(destination: URL, package: DownloadedPackage, provenance: RecipeProvenance) -> String? {
+        let remoteFiles = package.files.merging([package.recipeFilename: package.yaml]) { current, _ in current }
+        var sections: [String] = []
+        for relative in modifiedFiles(destination: destination, provenance: provenance) {
+            let local = (try? String(contentsOf: destination.appendingPathComponent(relative), encoding: .utf8)) ?? "<missing>"
+            let remote = remoteFiles[relative].map { String(decoding: $0, as: UTF8.self) } ?? "<removed>"
+            sections.append(Self.simpleDiff(path: relative, old: local, new: remote))
+        }
+        return sections.isEmpty ? nil : sections.joined(separator: "\n\n")
+    }
+
+    public static func simpleDiff(path: String, old: String, new: String) -> String {
+        let oldLines = old.components(separatedBy: .newlines)
+        let newLines = new.components(separatedBy: .newlines)
+        var lines = ["--- local/\(path)", "+++ remote/\(path)"]
+        let count = max(oldLines.count, newLines.count)
+        for index in 0..<count {
+            let lhs = index < oldLines.count ? oldLines[index] : nil
+            let rhs = index < newLines.count ? newLines[index] : nil
+            if lhs == rhs { continue }
+            if let lhs { lines.append("-\(lhs)") }
+            if let rhs { lines.append("+\(rhs)") }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func rewriteDuplicateIDs(in directory: URL) throws {
+        let recipes = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).filter { $0.lastPathComponent.lowercased().hasSuffix(".wg.yml") }
+        for recipe in recipes {
+            var document = try parser.parse(url: recipe).document
+            document.id = "local.\(UUID().uuidString.lowercased())"
+            document.version = nil
+            try Data(RecipeSerializer().serialize(document).utf8).write(to: recipe, options: .atomic)
+        }
     }
 
     private func currentEnabled(in destination: URL) throws -> Bool {
@@ -284,16 +439,15 @@ public final class RemoteRecipeInstaller {
         return try parser.parse(url: recipe).document.enabled
     }
 
+    private func destinationURL(recipeID: String) -> URL { root.appendingPathComponent(RecipeFileStore.slug(recipeID), isDirectory: true) }
     private func uniqueDuplicateURL(for destination: URL) -> URL {
-        var index = 1
-        var candidate = destination.deletingLastPathComponent().appendingPathComponent(destination.lastPathComponent + "-local")
-        while fileManager.fileExists(atPath: candidate.path) {
-            index += 1
-            candidate = destination.deletingLastPathComponent().appendingPathComponent(destination.lastPathComponent + "-local-\(index)")
-        }
+        var index = 1; var candidate = destination.deletingLastPathComponent().appendingPathComponent(destination.lastPathComponent + "-local")
+        while fileManager.fileExists(atPath: candidate.path) { index += 1; candidate = destination.deletingLastPathComponent().appendingPathComponent(destination.lastPathComponent + "-local-\(index)") }
         return candidate
     }
-
-
+    private func versionIsNewer(_ candidate: String?, than installed: String) -> Bool {
+        guard let candidate else { return false }
+        return candidate.compare(installed, options: .numeric) == .orderedDescending
+    }
     private func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 }

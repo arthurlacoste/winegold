@@ -6,6 +6,9 @@ public struct RecipeDocument: Equatable {
     public var name: String
     public var description: String
     public var version: String?
+    public var author: String?
+    public var category: String?
+    public var homepage: String?
     public var enabled: Bool
     public var trigger: String
     public var command: String
@@ -14,11 +17,14 @@ public struct RecipeDocument: Equatable {
     public var requirements: [String]
     public var variables: [RecipeVariable]?
 
-    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil) {
+    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, author: String? = nil, category: String? = nil, homepage: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil) {
         self.id = id
         self.name = name
         self.description = description
         self.version = version
+        self.author = author
+        self.category = category
+        self.homepage = homepage
         self.enabled = enabled
         self.trigger = trigger
         self.command = command
@@ -110,6 +116,9 @@ public struct RecipeParser {
             name: name,
             description: scalar("description", lines: lines) ?? "",
             version: scalar("version", lines: lines),
+            author: scalar("author", lines: lines),
+            category: scalar("category", lines: lines),
+            homepage: scalar("homepage", lines: lines) ?? scalar("source", lines: lines),
             enabled: (scalar("enabled", lines: lines) ?? "true").lowercased() != "false",
             trigger: trigger,
             command: command,
@@ -141,6 +150,9 @@ public struct RecipeParser {
             name: name,
             description: scalar("description", lines: lines) ?? "",
             version: scalar("version", lines: lines),
+            author: scalar("author", lines: lines),
+            category: scalar("category", lines: lines),
+            homepage: scalar("homepage", lines: lines) ?? scalar("source", lines: lines),
             enabled: enabled,
             trigger: trigger,
             command: command,
@@ -223,7 +235,7 @@ public struct RecipeParser {
 
     static func generatedID() -> String { "local.\(UUID().uuidString.lowercased())" }
 
-    static func runtimeUUID(for id: String) -> UUID {
+    public static func runtimeUUID(for id: String) -> UUID {
         if let uuid = UUID(uuidString: id) { return uuid }
         let digest = SHA256.hash(data: Data(id.utf8))
         var bytes = Array(digest.prefix(16))
@@ -251,6 +263,9 @@ public struct RecipeSerializer {
         lines.append("name: \(quote(document.name))")
         if !document.description.isEmpty { lines.append("description: \(quote(document.description))") }
         if let version = document.version { lines.append("version: \(quote(version))") }
+        if let author = document.author { lines.append("author: \(quote(author))") }
+        if let category = document.category { lines.append("category: \(quote(category))") }
+        if let homepage = document.homepage { lines.append("homepage: \(quote(homepage))") }
         lines.append("enabled: \(document.enabled ? "true" : "false")")
         if let variables = document.variables, !variables.isEmpty {
             let varText = RecipeVariableSerializer().serialize(variables)

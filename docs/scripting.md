@@ -294,3 +294,21 @@ cmd:
 ```
 
 Supporting paths must be relative to the recipe directory. Absolute paths and `..` traversal are rejected. Every declared file is required. Remote installation downloads only declared files and an optional sibling `README.md`. Missing commands mark the recipe as needing setup. Winegold never installs dependencies automatically.
+
+
+## Winegold Recipes catalogue index
+
+A compatible repository can expose a JSON index over HTTPS:
+
+```json
+{
+  "recipes": [
+    { "url": "recipes/images/resize-image/resize-image.wg.yml" },
+    { "url": "recipes/documents/md-to-pdf/md-to-pdf.wg.yml" }
+  ]
+}
+```
+
+URLs may be absolute or relative to the index. Each recipe remains autonomous and is installed atomically. Published metadata may include `author`, `category`, and `homepage` for the future Winegold Recipes browser.
+
+Remote recipes stay linked to their source. Settings shows their source, installed version, local modification state, missing commands, and available updates. Updates are always manual. A locally modified recipe can be kept, replaced, or duplicated before updating. The duplicate receives a new local ID.

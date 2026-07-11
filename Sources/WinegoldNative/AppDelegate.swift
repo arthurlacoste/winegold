@@ -20,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWC: SettingsWindowController?
     private var database: Database?
     private var recipeCoordinator: RecipeCoordinator?
+    private var remoteRecipeInstaller: RemoteRecipeInstaller?
     private var recipeWatcher: RecipeWatcher?
     private var globalHotKey: GlobalHotKey?
     private weak var showPanelMenuItem: NSMenuItem?
@@ -82,6 +83,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.keychainStore = kStore
             let coordinator = RecipeCoordinator(root: recipeRoot, db: db, variableStore: vStore, keychainStore: kStore)
             self.recipeCoordinator = coordinator
+            self.remoteRecipeInstaller = RemoteRecipeInstaller(root: recipeRoot, db: db)
             try coordinator.reconcile()
             try migrateDefaultRecipes(store: store, coordinator: coordinator)
             try ensureDefaultRecipes(store: store, coordinator: coordinator)
@@ -306,6 +308,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 store: settingsStore,
                 actionStore: actionStore,
                 recipeCoordinator: recipeCoordinator,
+                remoteRecipeInstaller: remoteRecipeInstaller,
                 variableStore: variableStore,
                 keychainStore: keychainStore,
                 onLaunchAtLoginChanged: { enabled in

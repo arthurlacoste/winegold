@@ -7,6 +7,7 @@ class SettingsWindowController: NSWindowController {
     private let store: SettingsStore
     private let actionStore: ActionStore
     private let recipeCoordinator: RecipeCoordinator?
+    private let remoteRecipeInstaller: RemoteRecipeInstaller?
     private let variableStore: RecipeVariableStore?
     private let keychainStore: KeychainSecretStore?
     private let onLaunchAtLoginChanged: (Bool) -> Void
@@ -14,10 +15,11 @@ class SettingsWindowController: NSWindowController {
     private let onPanelSideChanged: (PanelSide) -> Void
     private let onConfigurationChanged: () -> Void
 
-    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
+    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, remoteRecipeInstaller: RemoteRecipeInstaller? = nil, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
         self.store = store
         self.actionStore = actionStore
         self.recipeCoordinator = recipeCoordinator
+        self.remoteRecipeInstaller = remoteRecipeInstaller
         self.variableStore = variableStore
         self.keychainStore = keychainStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
@@ -40,6 +42,7 @@ class SettingsWindowController: NSWindowController {
             store: store,
             actionStore: actionStore,
             recipeCoordinator: recipeCoordinator,
+            remoteRecipeInstaller: remoteRecipeInstaller,
             variableStore: variableStore,
             keychainStore: keychainStore,
             onLaunchAtLoginChanged: onLaunchAtLoginChanged,
@@ -77,6 +80,7 @@ class SettingsViewController: NSViewController {
     private var store: SettingsStore
     private let actionStore: ActionStore
     private let recipeCoordinator: RecipeCoordinator?
+    private let remoteRecipeInstaller: RemoteRecipeInstaller?
     private let variableStore: RecipeVariableStore?
     private let keychainStore: KeychainSecretStore?
     private let onLaunchAtLoginChanged: (Bool) -> Void
@@ -101,13 +105,17 @@ class SettingsViewController: NSViewController {
     private var issueLabel: NSTextField!
     private var configurationView: ConfigurationVariablesView?
     private var needsSetupBadge: NSTextField?
+    private var provenanceLabel: NSTextField!
+    private var checkUpdateButton: NSButton!
+    private var updateButton: NSButton!
     private var configurationOriginY: CGFloat = 0
     private var settingsContentView: FlippedSettingsView!
 
-    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
+    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, remoteRecipeInstaller: RemoteRecipeInstaller? = nil, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
         self.store = store
         self.actionStore = actionStore
         self.recipeCoordinator = recipeCoordinator
+        self.remoteRecipeInstaller = remoteRecipeInstaller
         self.variableStore = variableStore
         self.keychainStore = keychainStore
         self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
@@ -225,8 +233,13 @@ class SettingsViewController: NSViewController {
 
         let importButton = NSButton(title: "Install…", target: self, action: #selector(importYAML))
         importButton.bezelStyle = .rounded
-        importButton.frame = NSRect(x: padding + 638, y: y, width: 82, height: 28)
+        importButton.frame = NSRect(x: padding + 552, y: y, width: 82, height: 28)
         settingsContentView.addSubview(importButton)
+
+        let installURLButton = NSButton(title: "Install URL…", target: self, action: #selector(installRemoteURL))
+        installURLButton.bezelStyle = .rounded
+        installURLButton.frame = NSRect(x: padding + 638, y: y, width: 96, height: 28)
+        settingsContentView.addSubview(installURLButton)
         y += 38
 
         issuePopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 300, height: 26), pullsDown: false)
@@ -240,6 +253,24 @@ class SettingsViewController: NSViewController {
         issueLabel.frame = NSRect(x: padding + 312, y: y + 3, width: w - 312, height: 20)
         settingsContentView.addSubview(issueLabel)
         y += 36
+
+        provenanceLabel = NSTextField(wrappingLabelWithString: "Source: Local")
+        provenanceLabel.font = .systemFont(ofSize: 11)
+        provenanceLabel.textColor = .secondaryLabelColor
+        provenanceLabel.frame = NSRect(x: padding, y: y, width: w - 190, height: 34)
+        settingsContentView.addSubview(provenanceLabel)
+
+        checkUpdateButton = NSButton(title: "Check update", target: self, action: #selector(checkRemoteUpdate))
+        checkUpdateButton.bezelStyle = .rounded
+        checkUpdateButton.frame = NSRect(x: padding + w - 184, y: y, width: 92, height: 28)
+        settingsContentView.addSubview(checkUpdateButton)
+
+        updateButton = NSButton(title: "Update", target: self, action: #selector(updateRemoteRecipe))
+        updateButton.bezelStyle = .rounded
+        updateButton.frame = NSRect(x: padding + w - 86, y: y, width: 86, height: 28)
+        updateButton.isEnabled = false
+        settingsContentView.addSubview(updateButton)
+        y += 42
 
         let promptButton = NSButton(title: "Help prompt", target: self, action: #selector(openHelpPrompt))
         promptButton.bezelStyle = .rounded
@@ -438,6 +469,7 @@ class SettingsViewController: NSViewController {
         successMessageField.stringValue = action.successMessage ?? ""
         commandTextView.string = shellCommand(for: action)
         refreshConfiguration(for: action)
+        refreshRemoteStatus(for: action)
     }
 
     private func refreshConfiguration(for action: Action) {
@@ -620,6 +652,9 @@ class SettingsViewController: NSViewController {
         triggerEditor.stringValue = "extension in {\"*\"}"
         successMessageField.stringValue = ""
         commandTextView.string = ""
+        provenanceLabel?.stringValue = "Source: Local"
+        checkUpdateButton?.isEnabled = false
+        updateButton?.isEnabled = false
     }
 
     private func shellCommand(for action: Action) -> String {
@@ -810,6 +845,145 @@ class SettingsViewController: NSViewController {
         let index = issuePopup.indexOfSelectedItem - 1
         guard index >= 0, index < recipeIssues.count else { return recipeIssues.first }
         return recipeIssues[index]
+    }
+
+    private func refreshRemoteStatus(for action: Action) {
+        guard let remoteRecipeInstaller,
+              let recipeCoordinator,
+              let externalID = recipeCoordinator.recipeExternalID(for: action.id) else {
+            provenanceLabel.stringValue = "Source: Local"
+            checkUpdateButton.isEnabled = false
+            updateButton.isEnabled = false
+            return
+        }
+        let requirements = (try? recipeCoordinator.path(for: action.id)).flatMap { $0 }.flatMap { try? RecipeParser().parse(url: $0).document.requirements } ?? []
+        let status = try? remoteRecipeInstaller.localStatus(recipeID: externalID, requirements: requirements)
+        applyRemoteStatus(status)
+    }
+
+    private func applyRemoteStatus(_ status: InstalledRecipeStatus?) {
+        guard let status else {
+            provenanceLabel.stringValue = "Source: Local"
+            checkUpdateButton.isEnabled = false
+            updateButton.isEnabled = false
+            return
+        }
+        let sourceName = status.source == nil ? "Local" : "Winegold Recipes"
+        let version = status.installedVersion.map { " · Version: \($0)" } ?? ""
+        let latest = status.latestVersion.flatMap { $0 == status.installedVersion ? nil : " · Latest: \($0)" } ?? ""
+        let details = !status.modifiedFiles.isEmpty ? " · Modified: \(status.modifiedFiles.joined(separator: ", "))" : (!status.missingCommands.isEmpty ? " · Missing: \(status.missingCommands.joined(separator: ", "))" : "")
+        provenanceLabel.stringValue = "Source: \(sourceName)\(version) · Status: \(status.state.rawValue)\(latest)\(details)"
+        checkUpdateButton.isEnabled = status.source != nil
+        updateButton.isEnabled = status.state == .updateAvailable || status.state == .modified
+    }
+
+    @objc private func installRemoteURL() {
+        guard let remoteRecipeInstaller else { showMessage("Remote recipe installation is unavailable."); return }
+        let alert = NSAlert()
+        alert.messageText = "Install from Winegold Recipes"
+        alert.informativeText = "Paste a direct HTTPS .wg.yml URL or a compatible catalogue JSON URL."
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 460, height: 24))
+        field.placeholderString = "https://…/recipe.wg.yml"
+        alert.accessoryView = field
+        guard alert.runModal() == .alertFirstButtonReturn,
+              let url = URL(string: field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
+        Task { @MainActor in
+            do {
+                if url.pathExtension.lowercased() == "json" {
+                    let inspections = try await remoteRecipeInstaller.inspectCatalogue(indexURL: url)
+                    let summary = inspections.map { "• \($0.document.name) \($0.document.version ?? "")\n  \($0.document.command)" }.joined(separator: "\n")
+                    let confirmation = NSAlert()
+                    confirmation.messageText = "Install \(inspections.count) Winegold Recipes?"
+                    confirmation.informativeText = summary
+                    confirmation.addButton(withTitle: "Install all")
+                    confirmation.addButton(withTitle: "Cancel")
+                    guard confirmation.runModal() == .alertFirstButtonReturn else { return }
+                    let installed = try await remoteRecipeInstaller.installCatalogue(indexURL: url)
+                    try recipeCoordinator?.reconcile()
+                    reloadActions()
+                    showMessage("Installed \(installed.count) Winegold Recipes.")
+                    onConfigurationChanged()
+                    return
+                }
+                let inspection = try await remoteRecipeInstaller.inspect(url: url)
+                guard confirmRemoteInstallation(inspection) else { return }
+                _ = try await remoteRecipeInstaller.install(url: url)
+                try recipeCoordinator?.reconcile()
+                reloadActions(select: inspection.document.id.map { RecipeParser.runtimeUUID(for: $0) })
+                onConfigurationChanged()
+            } catch RemoteRecipeError.idConflict(let id) {
+                let conflict = NSAlert()
+                conflict.messageText = "Recipe ID conflict"
+                conflict.informativeText = "A recipe already uses ID \(id). Keep the current recipe or install the incoming recipe as an unlinked local copy."
+                conflict.addButton(withTitle: "Keep current")
+                conflict.addButton(withTitle: "Install local copy")
+                if conflict.runModal() == .alertSecondButtonReturn {
+                    do {
+                        _ = try await remoteRecipeInstaller.installAsLocalCopy(url: url)
+                        try recipeCoordinator?.reconcile()
+                        reloadActions()
+                        onConfigurationChanged()
+                    } catch { showMessage("Installation failed: \(error.localizedDescription)") }
+                }
+            } catch { showMessage("Installation failed: \(error.localizedDescription)") }
+        }
+    }
+
+    private func confirmRemoteInstallation(_ inspection: RemoteRecipeInspection) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Install \(inspection.document.name)?"
+        var lines = ["Command:", inspection.document.command, "", "Included files:"]
+        lines += inspection.files.isEmpty ? ["None"] : inspection.files
+        if inspection.readmeAvailable { lines.append("README.md") }
+        lines += ["", "Required commands:", inspection.document.requirements.isEmpty ? "None" : inspection.document.requirements.joined(separator: ", ")]
+        if !inspection.missingCommands.isEmpty { lines += ["Missing commands:", inspection.missingCommands.joined(separator: ", ")] }
+        if !inspection.sharedVariableRequests.isEmpty { lines += ["Shared variable access:", inspection.sharedVariableRequests.joined(separator: ", ")] }
+        alert.informativeText = lines.joined(separator: "\n")
+        alert.addButton(withTitle: "Install")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    @objc private func checkRemoteUpdate() {
+        guard let actionID = selectedActionID,
+              let recipeCoordinator,
+              let recipeID = recipeCoordinator.recipeExternalID(for: actionID),
+              let remoteRecipeInstaller else { return }
+        Task { @MainActor in
+            do {
+                let status = try await remoteRecipeInstaller.checkForUpdate(recipeID: recipeID)
+                applyRemoteStatus(status)
+            } catch { showMessage("Update check failed: \(error.localizedDescription)") }
+        }
+    }
+
+    @objc private func updateRemoteRecipe() {
+        guard let actionID = selectedActionID,
+              let recipeCoordinator,
+              let recipeID = recipeCoordinator.recipeExternalID(for: actionID),
+              let remoteRecipeInstaller else { return }
+        Task { @MainActor in
+            do {
+                let preview = try await remoteRecipeInstaller.update(recipeID: recipeID, choice: .keepCurrent)
+                if preview.conflict, let diff = preview.diff {
+                    let alert = NSAlert()
+                    alert.messageText = "This recipe was modified locally"
+                    alert.informativeText = diff
+                    alert.addButton(withTitle: "Keep current")
+                    alert.addButton(withTitle: "Replace")
+                    alert.addButton(withTitle: "Duplicate current, then update")
+                    let response = alert.runModal()
+                    guard response != .alertFirstButtonReturn else { return }
+                    let choice: RecipeUpdateConflictChoice = response == .alertSecondButtonReturn ? .replace : .duplicateCurrent
+                    _ = try await remoteRecipeInstaller.update(recipeID: recipeID, choice: choice)
+                }
+                try recipeCoordinator.reconcile()
+                reloadActions(select: actionID)
+                onConfigurationChanged()
+            } catch { showMessage("Update failed: \(error.localizedDescription)") }
+        }
     }
 
     @objc private func importYAML() {

@@ -4,7 +4,11 @@ import XCTest
 private struct StubRecipeFetcher: RemoteRecipeFetching {
     let responses: [String: RemoteRecipeResponse]
     func fetch(_ url: URL) async throws -> RemoteRecipeResponse {
-        responses[url.absoluteString] ?? RemoteRecipeResponse(data: Data(), statusCode: 404)
+        let response = responses[url.absoluteString] ?? RemoteRecipeResponse(data: Data(), statusCode: 404, finalURL: url)
+        if response.finalURL.host == "invalid.local" {
+            return RemoteRecipeResponse(data: response.data, statusCode: response.statusCode, finalURL: url)
+        }
+        return response
     }
 }
 
@@ -84,7 +88,7 @@ final class RemoteRecipeInstallerTests: XCTestCase {
         let result = try await installer.update(recipeID: "winegold.resize-image")
         XCTAssertFalse(result.updated)
         XCTAssertTrue(result.conflict)
-        XCTAssertTrue(result.diff?.contains("modified: resize.py") == true)
+        XCTAssertTrue(result.diff?.contains("--- local/resize.py") == true)
         XCTAssertEqual(try String(contentsOf: destination.appendingPathComponent("resize.py")), "local edit")
     }
 
@@ -98,6 +102,74 @@ final class RemoteRecipeInstallerTests: XCTestCase {
         let installedRecipe = destination.appendingPathComponent("resize.wg.yml")
         XCTAssertFalse(try RecipeParser().parse(url: installedRecipe).document.enabled)
         XCTAssertEqual(try RecipeProvenanceStore(db: db).load(recipeID: "winegold.resize-image")?.installedVersion, "2.0.0")
+    }
+
+
+    func testRejectsCrossOriginRedirect() async throws {
+        let redirected = RemoteRecipeResponse(data: Data(recipe(version: "1.0.0").utf8), statusCode: 200, finalURL: URL(string: "https://evil.example/resize.wg.yml")!)
+        let installer = RemoteRecipeInstaller(root: temp.appendingPathComponent("recipes"), db: db, fetcher: StubRecipeFetcher(responses: [recipeURL.absoluteString: redirected]))
+        do {
+            _ = try await installer.inspect(url: recipeURL)
+            XCTFail("Expected cross-origin rejection")
+        } catch {
+            XCTAssertEqual(error as? RemoteRecipeError, .crossOrigin("resize.wg.yml"))
+        }
+    }
+
+    func testReadmeFailureDoesNotBlockInstall() async throws {
+        let installer = makeInstaller(recipe: recipe(version: "1.0.0"), helper: Data("ok".utf8), readmeStatus: 500)
+        let destination = try await installer.install(url: recipeURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.appendingPathComponent("resize.py").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.appendingPathComponent("README.md").path))
+    }
+
+    func testUpdateCheckStoresLatestVersion() async throws {
+        let v1 = makeInstaller(recipe: recipe(version: "1.0.0"), helper: Data("v1".utf8))
+        _ = try await v1.install(url: recipeURL)
+        let v2 = makeInstaller(recipe: recipe(version: "2.0.0"), helper: Data("v2".utf8))
+        let status = try await v2.checkForUpdate(recipeID: "winegold.resize-image")
+        XCTAssertEqual(status.state, .updateAvailable)
+        XCTAssertEqual(status.latestVersion, "2.0.0")
+        let provenance = try RecipeProvenanceStore(db: db).load(recipeID: "winegold.resize-image")
+        XCTAssertNotNil(provenance?.lastUpdateCheck)
+        XCTAssertEqual(provenance?.latestKnownVersion, "2.0.0")
+    }
+
+    func testDuplicateCurrentRewritesLocalIDAndPreservesLinkedID() async throws {
+        let v1 = makeInstaller(recipe: recipe(version: "1.0.0"), helper: Data("v1".utf8))
+        let destination = try await v1.install(url: recipeURL)
+        try Data("local edit".utf8).write(to: destination.appendingPathComponent("resize.py"))
+        let v2 = makeInstaller(recipe: recipe(version: "2.0.0"), helper: Data("v2".utf8))
+        _ = try await v2.update(recipeID: "winegold.resize-image", choice: .duplicateCurrent)
+        let duplicate = temp.appendingPathComponent("recipes/winegold-resize-image-local/resize.wg.yml")
+        let duplicateDocument = try RecipeParser().parse(url: duplicate).document
+        XCTAssertTrue(duplicateDocument.id?.hasPrefix("local.") == true)
+        XCTAssertNil(duplicateDocument.version)
+        XCTAssertEqual(try RecipeParser().parse(url: destination.appendingPathComponent("resize.wg.yml")).document.id, "winegold.resize-image")
+    }
+
+    func testUpdatePreservesVariableConfigurationByStableID() async throws {
+        let variableStore = RecipeVariableStore(db: db)
+        variableStore.writeOverride(externalID: "winegold.resize-image", variableName: "QUALITY", value: "90")
+        let v1 = makeInstaller(recipe: recipe(version: "1.0.0"), helper: Data("v1".utf8))
+        _ = try await v1.install(url: recipeURL)
+        let v2 = makeInstaller(recipe: recipe(version: "2.0.0"), helper: Data("v2".utf8))
+        _ = try await v2.update(recipeID: "winegold.resize-image", choice: .replace)
+        XCTAssertEqual(variableStore.readOverride(externalID: "winegold.resize-image", variableName: "QUALITY"), "90")
+    }
+
+    func testParsesCatalogueMetadata() throws {
+        let text = recipe(version: "1.0.0") + "\nauthor: Arthur\ncategory: images\nhomepage: https://example.com/resize\n"
+        let document = try RecipeParser().parse(text: text)
+        XCTAssertEqual(document.author, "Arthur")
+        XCTAssertEqual(document.category, "images")
+        XCTAssertEqual(document.homepage, "https://example.com/resize")
+    }
+
+    func testSimpleDiffContainsChangedLines() {
+        let diff = RemoteRecipeInstaller.simpleDiff(path: "tool.py", old: "one\ntwo", new: "one\nthree")
+        XCTAssertTrue(diff.contains("-two"))
+        XCTAssertTrue(diff.contains("+three"))
     }
 
     private func makeInstaller(recipe: String, helper: Data?, readmeStatus: Int = 404) -> RemoteRecipeInstaller {
