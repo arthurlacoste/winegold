@@ -98,6 +98,8 @@ public final class ConfigurationVariablesView: NSView {
         let label = NSTextField(labelWithString: item.label)
         label.font = .systemFont(ofSize: 13, weight: .semibold)
         label.textColor = .labelColor
+        label.alignment = .left
+        label.identifier = NSUserInterfaceItemIdentifier("configuration-label:\(item.name)")
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let badges = NSStackView()
@@ -105,10 +107,14 @@ public final class ConfigurationVariablesView: NSView {
         badges.spacing = 6
         badges.alignment = .centerY
         if item.isRequired {
-            badges.addArrangedSubview(makeBadge("Required", color: .systemOrange))
+            let badge = makeBadge("Required", color: .systemOrange)
+            badge.identifier = NSUserInterfaceItemIdentifier("configuration-required:\(item.name)")
+            badges.addArrangedSubview(badge)
         }
         if item.isSecret {
-            badges.addArrangedSubview(makeBadge("Secret", color: .secondaryLabelColor))
+            let badge = makeBadge("Secret", color: .secondaryLabelColor)
+            badge.identifier = NSUserInterfaceItemIdentifier("configuration-secret:\(item.name)")
+            badges.addArrangedSubview(badge)
         }
 
         let titleRow = NSStackView(views: [label, badges])
@@ -116,12 +122,16 @@ public final class ConfigurationVariablesView: NSView {
         titleRow.alignment = .centerY
         titleRow.spacing = 8
         titleRow.distribution = .fill
+        titleRow.setContentHuggingPriority(.required, for: .horizontal)
+        titleRow.widthAnchor.constraint(equalToConstant: 190).isActive = true
 
         let source = NSTextField(labelWithString: item.source)
         source.font = .systemFont(ofSize: 11)
         source.textColor = .tertiaryLabelColor
         source.lineBreakMode = .byTruncatingTail
-        source.setContentCompressionResistancePriority(.required, for: .horizontal)
+        source.alignment = .left
+        source.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        source.widthAnchor.constraint(equalToConstant: 78).isActive = true
 
         let valueControl: NSView
         if item.isSecret {
@@ -140,6 +150,7 @@ public final class ConfigurationVariablesView: NSView {
             field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             valueControl = field
         }
+        valueControl.widthAnchor.constraint(greaterThanOrEqualToConstant: 130).isActive = true
 
         let action = NSButton(
             title: item.isSecret ? (item.isConfigured ? "Replace secret" : "Set up") : "Remove",
@@ -151,17 +162,15 @@ public final class ConfigurationVariablesView: NSView {
         action.identifier = NSUserInterfaceItemIdentifier("configuration-action:\(item.name)")
         action.isHidden = !item.isSecret && !item.canRemove
         action.setContentHuggingPriority(.required, for: .horizontal)
-
-        let valueRow = NSStackView(views: [valueControl, source, action])
-        valueRow.orientation = .horizontal
-        valueRow.alignment = .centerY
-        valueRow.spacing = 10
-        valueRow.distribution = .fill
-        valueControl.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
-        source.widthAnchor.constraint(equalToConstant: 132).isActive = true
         action.widthAnchor.constraint(greaterThanOrEqualToConstant: 92).isActive = true
 
-        let content = NSStackView(views: [titleRow, valueRow])
+        let mainRow = NSStackView(views: [titleRow, valueControl, source, action])
+        mainRow.orientation = .horizontal
+        mainRow.alignment = .centerY
+        mainRow.spacing = 10
+        mainRow.distribution = .fill
+
+        let content = NSStackView(views: [mainRow])
         content.orientation = .vertical
         content.alignment = .width
         content.spacing = 8
@@ -179,9 +188,9 @@ public final class ConfigurationVariablesView: NSView {
         NSLayoutConstraint.activate([
             content.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
             content.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
-            content.topAnchor.constraint(equalTo: card.topAnchor, constant: 12),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -12),
-            card.heightAnchor.constraint(greaterThanOrEqualToConstant: item.warning == nil ? 76 : 98)
+            content.topAnchor.constraint(equalTo: card.topAnchor, constant: 10),
+            content.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -10),
+            card.heightAnchor.constraint(greaterThanOrEqualToConstant: item.warning == nil ? 58 : 82)
         ])
         return card
     }

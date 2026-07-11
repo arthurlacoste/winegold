@@ -56,6 +56,37 @@ final class ConfigurationVariablesViewTests: XCTestCase {
         XCTAssertGreaterThan(png.count, 8_000)
     }
 
+
+    func testLabelsAndBadgesAreVerticallyCenteredWithControls() throws {
+        _ = NSApplication.shared
+        let view = ConfigurationVariablesView(frame: NSRect(x: 0, y: 0, width: 610, height: 120))
+        view.translatesAutoresizingMaskIntoConstraints = true
+        view.apply([
+            ConfigurationVariablePresentation(
+                name: "UPLOAD_TOKEN",
+                label: "Service token",
+                value: "",
+                source: "Winegold",
+                isSecret: true,
+                isRequired: true,
+                isConfigured: true
+            )
+        ])
+        view.frame.size.height = view.intrinsicContentSize.height
+        view.layoutSubtreeIfNeeded()
+
+        let label = try XCTUnwrap(view.control(identifier: "configuration-label:UPLOAD_TOKEN"))
+        let required = try XCTUnwrap(view.control(identifier: "configuration-required:UPLOAD_TOKEN"))
+        let secret = try XCTUnwrap(view.control(identifier: "configuration-secret:UPLOAD_TOKEN"))
+        let value = try XCTUnwrap(view.control(identifier: "configuration-value:UPLOAD_TOKEN"))
+        let action = try XCTUnwrap(view.control(identifier: "configuration-action:UPLOAD_TOKEN"))
+
+        let centers = [label, required, secret, value, action].map { $0.convert($0.bounds, to: view).midY }
+        for center in centers.dropFirst() {
+            XCTAssertEqual(center, centers[0], accuracy: 2.0)
+        }
+    }
+
     func testNeedsSetupBadgeContentCanBeVerticallyCentered() {
         let badge = NSTextField(labelWithString: "Needs setup")
         badge.alignment = .center
