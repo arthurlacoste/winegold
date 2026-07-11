@@ -1,5 +1,6 @@
 import Cocoa
 import WinegoldCore
+import WinegoldUI
 
 class ActionPanelViewController: NSViewController {
     private let state: PanelState
@@ -1216,10 +1217,10 @@ private final class RecentActionRowView: NSView {
         super.layout()
         let rowWidth = bounds.width
         let rightInset: CGFloat = 10
-        let buttonWidth: CGFloat = 28
-        let runCardX = max(230, rowWidth - rightInset - buttonWidth)
-        let viewCardX = runCardX - 36
-        let saveCardX = viewCardX - (showsSaveButton ? 36 : 0)
+        let buttonSize = HistoryActionButtonStyle.size
+        let runCardX = max(230, rowWidth - rightInset - buttonSize.width)
+        let viewCardX = runCardX - buttonSize.width - HistoryActionButtonStyle.spacing
+        let saveCardX = viewCardX - (showsSaveButton ? buttonSize.width + HistoryActionButtonStyle.spacing : 0)
         let timeX = max(164, saveCardX - 52)
         let labelWidth = max(80, timeX - 42)
 
@@ -1227,12 +1228,13 @@ private final class RecentActionRowView: NSView {
         nameLabel.frame = NSRect(x: 30, y: 9, width: labelWidth, height: 18)
         subtitleLabel.frame = NSRect(x: 30, y: 29, width: labelWidth, height: 16)
         timeLabel.frame = NSRect(x: timeX, y: 9, width: 42, height: 18)
-        saveCard.frame = NSRect(x: saveCardX, y: 10, width: buttonWidth, height: 32)
-        saveIcon.frame = NSRect(x: saveCardX + 7, y: 18, width: 14, height: 14)
-        viewCard.frame = NSRect(x: viewCardX, y: 10, width: buttonWidth, height: 32)
-        viewIcon.frame = NSRect(x: viewCardX + 7, y: 18, width: 14, height: 14)
-        runCard.frame = NSRect(x: runCardX, y: 10, width: buttonWidth, height: 32)
-        runIcon.frame = NSRect(x: runCardX + 7, y: 18, width: 14, height: 14)
+        let buttonY = (bounds.height - buttonSize.height) / 2
+        saveCard.frame = NSRect(origin: NSPoint(x: saveCardX, y: buttonY), size: buttonSize)
+        saveIcon.frame = saveCard.frame
+        viewCard.frame = NSRect(origin: NSPoint(x: viewCardX, y: buttonY), size: buttonSize)
+        viewIcon.frame = viewCard.frame
+        runCard.frame = NSRect(origin: NSPoint(x: runCardX, y: buttonY), size: buttonSize)
+        runIcon.frame = runCard.frame
     }
 
     override func resetCursorRects() {
@@ -1295,38 +1297,44 @@ private final class RecentActionRowView: NSView {
         addSubview(timeLabel)
 
         if showsSaveButton {
-            saveCard.wantsLayer = true
-            saveCard.layer?.cornerRadius = 9
-            saveCard.layer?.backgroundColor = NSColor.systemYellow.withAlphaComponent(isSaved ? 0.22 : 0.10).cgColor
-            saveCard.layer?.borderWidth = 1
-            saveCard.layer?.borderColor = NSColor.systemYellow.withAlphaComponent(isSaved ? 0.55 : 0.28).cgColor
+            HistoryActionButtonStyle.configureCard(saveCard, backgroundColor: nil)
             addSubview(saveCard)
 
-            saveIcon.image = NSImage(systemSymbolName: isSaved ? "bookmark.fill" : "bookmark", accessibilityDescription: "Save")
-            saveIcon.contentTintColor = .systemYellow
+            HistoryActionButtonStyle.configureIcon(
+                saveIcon,
+                symbolName: isSaved ? "bookmark.fill" : "bookmark",
+                accessibilityDescription: "Save",
+                tintColor: .systemYellow
+            )
             addSubview(saveIcon)
         }
 
-        viewCard.wantsLayer = true
-        viewCard.layer?.cornerRadius = 9
-        viewCard.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.10).cgColor
-        viewCard.layer?.borderWidth = 1
-        viewCard.layer?.borderColor = NSColor.secondaryLabelColor.withAlphaComponent(0.20).cgColor
+        HistoryActionButtonStyle.configureCard(
+            viewCard,
+            backgroundColor: HistoryActionButtonStyle.eyeBackgroundColor
+        )
         addSubview(viewCard)
 
-        viewIcon.image = NSImage(systemSymbolName: "eye", accessibilityDescription: "View result")
-        viewIcon.contentTintColor = .secondaryLabelColor
+        HistoryActionButtonStyle.configureIcon(
+            viewIcon,
+            symbolName: "eye",
+            accessibilityDescription: "View result",
+            tintColor: HistoryActionButtonStyle.eyeTintColor
+        )
         addSubview(viewIcon)
 
-        runCard.wantsLayer = true
-        runCard.layer?.cornerRadius = 9
-        runCard.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
-        runCard.layer?.borderWidth = 1
-        runCard.layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.25).cgColor
+        HistoryActionButtonStyle.configureCard(
+            runCard,
+            backgroundColor: NSColor.controlAccentColor.withAlphaComponent(0.12)
+        )
         addSubview(runCard)
 
-        runIcon.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Rerun")
-        runIcon.contentTintColor = .controlAccentColor
+        HistoryActionButtonStyle.configureIcon(
+            runIcon,
+            symbolName: "arrow.clockwise",
+            accessibilityDescription: "Rerun",
+            tintColor: .controlAccentColor
+        )
         addSubview(runIcon)
     }
 }
