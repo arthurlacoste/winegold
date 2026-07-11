@@ -206,40 +206,26 @@ class SettingsViewController: NSViewController {
         settingsContentView.addSubview(hint)
         y += 38
 
-        actionPopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 300, height: 28), pullsDown: false)
+        actionPopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 250, height: 28), pullsDown: false)
         actionPopup.target = self
         actionPopup.action = #selector(actionSelectionChanged)
         settingsContentView.addSubview(actionPopup)
 
         let newButton = NSButton(title: "New", target: self, action: #selector(newAction))
-        newButton.bezelStyle = .rounded
-        newButton.frame = NSRect(x: padding + 312, y: y, width: 70, height: 28)
-        settingsContentView.addSubview(newButton)
-
         let saveButton = NSButton(title: "Save", target: self, action: #selector(saveAction))
-        saveButton.bezelStyle = .rounded
-        saveButton.frame = NSRect(x: padding + 392, y: y, width: 70, height: 28)
-        settingsContentView.addSubview(saveButton)
-
         let deleteButton = NSButton(title: "Delete", target: self, action: #selector(deleteAction))
-        deleteButton.bezelStyle = .rounded
-        deleteButton.frame = NSRect(x: padding + 472, y: y, width: 78, height: 28)
-        settingsContentView.addSubview(deleteButton)
-
         let revealButton = NSButton(title: "Reveal", target: self, action: #selector(revealRecipe))
-        revealButton.bezelStyle = .rounded
-        revealButton.frame = NSRect(x: padding + 560, y: y, width: 72, height: 28)
-        settingsContentView.addSubview(revealButton)
-
         let importButton = NSButton(title: "Install…", target: self, action: #selector(importYAML))
-        importButton.bezelStyle = .rounded
-        importButton.frame = NSRect(x: padding + 552, y: y, width: 82, height: 28)
-        settingsContentView.addSubview(importButton)
-
         let installURLButton = NSButton(title: "Install URL…", target: self, action: #selector(installRemoteURL))
-        installURLButton.bezelStyle = .rounded
-        installURLButton.frame = NSRect(x: padding + 638, y: y, width: 96, height: 28)
-        settingsContentView.addSubview(installURLButton)
+        let toolbarButtons = [newButton, saveButton, deleteButton, revealButton, importButton, installURLButton]
+        toolbarButtons.forEach { $0.bezelStyle = .rounded }
+        let toolbar = NSStackView(views: toolbarButtons)
+        toolbar.orientation = .horizontal
+        toolbar.alignment = .centerY
+        toolbar.spacing = 4
+        toolbar.distribution = .fillProportionally
+        toolbar.frame = NSRect(x: padding + 258, y: y, width: w - 258, height: 28)
+        settingsContentView.addSubview(toolbar)
         y += 38
 
         issuePopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 300, height: 26), pullsDown: false)
@@ -362,7 +348,7 @@ class SettingsViewController: NSViewController {
         settingsContentView.addSubview(configHeader)
         y += 40
 
-        let variablesView = ConfigurationVariablesView(frame: NSRect(x: padding + 110, y: y, width: w - 110, height: 220))
+        let variablesView = ConfigurationVariablesView(frame: NSRect(x: padding, y: y, width: w, height: 220))
         variablesView.translatesAutoresizingMaskIntoConstraints = true
         variablesView.autoresizingMask = [.width]
         variablesView.onValueChanged = { [weak self] name, value in self?.saveVariable(named: name, value: value) }

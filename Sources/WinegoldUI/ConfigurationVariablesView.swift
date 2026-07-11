@@ -47,7 +47,7 @@ public final class ConfigurationVariablesView: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         stack.orientation = .vertical
         stack.alignment = .width
-        stack.spacing = 12
+        stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -81,31 +81,30 @@ public final class ConfigurationVariablesView: NSView {
         }
 
         for value in values {
-            stack.addArrangedSubview(makeCard(value))
+            stack.addArrangedSubview(makeRow(value))
         }
         invalidateIntrinsicContentSize()
     }
 
-    private func makeCard(_ item: ConfigurationVariablePresentation) -> NSView {
-        let card = NSView()
-        card.wantsLayer = true
-        card.layer?.cornerRadius = 10
-        card.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.45).cgColor
-        card.translatesAutoresizingMaskIntoConstraints = false
+    private func makeRow(_ item: ConfigurationVariablePresentation) -> NSView {
+        let row = NSView()
+        row.translatesAutoresizingMaskIntoConstraints = false
+        row.identifier = NSUserInterfaceItemIdentifier("configuration-row:\(item.name)")
 
         let label = NSTextField(labelWithString: item.label)
-        label.font = .systemFont(ofSize: 13, weight: .semibold)
-        label.textColor = .labelColor
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textColor = .secondaryLabelColor
         label.alignment = .left
         label.identifier = NSUserInterfaceItemIdentifier("configuration-label:\(item.name)")
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.widthAnchor.constraint(equalToConstant: 100).isActive = true
 
         let badges = NSStackView()
         badges.orientation = .horizontal
         badges.spacing = 6
         badges.alignment = .centerY
+        badges.setContentHuggingPriority(.required, for: .horizontal)
         if item.isRequired {
             let badge = makeBadge("Required", color: .systemOrange)
             badge.identifier = NSUserInterfaceItemIdentifier("configuration-required:\(item.name)")
@@ -117,21 +116,13 @@ public final class ConfigurationVariablesView: NSView {
             badges.addArrangedSubview(badge)
         }
 
-        let titleRow = NSStackView(views: [label, badges])
-        titleRow.orientation = .horizontal
-        titleRow.alignment = .centerY
-        titleRow.spacing = 8
-        titleRow.distribution = .fill
-        titleRow.setContentHuggingPriority(.required, for: .horizontal)
-        titleRow.widthAnchor.constraint(equalToConstant: 190).isActive = true
-
         let source = NSTextField(labelWithString: item.source)
         source.font = .systemFont(ofSize: 11)
         source.textColor = .tertiaryLabelColor
         source.lineBreakMode = .byTruncatingTail
         source.alignment = .left
         source.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-        source.widthAnchor.constraint(equalToConstant: 78).isActive = true
+        source.widthAnchor.constraint(equalToConstant: 86).isActive = true
 
         let valueControl: NSView
         if item.isSecret {
@@ -150,7 +141,7 @@ public final class ConfigurationVariablesView: NSView {
             field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             valueControl = field
         }
-        valueControl.widthAnchor.constraint(greaterThanOrEqualToConstant: 130).isActive = true
+        valueControl.widthAnchor.constraint(greaterThanOrEqualToConstant: 140).isActive = true
 
         let action = NSButton(
             title: item.isSecret ? (item.isConfigured ? "Replace secret" : "Set up") : "Remove",
@@ -164,35 +155,46 @@ public final class ConfigurationVariablesView: NSView {
         action.setContentHuggingPriority(.required, for: .horizontal)
         action.widthAnchor.constraint(greaterThanOrEqualToConstant: 92).isActive = true
 
-        let mainRow = NSStackView(views: [titleRow, valueControl, source, action])
+        let controls = NSStackView(views: [badges, valueControl, source, action])
+        controls.orientation = .horizontal
+        controls.alignment = .centerY
+        controls.spacing = 10
+        controls.distribution = .fill
+        controls.translatesAutoresizingMaskIntoConstraints = false
+
+        let mainRow = NSStackView(views: [label, controls])
         mainRow.orientation = .horizontal
         mainRow.alignment = .centerY
         mainRow.spacing = 10
         mainRow.distribution = .fill
+        mainRow.translatesAutoresizingMaskIntoConstraints = false
+        row.addSubview(mainRow)
 
-        let content = NSStackView(views: [mainRow])
-        content.orientation = .vertical
-        content.alignment = .width
-        content.spacing = 8
+        var constraints = [
+            mainRow.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            mainRow.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            mainRow.topAnchor.constraint(equalTo: row.topAnchor),
+            row.heightAnchor.constraint(greaterThanOrEqualToConstant: item.warning == nil ? 28 : 52)
+        ]
 
         if let warning = item.warning, !warning.isEmpty {
             let warningLabel = NSTextField(wrappingLabelWithString: warning)
             warningLabel.font = .systemFont(ofSize: 11)
             warningLabel.textColor = .systemOrange
             warningLabel.identifier = NSUserInterfaceItemIdentifier("configuration-warning:\(item.name)")
-            content.addArrangedSubview(warningLabel)
+            warningLabel.translatesAutoresizingMaskIntoConstraints = false
+            row.addSubview(warningLabel)
+            constraints += [
+                warningLabel.leadingAnchor.constraint(equalTo: controls.leadingAnchor),
+                warningLabel.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+                warningLabel.topAnchor.constraint(equalTo: mainRow.bottomAnchor, constant: 4),
+                warningLabel.bottomAnchor.constraint(equalTo: row.bottomAnchor)
+            ]
+        } else {
+            constraints.append(mainRow.bottomAnchor.constraint(equalTo: row.bottomAnchor))
         }
-
-        content.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(content)
-        NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
-            content.topAnchor.constraint(equalTo: card.topAnchor, constant: 10),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -10),
-            card.heightAnchor.constraint(greaterThanOrEqualToConstant: item.warning == nil ? 58 : 82)
-        ])
-        return card
+        NSLayoutConstraint.activate(constraints)
+        return row
     }
 
     private func makeBadge(_ text: String, color: NSColor) -> NSTextField {

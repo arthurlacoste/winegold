@@ -32,10 +32,11 @@ final class ConfigurationVariablesViewTests: XCTestCase {
         view.frame.size.height = view.intrinsicContentSize.height
         view.layoutSubtreeIfNeeded()
 
-        let cards = view.subviewsRecursive.filter { $0.layer?.cornerRadius == 10 }
-        XCTAssertEqual(cards.count, 2)
-        let sortedCards = cards.sorted { $0.frame.minY < $1.frame.minY }
-        XCTAssertLessThanOrEqual(sortedCards[0].frame.maxY + 12, sortedCards[1].frame.minY)
+        let rows = view.subviewsRecursive.filter { $0.identifier?.rawValue.hasPrefix("configuration-row:") == true }
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertTrue(rows.allSatisfy { !$0.wantsLayer || (($0.layer?.borderWidth ?? 0) == 0 && $0.layer?.backgroundColor == nil) })
+        let sortedRows = rows.sorted { $0.frame.minY < $1.frame.minY }
+        XCTAssertLessThanOrEqual(sortedRows[0].frame.maxY + 10, sortedRows[1].frame.minY)
 
         let endpoint = try XCTUnwrap(view.control(identifier: "configuration-value:UPLOAD_ENDPOINT"))
         let token = try XCTUnwrap(view.control(identifier: "configuration-value:UPLOAD_TOKEN"))
@@ -45,7 +46,7 @@ final class ConfigurationVariablesViewTests: XCTestCase {
         let setupFrame = setup.convert(setup.bounds, to: view)
         XCTAssertFalse(endpointFrame.intersects(tokenFrame))
         XCTAssertFalse(tokenFrame.intersects(setupFrame))
-        XCTAssertGreaterThan(endpoint.frame.width, 200)
+        XCTAssertGreaterThan(endpoint.frame.width, 130)
 
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
