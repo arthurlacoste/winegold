@@ -215,20 +215,15 @@ class SettingsViewController: NSViewController {
         view.addSubview(issueLabel)
         y += 36
 
-        let exportButton = NSButton(title: "Export YAML…", target: self, action: #selector(exportYAML))
-        exportButton.bezelStyle = .rounded
-        exportButton.frame = NSRect(x: padding, y: y, width: 120, height: 28)
-        view.addSubview(exportButton)
-
         let promptButton = NSButton(title: "Help prompt", target: self, action: #selector(openHelpPrompt))
         promptButton.bezelStyle = .rounded
-        promptButton.frame = NSRect(x: padding + 132, y: y, width: 120, height: 28)
+        promptButton.frame = NSRect(x: padding, y: y, width: 120, height: 28)
         view.addSubview(promptButton)
 
-        let helpLine = NSTextField(labelWithString: "Export the selected action, or ask ChatGPT to improve the current script.")
+        let helpLine = NSTextField(labelWithString: "Ask ChatGPT to improve the current recipe.")
         helpLine.font = .systemFont(ofSize: 12)
         helpLine.textColor = .secondaryLabelColor
-        helpLine.frame = NSRect(x: padding + 266, y: y + 5, width: w - 266, height: 18)
+        helpLine.frame = NSRect(x: padding + 134, y: y + 5, width: w - 134, height: 18)
         view.addSubview(helpLine)
         y += 48
 
@@ -455,67 +450,9 @@ class SettingsViewController: NSViewController {
     }
 
 
-    private func currentEditedAction() -> Action? {
-        let existing = selectedActionID.flatMap { id in actions.first { $0.id == id } }
-        return formAction(existing: existing)
-    }
-
-    private func yamlString(for action: Action) -> String {
-        RecipeSerializer().serialize(RecipeDocument(
-            id: action.id.uuidString,
-            name: action.name,
-            description: action.description,
-            enabled: action.enabled,
-            trigger: action.triggerExpression ?? extensionExpression(action.acceptedExtensions),
-            command: shellCommand(for: action),
-            successMessage: action.successMessage
-        ))
-    }
-
-    private func yamlTrigger(_ trigger: String) -> String {
-        guard trigger.contains("\n") || trigger.count > 80 else { return yamlScalar(trigger) }
-        return ">\n" + trigger.split(separator: "\n", omittingEmptySubsequences: false).map { "  \($0)" }.joined(separator: "\n")
-    }
-
-
-    private func yamlSuccessMessage(_ message: String?) -> String {
-        guard let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
-        return "\nsuccessMessage: \(yamlScalar(message))"
-    }
-
     private func normalizedSuccessMessage() -> String? {
         let value = successMessageField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : value
-    }
-
-    private func yamlExec(_ command: String) -> String {
-        let normalized = command
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-
-        guard normalized.contains("\n") else { return yamlScalar(normalized) }
-
-        let indented = normalized
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { "    \($0)" }
-            .joined(separator: "\n")
-        return "|\n\(indented)"
-    }
-
-    private func yamlScalar(_ value: String) -> String {
-        let escaped = value
-            .replacingOccurrences(of: "'", with: "''")
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-        return "'\(escaped)'"
-    }
-
-
-    private func filenameSlug(_ value: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        let scalars = value.lowercased().unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }
-        let slug = String(scalars).split(separator: "-").joined(separator: "-")
-        return slug.isEmpty ? "winegold-action" : slug
     }
 
     private func currentExtensions() -> [String] {
@@ -641,24 +578,6 @@ class SettingsViewController: NSViewController {
         }
     }
 
-
-    @objc private func exportYAML() {
-        guard let action = currentEditedAction() else {
-            showMessage("Name, a valid trigger, and command are required before exporting.")
-            return
-        }
-        let panel = NSSavePanel()
-        panel.title = "Export Winegold YAML"
-        panel.nameFieldStringValue = "\(filenameSlug(action.name)).wg.yml"
-        panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try yamlString(for: action).write(to: url, atomically: true, encoding: .utf8)
-            showMessage("Exported: \(url.lastPathComponent)")
-        } catch {
-            showMessage("Export failed: \(error.localizedDescription)")
-        }
-    }
 
     @objc private func openHelpPrompt() {
         let pasteboard = NSPasteboard.general

@@ -2,7 +2,7 @@
 
 Winegold recipes are local YAML files ending in `.wg.yml`. They live under `~/.winegold/recipes/`, including ordinary nested category folders. Winegold watches this folder and keeps SQLite only as a derived index.
 
-Legacy `.add.yml` files can still be imported. They are converted to `.wg.yml`; new recipes and exports use only `.wg.yml`.
+Legacy `.add.yml` files can still be imported. They are converted to `.wg.yml`; new recipes use only `.wg.yml`.
 
 ## Minimal example
 
@@ -17,7 +17,7 @@ cmd:
   exec: 'printf "%s" "{input}" | pbcopy'
 ```
 
-`trigger` is one readable expression. The same expression is used by imported/exported scripts, the Settings builder, and direct expression editing.
+`trigger` is one readable expression. The same expression is used by imported recipes, the Settings builder, and direct expression editing.
 
 ## Nested expressions
 
@@ -130,7 +130,7 @@ requirements
 
 `successMessage` is optional and appears only after success. Unknown YAML fields are ignored.
 
-New exports always use `.wg.yml` and expression triggers. Winegold still imports the older `trigger.fileExtension` list and normalizes it internally, but do not use that form for new scripts.
+New recipes always use `.wg.yml` and expression triggers. Winegold still imports the older `trigger.fileExtension` list and normalizes it internally, but do not use that form for new scripts.
 
 ## Examples
 
@@ -189,4 +189,4 @@ Support paths must be relative to the recipe, stay inside its source folder, and
 
 Recipe subfolders become local action categories. The category and manual display order stay in SQLite; they are not written into the recipe.
 
-Settings updates known recipe fields atomically while preserving unknown top-level YAML fields, comments, version, declared files, requirements, and file permissions where practical. Exports always use `.wg.yml`.
+Settings updates known recipe fields atomically while preserving unknown top-level YAML fields, comments, version, declared files, requirements, and file permissions where practical. Use **Reveal** to open the source recipe in Finder.

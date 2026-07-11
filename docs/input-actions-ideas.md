@@ -32,7 +32,6 @@ Reveal in Finder
 Copy path
 Copy filename
 Import YAML
-Export YAML
 Convert image
 Resize image
 Open URL
