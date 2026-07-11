@@ -13,14 +13,18 @@ let package = Package(
             name: "WinegoldCore",
             dependencies: ["CSQLite"]
         ),
+        .target(
+            name: "WinegoldUI",
+            dependencies: ["WinegoldCore"]
+        ),
         .executableTarget(
             name: "WinegoldNative",
-            dependencies: ["WinegoldCore"],
+            dependencies: ["WinegoldCore", "WinegoldUI"],
             exclude: ["WinegoldNative-Info.plist", "Resources"]
         ),
         .testTarget(
             name: "WinegoldNativeTests",
-            dependencies: ["WinegoldCore"]
+            dependencies: ["WinegoldCore", "WinegoldUI"]
         )
     ]
 )

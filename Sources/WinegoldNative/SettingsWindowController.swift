@@ -1,5 +1,6 @@
 import Cocoa
 import WinegoldCore
+import WinegoldUI
 
 class SettingsWindowController: NSWindowController {
     private let store: SettingsStore

@@ -37,4 +37,10 @@ final class TriggerExpressionTests: XCTestCase {
         XCTAssertEqual(TriggerValidator().issues(in: try parser.parse("host greaterThan 2")).first, "greaterThan requires the numeric size field")
         XCTAssertTrue(TriggerValidator().issues(in: try parser.parse("size lessThan 20")).isEmpty)
     }
+
+    func testBooleanShortcutSerializesWithoutOperatorOrValue() throws {
+        let expression = TriggerExpression.condition(field: "isFile", operator: .equals, value: nil)
+        XCTAssertEqual(serializer.serialize(expression), "isFile")
+        XCTAssertEqual(try parser.parse(serializer.serialize(expression)), expression)
+    }
 }
