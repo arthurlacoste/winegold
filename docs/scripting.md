@@ -178,7 +178,7 @@ Non-secret variables resolve in order:
 
 Secret variables resolve in order:
 
-1. macOS Keychain value
+1. ~/.winegold/secrets.json value
 2. Environment inherited by the Winegold app
 3. missing
 

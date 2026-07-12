@@ -554,7 +554,7 @@ class SettingsViewController: NSViewController {
     private func promptForSecret(label: String) -> String? {
         let alert = makeAppAlert()
         alert.messageText = "Set up \(label)"
-        alert.informativeText = "Enter the required value. Winegold will store it in macOS Keychain."
+        alert.informativeText = "Enter the required value. Winegold will store it."
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
         let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
