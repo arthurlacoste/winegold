@@ -95,9 +95,10 @@ final class ConfigurationVariablesViewTests: XCTestCase {
 
         XCTAssertTrue(value is NSSecureTextField)
         XCTAssertLessThan(required.convert(required.bounds, to: view).midY, label.convert(label.bounds, to: view).midY)
-        let valueFrame = value.convert(value.bounds, to: view)
         let actionFrame = action.convert(action.bounds, to: view)
-        XCTAssertEqual(actionFrame.minY, valueFrame.minY, accuracy: 1.0)
+        let valueAlignmentFrame = value.convert(value.alignmentRect(forFrame: value.bounds), to: view)
+        let actionAlignmentFrame = action.convert(action.alignmentRect(forFrame: action.bounds), to: view)
+        XCTAssertEqual(actionAlignmentFrame.minY, valueAlignmentFrame.minY, accuracy: 1.0)
         XCTAssertGreaterThanOrEqual(actionFrame.height, 20)
         XCTAssertLessThanOrEqual(actionFrame.height, 44)
     }
