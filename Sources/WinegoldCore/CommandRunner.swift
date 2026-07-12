@@ -128,7 +128,7 @@ public actor CommandRunner {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: request.executablePath)
-        process.arguments = request.arguments
+        process.arguments = argumentsWithPipelineFailurePropagation(for: request)
 
         if let wd = request.workingDirectory {
             process.currentDirectoryURL = URL(fileURLWithPath: wd)
@@ -231,5 +231,18 @@ public actor CommandRunner {
                 id: id, actionId: UUID(), status: .failed, startedAt: startTime, endedAt: Date()
             )
         }
+    }
+
+    private func argumentsWithPipelineFailurePropagation(for request: CommandExecutionRequest) -> [String] {
+        guard request.executablePath == "/bin/zsh",
+              let commandFlagIndex = request.arguments.firstIndex(where: { $0 == "-c" || $0 == "-lc" }),
+              request.arguments.indices.contains(commandFlagIndex + 1) else {
+            return request.arguments
+        }
+
+        var arguments = request.arguments
+        let commandIndex = commandFlagIndex + 1
+        arguments[commandIndex] = "set -o pipefail\n" + arguments[commandIndex]
+        return arguments
     }
 }

@@ -3,7 +3,7 @@ import WinegoldCore
 import WinegoldUI
 import UniformTypeIdentifiers
 
-class SettingsWindowController: NSWindowController {
+class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let store: SettingsStore
     private let actionStore: ActionStore
     private let recipeCoordinator: RecipeCoordinator?
@@ -14,6 +14,7 @@ class SettingsWindowController: NSWindowController {
     private let onShortcutChanged: () -> Void
     private let onPanelSideChanged: (PanelSide) -> Void
     private let onConfigurationChanged: () -> Void
+    private var onSetupCancelled: (() -> Void)?
 
     init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, remoteRecipeInstaller: RemoteRecipeInstaller? = nil, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
         self.store = store
@@ -54,6 +55,7 @@ class SettingsWindowController: NSWindowController {
         window.onSaveShortcut = { [weak vc] in vc?.saveFromShortcut() }
 
         super.init(window: window)
+        window.delegate = self
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
@@ -73,6 +75,17 @@ class SettingsWindowController: NSWindowController {
     func showNewScriptTemplate(for files: [URL]) {
         show()
         (window?.contentViewController as? SettingsViewController)?.prepareNewScriptTemplate(for: files)
+    }
+
+    func showConfiguration(for actionID: UUID, onCancel: @escaping () -> Void) {
+        onSetupCancelled = onCancel
+        show()
+        (window?.contentViewController as? SettingsViewController)?.selectAction(actionID)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onSetupCancelled?()
+        onSetupCancelled = nil
     }
 }
 
@@ -378,6 +391,15 @@ class SettingsViewController: NSViewController {
     func refreshActions() {
         let selected = selectedActionID
         reloadActions(select: selected)
+    }
+
+    func selectAction(_ actionID: UUID) {
+        reloadActions(select: actionID)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let configurationView else { return }
+            configurationView.scrollToVisible(configurationView.bounds)
+            configurationView.window?.makeFirstResponder(configurationView)
+        }
     }
 
     func prepareNewScriptTemplate(for files: [URL]) {

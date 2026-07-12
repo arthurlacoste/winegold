@@ -2,6 +2,10 @@ import Cocoa
 import WinegoldCore
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    private struct PendingSetupRun {
+        let action: Action
+        let files: [URL]
+    }
     private enum PanelInvocation {
         case shortcut
         case menu
@@ -26,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private weak var showPanelMenuItem: NSMenuItem?
     private var variableStore: RecipeVariableStore?
     private var keychainStore: KeychainSecretStore?
+    private var pendingSetupRun: PendingSetupRun?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logMsg("[AppDelegate] app started")
@@ -47,6 +52,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             try recipeCoordinator.reconcile()
             settingsWC?.refreshActions()
             refreshPanelActions()
+            completePendingSetupIfReady()
         } catch {
             logMsg("[AppDelegate] active recipe reconcile failed: \(error.localizedDescription)")
         }
@@ -334,6 +340,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onConfigurationChanged: { [weak self] in
                     self?.refreshPanelActions()
+                    self?.completePendingSetupIfReady()
                 }
             )
         }
@@ -380,8 +387,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let storedActions = (try? store.listEnabledActions()) ?? []
+        let storedActions = panelStoredActions(store)
         let actions = runtimeActions(storedActions, for: files.first)
+        let requirements = setupRequirements(for: actions)
         var matched = ActionMatcher().matchingActions(for: files, actions: actions)
         matched = prioritizeInstallActionIfNeeded(matched, files: files)
         if invocation == .drag, matched.isEmpty, !shouldAutoImportScripts(files) {
@@ -406,7 +414,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 allActions: actions,
                 history: history,
                 savedHistory: savedHistory,
-                savedHistoryIds: Set(savedHistory.map { $0.id })
+                savedHistoryIds: Set(savedHistory.map { $0.id }),
+                setupRequirements: requirements
             )
             panel = existingPanel
             logMsg("[AppDelegate] reused existing panel")
@@ -419,9 +428,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 history: history,
                 savedHistory: savedHistory,
                 savedHistoryIds: Set(savedHistory.map { $0.id }),
+                setupRequirements: requirements,
                 settingsStore: settingsStore,
                 onRunAction: { [weak self] action, files in
                     self?.runAction(action, files: files)
+                },
+                onSetupAction: { [weak self] action, files in
+                    self?.beginSetup(action, files: files)
                 },
                 onToggleSavedRun: { [weak self] item in
                     self?.toggleSavedRun(item)
@@ -456,11 +469,117 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func refreshPanelActions() {
         guard let actionStore else { return }
-        let storedActions = (try? actionStore.listEnabledActions()) ?? []
+        let storedActions = panelStoredActions(actionStore)
         let files = actionPanelWindow?.currentFiles ?? []
         let actions = runtimeActions(storedActions, for: files.first)
         let matched = ActionMatcher().matchingActions(for: files, actions: actions)
-        actionPanelWindow?.replaceActions(allActions: actions, actions: matched)
+        actionPanelWindow?.replaceActions(
+            allActions: actions,
+            actions: matched,
+            setupRequirements: setupRequirements(for: actions)
+        )
+    }
+
+    private func panelStoredActions(_ store: ActionStore) -> [Action] {
+        let available = (try? store.listEnabledActions()) ?? []
+        let blocked = (try? store.listNeedingSetup()) ?? []
+        return available + blocked.filter { candidate in
+            !available.contains(where: { $0.id == candidate.id })
+        }
+    }
+
+    private func setupRequirements(for actions: [Action]) -> [UUID: RecipeSetupRequirements] {
+        guard let recipeCoordinator else { return [:] }
+        return Dictionary(uniqueKeysWithValues: actions.compactMap { action in
+            guard let requirements = try? recipeCoordinator.setupRequirements(for: action.id),
+                  !requirements.isReady else { return nil }
+            return (action.id, requirements)
+        })
+    }
+
+    private func beginSetup(_ action: Action, files: [URL]) {
+        guard let requirements = try? recipeCoordinator?.setupRequirements(for: action.id),
+              !requirements.isReady else {
+            runAction(action, files: files)
+            return
+        }
+
+        if requirements.missingCommands.count + requirements.missingVariables.count > 1 {
+            let overview = makeAppAlert()
+            overview.messageText = "Set up \(action.name)"
+            overview.informativeText = requirements.summary
+            overview.addButton(withTitle: "Complete setup and run")
+            overview.addButton(withTitle: "Cancel")
+            guard overview.runModal() == .alertFirstButtonReturn else { return }
+        }
+
+        pendingSetupRun = PendingSetupRun(action: action, files: files)
+        if !requirements.missingCommands.isEmpty,
+           !confirmAndLaunchInstallation(for: requirements.missingCommands) {
+            pendingSetupRun = nil
+            return
+        }
+        if !requirements.missingVariables.isEmpty {
+            actionPanelWindow?.hide()
+            ensureSettingsWindow()?.showConfiguration(for: action.id) { [weak self] in
+                guard self?.pendingSetupRun?.action.id == action.id else { return }
+                self?.pendingSetupRun = nil
+            }
+        }
+    }
+
+    private func confirmAndLaunchInstallation(for commands: [String]) -> Bool {
+        let valid = commands.filter { command in
+            !command.isEmpty && command.unicodeScalars.allSatisfy {
+                CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._+-")).contains($0)
+            }
+        }
+        guard valid.count == commands.count else { return false }
+        let installCommand = "brew install " + valid.map(shellQuote).joined(separator: " ")
+        let alert = makeAppAlert()
+        alert.messageText = valid.count == 1 ? "Install \(valid[0])?" : "Install required commands?"
+        alert.informativeText = "Winegold will open Terminal with:\n\n\(installCommand)\n\nReview the command before running it."
+        alert.addButton(withTitle: "Run in Terminal")
+        alert.addButton(withTitle: "Open instructions")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            let escaped = installCommand.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-e", "tell application \"Terminal\" to do script \"\(escaped)\""]
+            try? process.run()
+            return true
+        case .alertSecondButtonReturn:
+            if let command = valid.first,
+               let encoded = command.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+               let url = URL(string: "https://formulae.brew.sh/formula/\(encoded)") {
+                NSWorkspace.shared.open(url)
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func completePendingSetupIfReady() {
+        guard let pending = pendingSetupRun, let recipeCoordinator else { return }
+        _ = try? recipeCoordinator.reconcile()
+        guard let requirements = try? recipeCoordinator.setupRequirements(for: pending.action.id),
+              requirements.isReady else {
+            refreshPanelActions()
+            settingsWC?.refreshActions()
+            return
+        }
+        pendingSetupRun = nil
+        refreshPanelActions()
+        settingsWC?.refreshActions()
+        runAction(pending.action, files: pending.files)
+    }
+
+    private func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\\"'\\\"'") + "'"
     }
 
     private func toggleActionFavorite(_ action: Action) {
@@ -580,6 +699,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func runAction(_ action: Action, files: [URL]) {
+        if let requirements = try? recipeCoordinator?.setupRequirements(for: action.id),
+           !requirements.isReady {
+            beginSetup(action, files: files)
+            return
+        }
         actionPanelWindow?.markActionTriggered()
         guard let runHistoryStore = runHistoryStore else { return }
 

@@ -1,5 +1,6 @@
 import Cocoa
 import WinegoldCore
+import WinegoldUI
 
 class ActionCardView: NSView {
     override var isFlipped: Bool { true }
@@ -7,7 +8,9 @@ class ActionCardView: NSView {
     private let action: Action
     private let status: ActionValidationStatus
     private let isActive: Bool
+    private let setupRequirements: RecipeSetupRequirements?
     private let onDrop: ([URL]) -> Void
+    private let onSetup: (Action) -> Void
     private let onToggleFavorite: (Action) -> Void
     private let onMoveBefore: (Action, Action) -> Void
     private let isGroupedRow: Bool
@@ -21,6 +24,7 @@ class ActionCardView: NSView {
     private let favoriteButton = NSButton()
     private let runCard = NSView()
     private let runIcon = NSImageView()
+    private let runLabel = NSTextField(labelWithString: "")
 
     private static let actionDragType = NSPasteboard.PasteboardType("com.winegold.action-id")
 
@@ -28,16 +32,20 @@ class ActionCardView: NSView {
         action: Action,
         status: ActionValidationStatus,
         isActive: Bool,
+        setupRequirements: RecipeSetupRequirements? = nil,
         isGroupedRow: Bool = false,
         onDrop: @escaping ([URL]) -> Void,
+        onSetup: @escaping (Action) -> Void = { _ in },
         onToggleFavorite: @escaping (Action) -> Void,
         onMoveBefore: @escaping (Action, Action) -> Void
     ) {
         self.action = action
         self.status = status
         self.isActive = isActive
+        self.setupRequirements = setupRequirements
         self.isGroupedRow = isGroupedRow
         self.onDrop = onDrop
+        self.onSetup = onSetup
         self.onToggleFavorite = onToggleFavorite
         self.onMoveBefore = onMoveBefore
         super.init(frame: NSRect(x: 0, y: 0, width: 312, height: 64))
@@ -60,9 +68,10 @@ class ActionCardView: NSView {
             let subtitle = trigger?.isEmpty == false
                 ? trigger!
                 : (action.acceptedExtensions.contains("*") ? "all files" : action.acceptedExtensions.joined(separator: ", "))
-            configureSubtitle(subtitle)
-            configureFavoriteButton()
-            configureRunCard()
+            configureSubtitle(setupRequirements?.summary ?? subtitle)
+            if setupRequirements == nil { configureFavoriteButton() }
+            else { favoriteButton.isHidden = true }
+            configureRunCard(label: setupRequirements?.actionLabel)
         case .missingDependency(let reason), .configError(let reason):
             layer?.backgroundColor = WinegoldTheme.cardBackground(in: self, disabled: true).cgColor
             let icon = status.isMissing ? "exclamationmark.triangle" : "xmark.octagon"
@@ -115,9 +124,9 @@ class ActionCardView: NSView {
         super.layout()
         let rightInset: CGFloat = 12
         let leftTextX: CGFloat = 48
-        let buttonSize = NSSize(width: 34, height: 30)
+        let buttonSize = NSSize(width: setupRequirements == nil ? 34 : 116, height: 30)
         let buttonX = max(leftTextX + 120, bounds.width - rightInset - buttonSize.width)
-        let textRightPadding: CGFloat = caseAvailable ? 88 : 12
+        let textRightPadding: CGFloat = caseAvailable ? (setupRequirements == nil ? 88 : 150) : 12
         let textWidth = max(80, bounds.width - leftTextX - textRightPadding)
 
         leadingIcon.frame = NSRect(x: 12, y: 20, width: 24, height: 24)
@@ -126,6 +135,11 @@ class ActionCardView: NSView {
         favoriteButton.frame = NSRect(x: buttonX - 30, y: 18, width: 24, height: 24)
         runCard.frame = NSRect(x: buttonX, y: 16, width: buttonSize.width, height: buttonSize.height)
         runIcon.frame = runCard.frame
+        let runLabelHeight: CGFloat = 16
+        runLabel.frame = verticallyCenteredTextFrame(
+            in: runCard.frame,
+            textHeight: runLabelHeight
+        )
     }
 
     override func resetCursorRects() {
@@ -164,7 +178,8 @@ class ActionCardView: NSView {
         }
         logMsg("[ActionCardView] clicked action: \(action.name)")
         // Keep pressed visual state until the panel refreshes into loading/result.
-        onDrop([])
+        if setupRequirements == nil { onDrop([]) }
+        else { onSetup(action) }
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -273,7 +288,7 @@ class ActionCardView: NSView {
         onToggleFavorite(action)
     }
 
-    private func configureRunCard() {
+    private func configureRunCard(label: String? = nil) {
         runCard.wantsLayer = true
         runCard.layer?.cornerRadius = 10
         runCard.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.11).cgColor
@@ -281,14 +296,24 @@ class ActionCardView: NSView {
         runCard.layer?.borderColor = NSColor.clear.cgColor
         addSubview(runCard)
 
-        runIcon.image = NSImage(
-            systemSymbolName: "play.fill",
-            accessibilityDescription: "Run"
-        )?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .medium))
-        runIcon.imageAlignment = .alignCenter
-        runIcon.imageScaling = .scaleNone
-        runIcon.contentTintColor = NSColor.controlAccentColor.withAlphaComponent(0.82)
-        addSubview(runIcon)
+        if let label {
+            runLabel.stringValue = label
+            runLabel.alignment = .center
+            runLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+            runLabel.textColor = .controlAccentColor
+            runLabel.lineBreakMode = .byTruncatingTail
+            runLabel.identifier = NSUserInterfaceItemIdentifier("action-card-run-label")
+            addSubview(runLabel)
+        } else {
+            runIcon.image = NSImage(
+                systemSymbolName: "play.fill",
+                accessibilityDescription: "Run"
+            )?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .medium))
+            runIcon.imageAlignment = .alignCenter
+            runIcon.imageScaling = .scaleNone
+            runIcon.contentTintColor = NSColor.controlAccentColor.withAlphaComponent(0.82)
+            addSubview(runIcon)
+        }
     }
 
     private var caseAvailable: Bool {

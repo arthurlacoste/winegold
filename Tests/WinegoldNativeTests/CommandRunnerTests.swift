@@ -44,6 +44,31 @@ final class CommandRunnerTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 1)
     }
 
+    func testMissingCommandInPipelineFailsEvenWhenLastCommandSucceeds() async {
+        let request = CommandExecutionRequest(
+            executablePath: "/bin/zsh",
+            arguments: ["-lc", "winegold-command-that-does-not-exist | /usr/bin/true"]
+        )
+
+        let result = await runner.run(request: request)
+
+        XCTAssertEqual(result.status, .failed)
+        XCTAssertNotEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stderr.contains("command not found"))
+    }
+
+    func testFailingMiddlePipelineStageFailsRun() async {
+        let request = CommandExecutionRequest(
+            executablePath: "/bin/zsh",
+            arguments: ["-lc", "/bin/echo input | /usr/bin/false | /usr/bin/true"]
+        )
+
+        let result = await runner.run(request: request)
+
+        XCTAssertEqual(result.status, .failed)
+        XCTAssertNotEqual(result.exitCode, 0)
+    }
+
     func testNonExistentExecutable() async {
         let request = CommandExecutionRequest(
             executablePath: "/usr/bin/nonexistent_abc123"

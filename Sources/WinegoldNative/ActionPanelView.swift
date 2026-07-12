@@ -5,6 +5,7 @@ import WinegoldUI
 class ActionPanelViewController: NSViewController {
     private let state: PanelState
     private let onRunAction: (Action, [URL]) -> Void
+    private let onSetupAction: (Action, [URL]) -> Void
     private let onToggleSavedRun: (RunHistoryItem) -> Void
     private let onOpenSettings: () -> Void
     private let onToggleFavorite: (Action) -> Void
@@ -44,6 +45,7 @@ class ActionPanelViewController: NSViewController {
     init(
         state: PanelState,
         onRunAction: @escaping (Action, [URL]) -> Void,
+        onSetupAction: @escaping (Action, [URL]) -> Void,
         onToggleSavedRun: @escaping (RunHistoryItem) -> Void,
         onOpenSettings: @escaping () -> Void,
         onToggleFavorite: @escaping (Action) -> Void,
@@ -51,6 +53,7 @@ class ActionPanelViewController: NSViewController {
     ) {
         self.state = state
         self.onRunAction = onRunAction
+        self.onSetupAction = onSetupAction
         self.onToggleSavedRun = onToggleSavedRun
         self.onOpenSettings = onOpenSettings
         self.onToggleFavorite = onToggleFavorite
@@ -181,8 +184,7 @@ class ActionPanelViewController: NSViewController {
             }
         }
 
-        let minimumHeight: CGFloat = shouldShowActions ? 520 : y + 24
-        installScrollView(panelWidth: panelWidth, contentHeight: max(y + 20, minimumHeight))
+        installScrollView(panelWidth: panelWidth, contentHeight: y + 20)
     }
 
     private func addDropZone(y: CGFloat, w: CGFloat) -> CGFloat {
@@ -300,7 +302,7 @@ class ActionPanelViewController: NSViewController {
     }
 
     private func installScrollView(panelWidth: CGFloat, contentHeight: CGFloat) {
-        currentContentHeight = contentHeight
+        currentContentHeight = contentHeight + footerHeight
         contentView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: contentHeight)
         scrollView.documentView = contentView
         scrollView.hasVerticalScroller = !state.isCompact && shouldShowActions
@@ -516,16 +518,21 @@ class ActionPanelViewController: NSViewController {
 
             for (index, action) in group.actions.enumerated() {
                 let status = validator.validate(action)
+                let setupRequirements = state.setupRequirements[action.id]
                 let card = ActionCardView(
                     action: action,
                     status: status,
                     isActive: state.activeActionId == action.id,
+                    setupRequirements: setupRequirements,
                     isGroupedRow: true,
                     onDrop: { [weak self] droppedFiles in
                         let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
                         logMsg("[PanelVC] onDrop action=\(action.name) files=\(files.map { $0.lastPathComponent })")
                         guard !files.isEmpty else { return }
                         self?.startRun(action: action, files: files)
+                    },
+                    onSetup: { [weak self] action in
+                        self?.onSetupAction(action, self?.state.files ?? [])
                     },
                     onToggleFavorite: { [weak self] action in
                         self?.onToggleFavorite(action)

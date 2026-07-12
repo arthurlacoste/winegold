@@ -134,9 +134,9 @@ public final class RecipeCoordinator {
     private let index: RecipeIndexStore
     private let fileStore: RecipeFileStore
     private let variableStore: RecipeVariableStore?
-    private let keychainStore: KeychainSecretStore?
+    private let keychainStore: (any KeychainSecretStoreProtocol)?
 
-    public init(root: URL, db: Database, scanner: RecipeScanner = RecipeScanner(), parser: RecipeParser = RecipeParser(), variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil) {
+    public init(root: URL, db: Database, scanner: RecipeScanner = RecipeScanner(), parser: RecipeParser = RecipeParser(), variableStore: RecipeVariableStore? = nil, keychainStore: (any KeychainSecretStoreProtocol)? = nil) {
         self.root = root
         self.scanner = scanner
         self.parser = parser
@@ -198,6 +198,25 @@ public final class RecipeCoordinator {
         guard let variableStore, let keychainStore else { return .ready }
         let resolver = RecipeVariableResolver(variableStore: variableStore, keychainStore: keychainStore)
         return resolver.setupStatus(variables: variables, externalID: record.document.id ?? "", appEnvironment: ProcessInfo.processInfo.environment)
+    }
+
+    public func setupRequirements(for actionID: UUID) throws -> RecipeSetupRequirements? {
+        guard let path = try index.path(for: actionID) else { return nil }
+        let record = try parser.parse(url: path)
+        let missingCommands = RecipeRequirementChecker().missingCommands(record.document.requirements)
+        var missingVariables: [RecipeVariable] = []
+        if let variables = record.document.variables, !variables.isEmpty,
+           let variableStore, let keychainStore {
+            let resolver = RecipeVariableResolver(variableStore: variableStore, keychainStore: keychainStore)
+            if case let .needsSetup(missing) = resolver.setupStatus(
+                variables: variables,
+                externalID: record.document.id ?? "",
+                appEnvironment: ProcessInfo.processInfo.environment
+            ) {
+                missingVariables = missing
+            }
+        }
+        return RecipeSetupRequirements(missingCommands: missingCommands, missingVariables: missingVariables)
     }
 
     public func repairDraft(at path: URL) throws -> RecipeDocument {

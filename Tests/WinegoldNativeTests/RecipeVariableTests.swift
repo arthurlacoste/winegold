@@ -713,6 +713,42 @@ final class RecipeVariableTests: XCTestCase {
         }
     }
 
+    func testCoordinatorReportsCommandAndVariableSetupBlockers() throws {
+        let root = temporaryDirectory().appendingPathComponent("recipes")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let recipe = """
+        id: winegold.setup-test
+        name: Setup test
+        trigger: extension in {"txt"}
+        requires:
+          commands:
+            - winegold-command-that-does-not-exist
+        variables:
+          TOKEN:
+            required: true
+            secret: true
+        cmd:
+          exec: 'echo "$TOKEN"'
+        """
+        try recipe.write(to: root.appendingPathComponent("setup.wg.yml"), atomically: true, encoding: .utf8)
+        let db = try inMemoryDB()
+        let variableStore = RecipeVariableStore(db: db)
+        let coordinator = RecipeCoordinator(
+            root: root,
+            db: db,
+            variableStore: variableStore,
+            keychainStore: InMemoryKeychainStore()
+        )
+
+        try coordinator.reconcile()
+        let actionID = RecipeParser.runtimeUUID(for: "winegold.setup-test")
+        let requirements = try XCTUnwrap(coordinator.setupRequirements(for: actionID))
+
+        XCTAssertEqual(requirements.missingCommands, ["winegold-command-that-does-not-exist"])
+        XCTAssertEqual(requirements.missingVariables.map(\.name), ["TOKEN"])
+        XCTAssertEqual(try ActionStore(db: db).listNeedingSetup().map(\.id), [actionID])
+    }
+
     // MARK: - Helpers
 
     private func inMemoryDB() throws -> Database {

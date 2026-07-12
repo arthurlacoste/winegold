@@ -28,8 +28,10 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         history: [RunHistoryItem],
         savedHistory: [RunHistoryItem],
         savedHistoryIds: Set<UUID>,
+        setupRequirements: [UUID: RecipeSetupRequirements],
         settingsStore: SettingsStore,
         onRunAction: @escaping (Action, [URL]) -> Void,
+        onSetupAction: @escaping (Action, [URL]) -> Void,
         onToggleSavedRun: @escaping (RunHistoryItem) -> Void,
         onOpenSettings: @escaping () -> Void,
         onToggleFavorite: @escaping (Action) -> Void,
@@ -42,6 +44,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         state.history = history
         state.savedHistory = savedHistory
         state.savedHistoryIds = savedHistoryIds
+        state.setupRequirements = setupRequirements
         self.panelState = state
         self.targetScreen = screen
         self.settingsStore = settingsStore
@@ -49,6 +52,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         let vc = ActionPanelViewController(
             state: state,
             onRunAction: onRunAction,
+            onSetupAction: onSetupAction,
             onToggleSavedRun: onToggleSavedRun,
             onOpenSettings: onOpenSettings,
             onToggleFavorite: onToggleFavorite,
@@ -105,7 +109,8 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         allActions: [Action],
         history: [RunHistoryItem],
         savedHistory: [RunHistoryItem],
-        savedHistoryIds: Set<UUID>
+        savedHistoryIds: Set<UUID>,
+        setupRequirements: [UUID: RecipeSetupRequirements]
     ) {
         targetScreen = screen
         panelState.files = files
@@ -114,6 +119,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.history = history
         panelState.savedHistory = savedHistory
         panelState.savedHistoryIds = savedHistoryIds
+        panelState.setupRequirements = setupRequirements
         panelState.lastResult = nil
         panelState.batchResults = []
         panelState.activeActionId = nil
@@ -135,9 +141,10 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
 
     var currentFiles: [URL] { panelState.files }
 
-    func replaceActions(allActions: [Action], actions: [Action]) {
+    func replaceActions(allActions: [Action], actions: [Action], setupRequirements: [UUID: RecipeSetupRequirements]) {
         panelState.allActions = allActions
         panelState.actions = actions
+        panelState.setupRequirements = setupRequirements
         panelVC.refresh()
     }
 
@@ -481,7 +488,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         if panelState.isCompact {
             targetHeight = compactStatusFrameHeight()
         } else if panelVC.shouldShowActions {
-            targetHeight = targetFrameHeight(forContentHeight: max(panelVC.currentContentHeight, 520))
+            targetHeight = targetFrameHeight(forContentHeight: panelVC.currentContentHeight)
         } else {
             targetHeight = targetFrameHeight(forContentHeight: max(panelVC.currentContentHeight, idleDropFrameHeight))
         }
