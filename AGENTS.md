@@ -103,4 +103,7 @@ position it with `y = container.midY - textHeight / 2`. Add a geometry test
 that compares both `midY` values. `alignment = .center` only centers text
 horizontally.
 
+Use AppKit `NSAlert` via `makeAppAlert()`. Keep native macOS alert layout.
+Factory only replaces app icon with pre-rendered rounded version.
+
 Do not use macOS Keychain for recipe tokens or secret variables. Prefer non-interactive local storage with restrictive filesystem permissions so macOS never repeatedly prompts for access.

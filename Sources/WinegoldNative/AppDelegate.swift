@@ -624,7 +624,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 var result = CommandResult(actionId: action.id, actionName: action.name, inputFiles: [file.path], status: .success, startedAt: startedAt, endedAt: Date())
                 do {
                     let preview = try recipeCoordinator.inspectInstallation(file)
-                    let alert = NSAlert()
+                    let alert = makeAppAlert()
                     alert.messageText = "Install Winegold recipe?"
                     alert.informativeText = installationSummaryText(preview)
                     alert.addButton(withTitle: "Install")

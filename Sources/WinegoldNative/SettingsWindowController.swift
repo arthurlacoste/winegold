@@ -552,7 +552,7 @@ class SettingsViewController: NSViewController {
     }
 
     private func promptForSecret(label: String) -> String? {
-        let alert = NSAlert()
+        let alert = makeAppAlert()
         alert.messageText = "Set up \(label)"
         alert.informativeText = "Enter the required value. Winegold will store it in macOS Keychain."
         alert.addButton(withTitle: "Save")
@@ -581,7 +581,7 @@ class SettingsViewController: NSViewController {
             let hasConsent = variableStore.consentStatus(key: sharedKey, externalID: externalID)
 
             if sharedExists && !hasConsent {
-                let alert = NSAlert()
+                let alert = makeAppAlert()
                 alert.messageText = "Shared required value"
                 alert.informativeText = "This recipe requests access to your saved \"\(variable.label)\". You can approve access or enter a separate value for this recipe."
                 alert.addButton(withTitle: "Use saved value")
@@ -766,7 +766,7 @@ class SettingsViewController: NSViewController {
     }
 
     private func showMessage(_ message: String) {
-        let alert = NSAlert()
+        let alert = makeAppAlert()
         alert.messageText = message
         alert.runModal()
     }
@@ -887,7 +887,7 @@ class SettingsViewController: NSViewController {
 
     @objc private func installRemoteURL() {
         guard let remoteRecipeInstaller else { showMessage("Remote recipe installation is unavailable."); return }
-        let alert = NSAlert()
+        let alert = makeAppAlert()
         alert.messageText = "Install from Winegold Recipes"
         alert.informativeText = "Paste a direct HTTPS .wg.yml URL or a compatible catalogue JSON URL."
         alert.addButton(withTitle: "Continue")
@@ -902,7 +902,7 @@ class SettingsViewController: NSViewController {
                 if url.pathExtension.lowercased() == "json" {
                     let inspections = try await remoteRecipeInstaller.inspectCatalogue(indexURL: url)
                     let summary = inspections.map { "• \($0.document.name) \($0.document.version ?? "")\n  \($0.document.command)" }.joined(separator: "\n")
-                    let confirmation = NSAlert()
+                    let confirmation = makeAppAlert()
                     confirmation.messageText = "Install \(inspections.count) Winegold Recipes?"
                     confirmation.informativeText = summary
                     confirmation.addButton(withTitle: "Install all")
@@ -922,7 +922,7 @@ class SettingsViewController: NSViewController {
                 reloadActions(select: inspection.document.id.map { RecipeParser.runtimeUUID(for: $0) })
                 onConfigurationChanged()
             } catch RemoteRecipeError.idConflict(let id) {
-                let conflict = NSAlert()
+                let conflict = makeAppAlert()
                 conflict.messageText = "Recipe ID conflict"
                 conflict.informativeText = "A recipe already uses ID \(id). Keep the current recipe or install the incoming recipe as an unlinked local copy."
                 conflict.addButton(withTitle: "Keep current")
@@ -940,7 +940,7 @@ class SettingsViewController: NSViewController {
     }
 
     private func confirmRemoteInstallation(_ inspection: RemoteRecipeInspection) -> Bool {
-        let alert = NSAlert()
+        let alert = makeAppAlert()
         alert.messageText = "Install \(inspection.document.name)?"
         var lines = ["Command:", inspection.document.command, "", "Included files:"]
         lines += inspection.files.isEmpty ? ["None"] : inspection.files
@@ -976,7 +976,7 @@ class SettingsViewController: NSViewController {
             do {
                 let preview = try await remoteRecipeInstaller.update(recipeID: recipeID, choice: .keepCurrent)
                 if preview.conflict, let diff = preview.diff {
-                    let alert = NSAlert()
+                    let alert = makeAppAlert()
                     alert.messageText = "This recipe was modified locally"
                     alert.informativeText = diff
                     alert.addButton(withTitle: "Keep current")
