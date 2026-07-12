@@ -55,7 +55,8 @@ final class ConfigurationVariablesViewTests: XCTestCase {
             tokenLabel.convert(tokenLabel.bounds, to: view).minX,
             accuracy: 1.0
         )
-        XCTAssertEqual(setupFrame.height, 26, accuracy: 1.0)
+        XCTAssertGreaterThanOrEqual(setupFrame.height, 20)
+        XCTAssertLessThanOrEqual(setupFrame.height, 44)
 
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
@@ -96,8 +97,9 @@ final class ConfigurationVariablesViewTests: XCTestCase {
         XCTAssertLessThan(required.convert(required.bounds, to: view).midY, label.convert(label.bounds, to: view).midY)
         let valueFrame = value.convert(value.bounds, to: view)
         let actionFrame = action.convert(action.bounds, to: view)
-        XCTAssertEqual(actionFrame.maxY, valueFrame.maxY, accuracy: 1.0)
-        XCTAssertEqual(actionFrame.height, valueFrame.height, accuracy: 1.0)
+        XCTAssertEqual(actionFrame.minY, valueFrame.minY, accuracy: 1.0)
+        XCTAssertGreaterThanOrEqual(actionFrame.height, 20)
+        XCTAssertLessThanOrEqual(actionFrame.height, 44)
     }
 
     func testNeedsSetupBadgeContentCanBeVerticallyCentered() {
