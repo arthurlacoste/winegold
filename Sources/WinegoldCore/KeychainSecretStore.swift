@@ -1,58 +1,65 @@
 import Foundation
-import Security
 
-public struct KeychainSecretStore: KeychainSecretStoreProtocol {
-    private let service: String
+/// Local secret storage that avoids interactive macOS Keychain prompts.
+public final class LocalSecretStore: KeychainSecretStoreProtocol {
+    private static let lock = NSLock()
+    private let fileURL: URL
 
-    public init(service: String = "com.winegold.native.secrets") {
-        self.service = service
+    public init(fileURL: URL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".winegold", isDirectory: true)
+        .appendingPathComponent("secrets.json")) {
+        self.fileURL = fileURL
     }
 
     public func read(key: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        withStorage { $0[key] }
     }
 
     public func write(key: String, value: String) {
-        delete(key: key)
-        guard let data = value.data(using: .utf8) else { return }
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: data
-        ]
-        SecItemAdd(query as CFDictionary, nil)
+        updateStorage { $0[key] = value }
     }
 
     public func delete(key: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
-        SecItemDelete(query as CFDictionary)
+        updateStorage { $0.removeValue(forKey: key) }
     }
 
     public func listKeys() -> [String] {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitAll
-        ]
-        var items: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &items)
-        guard status == errSecSuccess, let results = items as? [[String: Any]] else { return [] }
-        return results.compactMap { $0[kSecAttrAccount as String] as? String }
+        withStorage { Array($0.keys) }
+    }
+
+    private func withStorage<T>(_ body: ([String: String]) -> T) -> T {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        return body(load())
+    }
+
+    private func updateStorage(_ change: (inout [String: String]) -> Void) {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        var storage = load()
+        change(&storage)
+        save(storage)
+    }
+
+    private func load() -> [String: String] {
+        guard let data = try? Data(contentsOf: fileURL) else { return [:] }
+        return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+    }
+
+    private func save(_ storage: [String: String]) {
+        let directory = fileURL.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            let data = try JSONEncoder().encode(storage)
+            try data.write(to: fileURL, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        } catch {
+            // Secret persistence must not crash command execution.
+        }
     }
 }

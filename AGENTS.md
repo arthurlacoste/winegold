@@ -96,3 +96,5 @@ Small helpers.
 No magic if a plain function is enough.
 
 Keep the app local-first.
+
+Do not use macOS Keychain for recipe tokens or secret variables. Prefer non-interactive local storage with restrictive filesystem permissions so macOS never repeatedly prompts for access.

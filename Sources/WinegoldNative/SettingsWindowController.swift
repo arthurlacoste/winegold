@@ -9,14 +9,14 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let recipeCoordinator: RecipeCoordinator?
     private let remoteRecipeInstaller: RemoteRecipeInstaller?
     private let variableStore: RecipeVariableStore?
-    private let keychainStore: KeychainSecretStore?
+    private let keychainStore: LocalSecretStore?
     private let onLaunchAtLoginChanged: (Bool) -> Void
     private let onShortcutChanged: () -> Void
     private let onPanelSideChanged: (PanelSide) -> Void
     private let onConfigurationChanged: () -> Void
     private var onSetupCancelled: (() -> Void)?
 
-    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, remoteRecipeInstaller: RemoteRecipeInstaller? = nil, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
+    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, remoteRecipeInstaller: RemoteRecipeInstaller? = nil, variableStore: RecipeVariableStore? = nil, keychainStore: LocalSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
         self.store = store
         self.actionStore = actionStore
         self.recipeCoordinator = recipeCoordinator
@@ -95,7 +95,7 @@ class SettingsViewController: NSViewController {
     private let recipeCoordinator: RecipeCoordinator?
     private let remoteRecipeInstaller: RemoteRecipeInstaller?
     private let variableStore: RecipeVariableStore?
-    private let keychainStore: KeychainSecretStore?
+    private let keychainStore: LocalSecretStore?
     private let onLaunchAtLoginChanged: (Bool) -> Void
     private let onShortcutChanged: () -> Void
     private let onPanelSideChanged: (PanelSide) -> Void
@@ -124,7 +124,7 @@ class SettingsViewController: NSViewController {
     private var configurationOriginY: CGFloat = 0
     private var settingsContentView: FlippedSettingsView!
 
-    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, remoteRecipeInstaller: RemoteRecipeInstaller? = nil, variableStore: RecipeVariableStore? = nil, keychainStore: KeychainSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
+    init(store: SettingsStore, actionStore: ActionStore, recipeCoordinator: RecipeCoordinator?, remoteRecipeInstaller: RemoteRecipeInstaller? = nil, variableStore: RecipeVariableStore? = nil, keychainStore: LocalSecretStore? = nil, onLaunchAtLoginChanged: @escaping (Bool) -> Void, onShortcutChanged: @escaping () -> Void, onPanelSideChanged: @escaping (PanelSide) -> Void, onConfigurationChanged: @escaping () -> Void = {}) {
         self.store = store
         self.actionStore = actionStore
         self.recipeCoordinator = recipeCoordinator

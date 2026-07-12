@@ -29,7 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalHotKey: GlobalHotKey?
     private weak var showPanelMenuItem: NSMenuItem?
     private var variableStore: RecipeVariableStore?
-    private var keychainStore: KeychainSecretStore?
+    private var keychainStore: LocalSecretStore?
     private var pendingSetupRun: PendingSetupRun?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -85,7 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             try LegacyRecipeMigrator(db: db, root: recipeRoot).migrateIfNeeded()
             let vStore = RecipeVariableStore(db: db)
             self.variableStore = vStore
-            let kStore = KeychainSecretStore()
+            let kStore = LocalSecretStore()
             self.keychainStore = kStore
             let coordinator = RecipeCoordinator(root: recipeRoot, db: db, variableStore: vStore, keychainStore: kStore)
             self.recipeCoordinator = coordinator

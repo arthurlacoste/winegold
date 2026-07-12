@@ -423,38 +423,44 @@ final class RecipeVariableTests: XCTestCase {
         XCTAssertTrue(vars[0].required)
     }
 
-    // MARK: - Recipe variable keychain store integration
+    // MARK: - Recipe variable local secret store integration
 
-    func testKeychainSecretStoreWriteAndRead() {
-        let store = KeychainSecretStore(service: "com.winegold.test.\(UUID().uuidString)")
-        let key = "test-key-\(UUID().uuidString)"
-        defer { store.delete(key: key) }
+    func testLocalSecretStoreWriteAndRead() {
+        let fixture = localSecretFixture()
+        let store = LocalSecretStore(fileURL: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture.deletingLastPathComponent()) }
 
-        store.write(key: key, value: "hello")
-        XCTAssertEqual(store.read(key: key), "hello")
+        store.write(key: "token", value: "hello")
+        XCTAssertEqual(store.read(key: "token"), "hello")
+        let permissions = try? FileManager.default.attributesOfItem(atPath: fixture.path)[.posixPermissions] as? NSNumber
+        XCTAssertEqual(permissions?.intValue, 0o600)
     }
 
-    func testKeychainSecretStoreDelete() {
-        let store = KeychainSecretStore(service: "com.winegold.test.\(UUID().uuidString)")
-        let key = "test-del-\(UUID().uuidString)"
+    func testLocalSecretStoreDelete() {
+        let fixture = localSecretFixture()
+        let store = LocalSecretStore(fileURL: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture.deletingLastPathComponent()) }
 
-        store.write(key: key, value: "hello")
-        store.delete(key: key)
-        XCTAssertNil(store.read(key: key))
+        store.write(key: "token", value: "hello")
+        store.delete(key: "token")
+        XCTAssertNil(store.read(key: "token"))
     }
 
-    func testKeychainSecretStoreListKeys() {
-        let service = "com.winegold.test.list.\(UUID().uuidString)"
-        let store = KeychainSecretStore(service: service)
-        let k1 = "list-key-a-\(UUID().uuidString)"
-        let k2 = "list-key-b-\(UUID().uuidString)"
-        defer { store.delete(key: k1); store.delete(key: k2) }
+    func testLocalSecretStoreListKeys() {
+        let fixture = localSecretFixture()
+        let store = LocalSecretStore(fileURL: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture.deletingLastPathComponent()) }
 
-        store.write(key: k1, value: "a")
-        store.write(key: k2, value: "b")
+        store.write(key: "a", value: "one")
+        store.write(key: "b", value: "two")
         let keys = store.listKeys()
-        XCTAssertTrue(keys.contains(k1))
-        XCTAssertTrue(keys.contains(k2))
+        XCTAssertEqual(Set(keys), ["a", "b"])
+    }
+
+    private func localSecretFixture() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("winegold-secret-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("secrets.json")
     }
 
     // MARK: - Secret storage key format
