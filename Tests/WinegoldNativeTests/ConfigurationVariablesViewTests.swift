@@ -98,7 +98,7 @@ final class ConfigurationVariablesViewTests: XCTestCase {
         let actionFrame = action.convert(action.bounds, to: view)
         let valueAlignmentFrame = value.convert(value.alignmentRect(forFrame: value.bounds), to: view)
         let actionAlignmentFrame = action.convert(action.alignmentRect(forFrame: action.bounds), to: view)
-        XCTAssertEqual(actionAlignmentFrame.minY, valueAlignmentFrame.minY, accuracy: 1.0)
+        XCTAssertEqual(actionAlignmentFrame.maxY, valueAlignmentFrame.maxY, accuracy: 1.0)
         XCTAssertGreaterThanOrEqual(actionFrame.height, 20)
         XCTAssertLessThanOrEqual(actionFrame.height, 44)
     }
