@@ -57,6 +57,30 @@ final class CommandRunnerTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("command not found"))
     }
 
+    func testEarlierFailureIsNotHiddenBySuccessfulCleanup() async {
+        let request = CommandExecutionRequest(
+            executablePath: "/bin/zsh",
+            arguments: ["-lc", "/usr/bin/false\n/bin/rm -f /tmp/winegold-missing-file"]
+        )
+
+        let result = await runner.run(request: request)
+
+        XCTAssertEqual(result.status, .failed)
+        XCTAssertNotEqual(result.exitCode, 0)
+    }
+
+    func testExplicitFailureHandlingRemainsSupported() async {
+        let request = CommandExecutionRequest(
+            executablePath: "/bin/zsh",
+            arguments: ["-lc", "/usr/bin/false || handled=true\ntest \"$handled\" = true"]
+        )
+
+        let result = await runner.run(request: request)
+
+        XCTAssertEqual(result.status, .success)
+        XCTAssertEqual(result.exitCode, 0)
+    }
+
     func testFailingMiddlePipelineStageFailsRun() async {
         let request = CommandExecutionRequest(
             executablePath: "/bin/zsh",

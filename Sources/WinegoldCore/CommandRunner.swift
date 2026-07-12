@@ -242,7 +242,7 @@ public actor CommandRunner {
 
         var arguments = request.arguments
         let commandIndex = commandFlagIndex + 1
-        arguments[commandIndex] = "set -o pipefail\n" + arguments[commandIndex]
+        arguments[commandIndex] = "set -o errexit\nset -o pipefail\n" + arguments[commandIndex]
         return arguments
     }
 }
