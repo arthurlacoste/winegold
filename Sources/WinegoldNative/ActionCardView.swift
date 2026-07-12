@@ -58,6 +58,11 @@ class ActionCardView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyVisualState(animated: false)
+    }
+
     private func setup() {
         switch status {
         case .available:

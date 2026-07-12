@@ -148,6 +148,10 @@ class SettingsViewController: NSViewController {
         settingsContentView = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 1180))
         settingsContentView.wantsLayer = true
         settingsContentView.layer?.backgroundColor = WinegoldTheme.panelBackground(in: settingsContentView).cgColor
+        settingsContentView.onAppearanceChanged = { [weak settingsContentView] in
+            guard let settingsContentView else { return }
+            settingsContentView.layer?.backgroundColor = WinegoldTheme.panelBackground(in: settingsContentView).cgColor
+        }
         scrollView.documentView = settingsContentView
         view = scrollView
     }
@@ -311,6 +315,8 @@ class SettingsViewController: NSViewController {
         scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
         scroll.borderType = .bezelBorder
+        scroll.drawsBackground = true
+        scroll.backgroundColor = .textBackgroundColor
 
         commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 145))
         commandTextView.font = NSFont(name: "Menlo", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
@@ -322,6 +328,10 @@ class SettingsViewController: NSViewController {
         commandTextView.textContainer?.containerSize = NSSize(width: w - 124, height: CGFloat.greatestFiniteMagnitude)
         commandTextView.isAutomaticQuoteSubstitutionEnabled = false
         commandTextView.isAutomaticDashSubstitutionEnabled = false
+        commandTextView.drawsBackground = true
+        commandTextView.backgroundColor = .textBackgroundColor
+        commandTextView.textColor = .labelColor
+        commandTextView.insertionPointColor = .labelColor
         commandTextView.string = ""
         scroll.documentView = commandTextView
         settingsContentView.addSubview(scroll)
@@ -1086,5 +1096,11 @@ private final class SettingsWindow: NSWindow {
 }
 
 private final class FlippedSettingsView: NSView {
+    var onAppearanceChanged: (() -> Void)?
     override var isFlipped: Bool { true }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onAppearanceChanged?()
+    }
 }

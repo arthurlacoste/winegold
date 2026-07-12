@@ -76,6 +76,10 @@ class ActionPanelViewController: NSViewController {
             self?.setDragPreviewFiles(files)
         }
         (view as? PanelDropView)?.onFilesDropped = fileDropHandler
+        (view as? PanelDropView)?.onAppearanceChanged = { [weak self] in
+            self?.applyTheme()
+            self?.refresh(animatedStatusInsert: false)
+        }
         (view as? PanelDropView)?.onFilesPreviewed = filePreviewHandler
         scrollView.onFilesDropped = fileDropHandler
         scrollView.onFilesPreviewed = filePreviewHandler
@@ -1034,6 +1038,11 @@ private final class PanelFooterBarView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        layer?.backgroundColor = WinegoldTheme.panelBackground(in: self).withAlphaComponent(0.96).cgColor
+    }
 }
 
 private final class PanelActionListView: NSView {
@@ -1050,6 +1059,12 @@ private final class PanelActionListView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        layer?.backgroundColor = WinegoldTheme.cardBackground(in: self).cgColor
+        layer?.borderColor = WinegoldTheme.border(in: self).cgColor
+    }
 }
 
 private final class PanelDropZoneView: NSView {
@@ -1069,6 +1084,11 @@ private final class PanelDropZoneView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyStyle()
+    }
 
     private func applyStyle() {
         layer?.cornerRadius = 14
@@ -1135,6 +1155,7 @@ private final class PanelDropView: NSView {
     var onFilesDropped: (([URL]) -> Void)?
     var onFilesPreviewed: (([URL]) -> Void)?
     var onDraggingChanged: ((Bool) -> Void)?
+    var onAppearanceChanged: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1143,6 +1164,11 @@ private final class PanelDropView: NSView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onAppearanceChanged?()
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -1181,6 +1207,12 @@ private final class DropForwardingScrollView: NSScrollView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        layer?.backgroundColor = WinegoldTheme.rowBackground(in: self).cgColor
+        layer?.borderColor = WinegoldTheme.border(in: self).cgColor
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

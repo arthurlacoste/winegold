@@ -1,5 +1,6 @@
 import Cocoa
 import WinegoldCore
+import WinegoldUI
 
 class ActionPanelWindow: NSPanel, NSWindowDelegate {
     private let panelVC: ActionPanelViewController
