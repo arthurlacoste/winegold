@@ -117,7 +117,7 @@ class SettingsViewController: NSViewController {
     private var issuePopup: NSPopUpButton!
     private var issueLabel: NSTextField!
     private var configurationView: ConfigurationVariablesView?
-    private var needsSetupBadge: NSTextField?
+    private var needsSetupBadge: PillBadgeView?
     private var provenanceLabel: NSTextField!
     private var checkUpdateButton: NSButton!
     private var updateButton: NSButton!
@@ -219,7 +219,8 @@ class SettingsViewController: NSViewController {
         settingsContentView.addSubview(hint)
         y += 38
 
-        actionPopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 250, height: 28), pullsDown: false)
+        actionPopup = NSPopUpButton(frame: NSRect(x: padding, y: y, width: 250, height: 26), pullsDown: false)
+        actionPopup.controlSize = .regular
         actionPopup.target = self
         actionPopup.action = #selector(actionSelectionChanged)
         settingsContentView.addSubview(actionPopup)
@@ -231,13 +232,18 @@ class SettingsViewController: NSViewController {
         let importButton = NSButton(title: "Install…", target: self, action: #selector(importYAML))
         let installURLButton = NSButton(title: "Install URL…", target: self, action: #selector(installRemoteURL))
         let toolbarButtons = [newButton, saveButton, deleteButton, revealButton, importButton, installURLButton]
-        toolbarButtons.forEach { $0.bezelStyle = .rounded }
+        toolbarButtons.forEach {
+            $0.bezelStyle = .rounded
+            $0.controlSize = .regular
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            $0.heightAnchor.constraint(equalToConstant: 26).isActive = true
+        }
         let toolbar = NSStackView(views: toolbarButtons)
         toolbar.orientation = .horizontal
-        toolbar.alignment = .centerY
+        toolbar.alignment = .top
         toolbar.spacing = 4
         toolbar.distribution = .fillProportionally
-        toolbar.frame = NSRect(x: padding + 258, y: y, width: w - 258, height: 28)
+        toolbar.frame = NSRect(x: padding + 258, y: y, width: w - 258, height: 26)
         settingsContentView.addSubview(toolbar)
         y += 38
 
@@ -340,13 +346,7 @@ class SettingsViewController: NSViewController {
         let configTitle = NSTextField(labelWithString: "Configuration")
         configTitle.font = .boldSystemFont(ofSize: 17)
 
-        needsSetupBadge = NSTextField(labelWithString: "Needs setup")
-        needsSetupBadge!.font = .systemFont(ofSize: 11, weight: .semibold)
-        needsSetupBadge!.textColor = .white
-        needsSetupBadge!.alignment = .center
-        needsSetupBadge!.wantsLayer = true
-        needsSetupBadge!.layer?.backgroundColor = NSColor.systemOrange.cgColor
-        needsSetupBadge!.layer?.cornerRadius = 6
+        needsSetupBadge = PillBadgeView(title: "Needs setup", color: .systemOrange)
         needsSetupBadge!.isHidden = true
         needsSetupBadge!.translatesAutoresizingMaskIntoConstraints = false
         needsSetupBadge!.heightAnchor.constraint(equalToConstant: 24).isActive = true

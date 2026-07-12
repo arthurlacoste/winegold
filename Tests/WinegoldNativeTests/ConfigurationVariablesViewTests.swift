@@ -48,6 +48,15 @@ final class ConfigurationVariablesViewTests: XCTestCase {
         XCTAssertFalse(tokenFrame.intersects(setupFrame))
         XCTAssertGreaterThan(endpoint.frame.width, 130)
 
+        let endpointLabel = try XCTUnwrap(view.control(identifier: "configuration-label:UPLOAD_ENDPOINT"))
+        let tokenLabel = try XCTUnwrap(view.control(identifier: "configuration-label:UPLOAD_TOKEN"))
+        XCTAssertEqual(
+            endpointLabel.convert(endpointLabel.bounds, to: view).minX,
+            tokenLabel.convert(tokenLabel.bounds, to: view).minX,
+            accuracy: 1.0
+        )
+        XCTAssertEqual(setupFrame.height, 26, accuracy: 1.0)
+
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         let representation = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
@@ -78,16 +87,17 @@ final class ConfigurationVariablesViewTests: XCTestCase {
 
         let label = try XCTUnwrap(view.control(identifier: "configuration-label:UPLOAD_TOKEN"))
         let required = try XCTUnwrap(view.view(identifier: "configuration-required:UPLOAD_TOKEN"))
-        let secret = try XCTUnwrap(view.view(identifier: "configuration-secret:UPLOAD_TOKEN"))
+        XCTAssertNil(view.view(identifier: "configuration-secret:UPLOAD_TOKEN"))
+        XCTAssertNil(view.control(identifier: "configuration-source:UPLOAD_TOKEN")?.superview)
         let value = try XCTUnwrap(view.control(identifier: "configuration-value:UPLOAD_TOKEN"))
         let action = try XCTUnwrap(view.control(identifier: "configuration-action:UPLOAD_TOKEN"))
 
         XCTAssertTrue(value is NSSecureTextField)
         XCTAssertLessThan(required.convert(required.bounds, to: view).midY, label.convert(label.bounds, to: view).midY)
-        let centers = [secret, value, action].map { $0.convert($0.bounds, to: view).midY }
-        for center in centers.dropFirst() {
-            XCTAssertEqual(center, centers[0], accuracy: 2.0)
-        }
+        let valueFrame = value.convert(value.bounds, to: view)
+        let actionFrame = action.convert(action.bounds, to: view)
+        XCTAssertEqual(actionFrame.maxY, valueFrame.maxY, accuracy: 1.0)
+        XCTAssertEqual(actionFrame.height, valueFrame.height, accuracy: 1.0)
     }
 
     func testNeedsSetupBadgeContentCanBeVerticallyCentered() {

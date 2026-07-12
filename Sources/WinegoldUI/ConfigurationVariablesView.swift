@@ -81,7 +81,9 @@ public final class ConfigurationVariablesView: NSView {
         }
 
         for value in values {
-            stack.addArrangedSubview(makeRow(value))
+            let row = makeRow(value)
+            stack.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
         invalidateIntrinsicContentSize()
     }
@@ -121,7 +123,7 @@ public final class ConfigurationVariablesView: NSView {
             action: item.isSecret ? #selector(setupSecret(_:)) : #selector(removeValue(_:))
         )
         action.bezelStyle = .rounded
-        action.controlSize = .small
+        action.controlSize = .regular
         action.identifier = NSUserInterfaceItemIdentifier("configuration-action:\(item.name)")
         action.isHidden = !item.isSecret && !item.canRemove
         action.setContentHuggingPriority(.required, for: .horizontal)
@@ -141,27 +143,17 @@ public final class ConfigurationVariablesView: NSView {
             secureField.identifier = NSUserInterfaceItemIdentifier("configuration-value:\(item.name)")
             secureField.translatesAutoresizingMaskIntoConstraints = false
 
-            let secretBadge = makeBadge("Secret", color: .secondaryLabelColor, identifier: "configuration-secret:\(item.name)")
-            secretBadge.translatesAutoresizingMaskIntoConstraints = false
-
             rightColumn.addSubview(secureField)
-            rightColumn.addSubview(secretBadge)
-            rightColumn.addSubview(source)
             rightColumn.addSubview(action)
             NSLayoutConstraint.activate([
-                secretBadge.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor),
-                secretBadge.centerYAnchor.constraint(equalTo: secureField.centerYAnchor),
-                secureField.leadingAnchor.constraint(equalTo: secretBadge.trailingAnchor, constant: 8),
+                secureField.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor),
                 secureField.topAnchor.constraint(equalTo: rightColumn.topAnchor),
                 secureField.heightAnchor.constraint(equalToConstant: 26),
-                source.leadingAnchor.constraint(equalTo: secureField.trailingAnchor, constant: 10),
-                source.centerYAnchor.constraint(equalTo: secureField.centerYAnchor),
-                source.widthAnchor.constraint(equalToConstant: 86),
-                action.leadingAnchor.constraint(equalTo: source.trailingAnchor, constant: 10),
+                action.leadingAnchor.constraint(equalTo: secureField.trailingAnchor, constant: 10),
                 action.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor),
-                action.centerYAnchor.constraint(equalTo: secureField.centerYAnchor),
-                action.widthAnchor.constraint(greaterThanOrEqualToConstant: 92),
-                secureField.bottomAnchor.constraint(equalTo: rightColumn.bottomAnchor)
+                action.topAnchor.constraint(equalTo: rightColumn.topAnchor),
+                action.widthAnchor.constraint(equalToConstant: 112),
+                action.heightAnchor.constraint(equalToConstant: 26)
             ])
         } else {
             let field = NSTextField(string: item.value)
@@ -182,8 +174,9 @@ public final class ConfigurationVariablesView: NSView {
                 field.heightAnchor.constraint(equalToConstant: 26),
                 action.leadingAnchor.constraint(equalTo: field.trailingAnchor, constant: 10),
                 action.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor),
-                action.centerYAnchor.constraint(equalTo: field.centerYAnchor),
-                action.widthAnchor.constraint(greaterThanOrEqualToConstant: 92),
+                action.topAnchor.constraint(equalTo: rightColumn.topAnchor),
+                action.widthAnchor.constraint(equalToConstant: 112),
+                action.heightAnchor.constraint(equalToConstant: 26),
                 source.leadingAnchor.constraint(equalTo: field.leadingAnchor, constant: 2),
                 source.trailingAnchor.constraint(lessThanOrEqualTo: field.trailingAnchor),
                 source.topAnchor.constraint(equalTo: field.bottomAnchor, constant: 3),
@@ -196,8 +189,8 @@ public final class ConfigurationVariablesView: NSView {
         NSLayoutConstraint.activate([
             leftColumn.leadingAnchor.constraint(equalTo: row.leadingAnchor),
             leftColumn.topAnchor.constraint(equalTo: row.topAnchor, constant: 3),
-            leftColumn.widthAnchor.constraint(equalToConstant: 100),
-            rightColumn.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 110),
+            leftColumn.widthAnchor.constraint(equalToConstant: 140),
+            rightColumn.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 150),
             rightColumn.trailingAnchor.constraint(equalTo: row.trailingAnchor),
             rightColumn.topAnchor.constraint(equalTo: row.topAnchor),
             rightColumn.bottomAnchor.constraint(equalTo: row.bottomAnchor),

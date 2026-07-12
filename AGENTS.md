@@ -97,4 +97,10 @@ No magic if a plain function is enough.
 
 Keep the app local-first.
 
+For text inside fixed-height AppKit pills, badges, or cards, do not give an
+`NSTextField` the full container frame. Give it its intrinsic text height and
+position it with `y = container.midY - textHeight / 2`. Add a geometry test
+that compares both `midY` values. `alignment = .center` only centers text
+horizontally.
+
 Do not use macOS Keychain for recipe tokens or secret variables. Prefer non-interactive local storage with restrictive filesystem permissions so macOS never repeatedly prompts for access.
