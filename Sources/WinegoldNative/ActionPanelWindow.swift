@@ -157,7 +157,10 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
 
     private func applyTheme() {
         backgroundColor = WinegoldTheme.panelBackground(in: contentView)
-        contentView?.layer?.backgroundColor = WinegoldTheme.panelBackground(in: contentView).cgColor
+        contentView?.layer?.backgroundColor = WinegoldTheme.layerColor(
+            WinegoldTheme.panelBackground(in: contentView),
+            in: contentView
+        )
     }
 
     func show(staysOpen: Bool = false) {

@@ -29,6 +29,34 @@ final class WinegoldThemeTests: XCTestCase {
         XCTAssertTrue(WinegoldTheme.isDark(in: view))
     }
 
+    func testLayerColorResolvesUsingViewEffectiveAppearance() throws {
+        let lightView = NSView()
+        lightView.appearance = try XCTUnwrap(NSAppearance(named: .aqua))
+        let darkView = NSView()
+        darkView.appearance = try XCTUnwrap(NSAppearance(named: .darkAqua))
+
+        let light = WinegoldTheme.layerColor(.windowBackgroundColor, in: lightView)
+        let dark = WinegoldTheme.layerColor(.windowBackgroundColor, in: darkView)
+
+        XCTAssertNotEqual(light, dark)
+        XCTAssertEqual(light, resolvedCGColor(.windowBackgroundColor, appearance: lightView.effectiveAppearance))
+        XCTAssertEqual(dark, resolvedCGColor(.windowBackgroundColor, appearance: darkView.effectiveAppearance))
+    }
+
+    func testLayerColorAppliesAlphaInsideViewAppearance() throws {
+        let lightView = NSView()
+        lightView.appearance = try XCTUnwrap(NSAppearance(named: .aqua))
+        let darkView = NSView()
+        darkView.appearance = try XCTUnwrap(NSAppearance(named: .darkAqua))
+
+        let light = WinegoldTheme.layerColor(.windowBackgroundColor, alpha: 0.96, in: lightView)
+        let dark = WinegoldTheme.layerColor(.windowBackgroundColor, alpha: 0.96, in: darkView)
+
+        XCTAssertNotEqual(light, dark)
+        XCTAssertEqual(light.alpha, 0.96, accuracy: 0.001)
+        XCTAssertEqual(dark.alpha, 0.96, accuracy: 0.001)
+    }
+
     private func contrastRatio(_ foreground: NSColor, _ background: NSColor, appearance: NSAppearance) -> CGFloat {
         let foregroundLuminance = luminance(foreground, appearance: appearance)
         let backgroundLuminance = luminance(background, appearance: appearance)
@@ -47,5 +75,13 @@ final class WinegoldThemeTests: XCTestCase {
         return 0.2126 * channel(resolved.redComponent)
             + 0.7152 * channel(resolved.greenComponent)
             + 0.0722 * channel(resolved.blueComponent)
+    }
+
+    private func resolvedCGColor(_ color: NSColor, appearance: NSAppearance) -> CGColor {
+        var resolved = color.cgColor
+        appearance.performAsCurrentDrawingAppearance {
+            resolved = color.cgColor
+        }
+        return resolved
     }
 }

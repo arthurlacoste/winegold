@@ -66,7 +66,7 @@ class ActionCardView: NSView {
     private func setup() {
         switch status {
         case .available:
-            layer?.backgroundColor = WinegoldTheme.cardBackground(in: self).cgColor
+            layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.cardBackground(in: self), in: self)
             configureIcon(systemName: iconName, tint: .secondaryLabelColor)
             configureTitle(action.name, weight: .bold, color: .controlTextColor)
             let trigger = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -78,7 +78,10 @@ class ActionCardView: NSView {
             else { favoriteButton.isHidden = true }
             configureRunCard(label: setupRequirements?.actionLabel)
         case .missingDependency(let reason), .configError(let reason):
-            layer?.backgroundColor = WinegoldTheme.cardBackground(in: self, disabled: true).cgColor
+            layer?.backgroundColor = WinegoldTheme.layerColor(
+                WinegoldTheme.cardBackground(in: self, disabled: true),
+                in: self
+            )
             let icon = status.isMissing ? "exclamationmark.triangle" : "xmark.octagon"
             configureIcon(systemName: icon, tint: .secondaryLabelColor)
             configureTitle(action.name, weight: .regular, color: .secondaryLabelColor)
@@ -241,10 +244,14 @@ class ActionCardView: NSView {
 
         let changes = {
             self.layer?.borderWidth = borderWidth
-            self.layer?.borderColor = borderColor.cgColor
-            self.layer?.backgroundColor = (self.isGroupedRow && !isEmphasized) ? NSColor.clear.cgColor : backgroundColor.cgColor
+            self.layer?.borderColor = WinegoldTheme.layerColor(borderColor, in: self)
+            let resolvedBackground = self.isGroupedRow && !isEmphasized ? NSColor.clear : backgroundColor
+            self.layer?.backgroundColor = WinegoldTheme.layerColor(resolvedBackground, in: self)
             if self.caseAvailable {
-                self.runCard.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(isEmphasized ? 0.16 : 0.09).cgColor
+                self.runCard.layer?.backgroundColor = WinegoldTheme.layerColor(
+                    NSColor.controlAccentColor.withAlphaComponent(isEmphasized ? 0.16 : 0.09),
+                    in: self.runCard
+                )
                 self.runCard.layer?.borderColor = NSColor.clear.cgColor
             }
         }
@@ -296,7 +303,10 @@ class ActionCardView: NSView {
     private func configureRunCard(label: String? = nil) {
         runCard.wantsLayer = true
         runCard.layer?.cornerRadius = 10
-        runCard.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.11).cgColor
+        runCard.layer?.backgroundColor = WinegoldTheme.layerColor(
+            NSColor.controlAccentColor.withAlphaComponent(0.11),
+            in: runCard
+        )
         runCard.layer?.borderWidth = 0
         runCard.layer?.borderColor = NSColor.clear.cgColor
         addSubview(runCard)

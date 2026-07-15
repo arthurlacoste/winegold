@@ -1,6 +1,15 @@
 import AppKit
 
 public enum WinegoldTheme {
+    public static func layerColor(_ color: NSColor, alpha: CGFloat? = nil, in view: NSView?) -> CGColor {
+        let appearance = view?.effectiveAppearance ?? NSApp.effectiveAppearance
+        var resolved = color.cgColor
+        appearance.performAsCurrentDrawingAppearance {
+            resolved = (alpha.map { color.withAlphaComponent($0) } ?? color).cgColor
+        }
+        return resolved
+    }
+
     public static func isDark(in view: NSView?) -> Bool {
         let appearance = view?.effectiveAppearance ?? NSApp.effectiveAppearance
         return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

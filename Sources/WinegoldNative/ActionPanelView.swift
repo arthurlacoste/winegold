@@ -66,9 +66,9 @@ class ActionPanelViewController: NSViewController {
     override func loadView() {
         view = PanelDropView(frame: .zero)
         view.wantsLayer = true
-        view.layer?.backgroundColor = WinegoldTheme.panelBackground(in: view).cgColor
+        view.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.panelBackground(in: view), in: view)
         contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = WinegoldTheme.panelBackground(in: view).cgColor
+        contentView.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.panelBackground(in: view), in: view)
         let fileDropHandler: ([URL]) -> Void = { [weak self] files in
             self?.setDraggedFiles(files)
         }
@@ -108,9 +108,9 @@ class ActionPanelViewController: NSViewController {
     }
 
     private func applyTheme() {
-        view.layer?.backgroundColor = WinegoldTheme.panelBackground(in: view).cgColor
+        view.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.panelBackground(in: view), in: view)
         contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = WinegoldTheme.panelBackground(in: view).cgColor
+        contentView.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.panelBackground(in: view), in: view)
         scrollView.drawsBackground = false
     }
 
@@ -401,9 +401,8 @@ class ActionPanelViewController: NSViewController {
     }
 
     private func addDivider(y: inout CGFloat, w: CGFloat) {
-        let line = NSView(frame: NSRect(x: padding, y: y, width: w, height: 1))
-        line.wantsLayer = true
-        line.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        let line = NSBox(frame: NSRect(x: padding, y: y, width: w, height: 1))
+        line.boxType = .separator
         contentView.addSubview(line)
         y += 12
     }
@@ -552,7 +551,7 @@ class ActionPanelViewController: NSViewController {
                 if index < group.actions.count - 1 {
                     let separator = NSView(frame: NSRect(x: 0, y: CGFloat(index + 1) * rowHeight, width: w, height: 1))
                     separator.wantsLayer = true
-                    separator.layer?.backgroundColor = WinegoldTheme.separator(in: view).cgColor
+                    separator.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.separator(in: view), in: view)
                     container.addSubview(separator)
                 }
             }
@@ -564,9 +563,15 @@ class ActionPanelViewController: NSViewController {
         let container = NSView(frame: NSRect(x: padding, y: y, width: w, height: 74))
         container.wantsLayer = true
         container.layer?.cornerRadius = 12
-        container.layer?.backgroundColor = WinegoldTheme.cardBackground(in: view, emphasized: true).cgColor
+        container.layer?.backgroundColor = WinegoldTheme.layerColor(
+            WinegoldTheme.cardBackground(in: view, emphasized: true),
+            in: view
+        )
         container.layer?.borderWidth = 1
-        container.layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor
+        container.layer?.borderColor = WinegoldTheme.layerColor(
+            NSColor.controlAccentColor.withAlphaComponent(0.35),
+            in: view
+        )
 
         let spinner = NSProgressIndicator(frame: NSRect(x: 14, y: 18, width: 28, height: 28))
         spinner.style = .spinning
@@ -700,9 +705,9 @@ class ActionPanelViewController: NSViewController {
         let container = NSView(frame: NSRect(x: padding, y: y, width: w, height: height))
         container.wantsLayer = true
         container.layer?.cornerRadius = 14
-        container.layer?.backgroundColor = WinegoldTheme.cardBackground(in: view).cgColor
+        container.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.cardBackground(in: view), in: view)
         container.layer?.borderWidth = 1
-        container.layer?.borderColor = WinegoldTheme.border(in: view).cgColor
+        container.layer?.borderColor = WinegoldTheme.layerColor(WinegoldTheme.border(in: view), in: view)
 
         let (iconName, iconColor) = iconFor(status: result.status)
         let icon = NSImageView(image: NSImage(systemSymbolName: iconName, accessibilityDescription: nil)!)
@@ -764,9 +769,9 @@ class ActionPanelViewController: NSViewController {
         let container = NSView(frame: NSRect(x: padding, y: y, width: w, height: 60))
         container.wantsLayer = true
         container.layer?.cornerRadius = 8
-        container.layer?.backgroundColor = WinegoldTheme.statusBackground(in: view).cgColor
+        container.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.statusBackground(in: view), in: view)
         container.layer?.borderWidth = 1
-        container.layer?.borderColor = WinegoldTheme.border(in: view).cgColor
+        container.layer?.borderColor = WinegoldTheme.layerColor(WinegoldTheme.border(in: view), in: view)
 
         let (iconName, iconColor) = iconFor(status: result.status)
         let icon = NSImageView(image: NSImage(systemSymbolName: iconName, accessibilityDescription: nil)!)
@@ -1033,7 +1038,11 @@ private final class PanelFooterBarView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = WinegoldTheme.panelBackground(in: self).withAlphaComponent(0.96).cgColor
+        layer?.backgroundColor = WinegoldTheme.layerColor(
+            WinegoldTheme.panelBackground(in: self),
+            alpha: 0.96,
+            in: self
+        )
         layer?.borderWidth = 0
     }
 
@@ -1041,7 +1050,11 @@ private final class PanelFooterBarView: NSView {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        layer?.backgroundColor = WinegoldTheme.panelBackground(in: self).withAlphaComponent(0.96).cgColor
+        layer?.backgroundColor = WinegoldTheme.layerColor(
+            WinegoldTheme.panelBackground(in: self),
+            alpha: 0.96,
+            in: self
+        )
     }
 }
 
@@ -1053,17 +1066,17 @@ private final class PanelActionListView: NSView {
         wantsLayer = true
         layer?.cornerRadius = 10
         layer?.masksToBounds = true
-        layer?.backgroundColor = WinegoldTheme.cardBackground(in: self).cgColor
+        layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.cardBackground(in: self), in: self)
         layer?.borderWidth = 1
-        layer?.borderColor = WinegoldTheme.border(in: self).cgColor
+        layer?.borderColor = WinegoldTheme.layerColor(WinegoldTheme.border(in: self), in: self)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        layer?.backgroundColor = WinegoldTheme.cardBackground(in: self).cgColor
-        layer?.borderColor = WinegoldTheme.border(in: self).cgColor
+        layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.cardBackground(in: self), in: self)
+        layer?.borderColor = WinegoldTheme.layerColor(WinegoldTheme.border(in: self), in: self)
     }
 }
 
@@ -1094,8 +1107,10 @@ private final class PanelDropZoneView: NSView {
         layer?.cornerRadius = 14
         let emphasized = isHighlighted || isPressed
         layer?.borderWidth = emphasized ? 1.5 : 1
-        layer?.borderColor = (emphasized ? NSColor.controlAccentColor.withAlphaComponent(0.55) : WinegoldTheme.border(in: self)).cgColor
-        layer?.backgroundColor = (emphasized ? NSColor.controlAccentColor.withAlphaComponent(0.08) : WinegoldTheme.cardBackground(in: self)).cgColor
+        let borderColor = emphasized ? NSColor.controlAccentColor.withAlphaComponent(0.55) : WinegoldTheme.border(in: self)
+        let backgroundColor = emphasized ? NSColor.controlAccentColor.withAlphaComponent(0.08) : WinegoldTheme.cardBackground(in: self)
+        layer?.borderColor = WinegoldTheme.layerColor(borderColor, in: self)
+        layer?.backgroundColor = WinegoldTheme.layerColor(backgroundColor, in: self)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -1211,8 +1226,8 @@ private final class DropForwardingScrollView: NSScrollView {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        layer?.backgroundColor = WinegoldTheme.rowBackground(in: self).cgColor
-        layer?.borderColor = WinegoldTheme.border(in: self).cgColor
+        layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.rowBackground(in: self), in: self)
+        layer?.borderColor = WinegoldTheme.layerColor(WinegoldTheme.border(in: self), in: self)
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -1276,9 +1291,9 @@ private final class RecentActionRowView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: 312, height: 52))
         wantsLayer = true
         layer?.cornerRadius = 10
-        layer?.backgroundColor = WinegoldTheme.rowBackground(in: self).cgColor
+        layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.rowBackground(in: self), in: self)
         layer?.borderWidth = 1
-        layer?.borderColor = WinegoldTheme.border(in: self).cgColor
+        layer?.borderColor = WinegoldTheme.layerColor(WinegoldTheme.border(in: self), in: self)
         setup()
     }
 
@@ -1317,13 +1332,13 @@ private final class RecentActionRowView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         layer?.borderWidth = 1.5
-        layer?.borderColor = NSColor.controlAccentColor.cgColor
+        layer?.borderColor = WinegoldTheme.layerColor(.controlAccentColor, in: self)
     }
 
     override func mouseUp(with event: NSEvent) {
         defer {
             layer?.borderWidth = 1
-            layer?.borderColor = WinegoldTheme.border(in: self).cgColor
+            layer?.borderColor = WinegoldTheme.layerColor(WinegoldTheme.border(in: self), in: self)
         }
         let point = convert(event.locationInWindow, from: nil)
         guard bounds.contains(point) else { return }
@@ -1345,9 +1360,9 @@ private final class RecentActionRowView: NSView {
         dot.wantsLayer = true
         dot.layer?.cornerRadius = 4
         switch item.status {
-        case .success: dot.layer?.backgroundColor = NSColor.systemGreen.cgColor
-        case .failed, .timeout: dot.layer?.backgroundColor = NSColor.systemRed.cgColor
-        default: dot.layer?.backgroundColor = NSColor.systemOrange.cgColor
+        case .success: dot.layer?.backgroundColor = WinegoldTheme.layerColor(.systemGreen, in: dot)
+        case .failed, .timeout: dot.layer?.backgroundColor = WinegoldTheme.layerColor(.systemRed, in: dot)
+        default: dot.layer?.backgroundColor = WinegoldTheme.layerColor(.systemOrange, in: dot)
         }
         addSubview(dot)
 

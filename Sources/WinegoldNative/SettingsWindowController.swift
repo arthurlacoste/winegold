@@ -147,10 +147,16 @@ class SettingsViewController: NSViewController {
         scrollView.drawsBackground = false
         settingsContentView = FlippedSettingsView(frame: NSRect(x: 0, y: 0, width: 760, height: 1180))
         settingsContentView.wantsLayer = true
-        settingsContentView.layer?.backgroundColor = WinegoldTheme.panelBackground(in: settingsContentView).cgColor
+        settingsContentView.layer?.backgroundColor = WinegoldTheme.layerColor(
+            WinegoldTheme.panelBackground(in: settingsContentView),
+            in: settingsContentView
+        )
         settingsContentView.onAppearanceChanged = { [weak settingsContentView] in
             guard let settingsContentView else { return }
-            settingsContentView.layer?.backgroundColor = WinegoldTheme.panelBackground(in: settingsContentView).cgColor
+            settingsContentView.layer?.backgroundColor = WinegoldTheme.layerColor(
+                WinegoldTheme.panelBackground(in: settingsContentView),
+                in: settingsContentView
+            )
         }
         scrollView.documentView = settingsContentView
         view = scrollView
@@ -384,9 +390,8 @@ class SettingsViewController: NSViewController {
     }
 
     private func addDivider(y: CGFloat, x: CGFloat, width: CGFloat) {
-        let line = NSView(frame: NSRect(x: x, y: y, width: width, height: 1))
-        line.wantsLayer = true
-        line.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        let line = NSBox(frame: NSRect(x: x, y: y, width: width, height: 1))
+        line.boxType = .separator
         settingsContentView.addSubview(line)
     }
 
@@ -1082,18 +1087,6 @@ class SettingsViewController: NSViewController {
     }
 }
 
-
-private final class SettingsWindow: NSWindow {
-    var onSaveShortcut: (() -> Void)?
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers?.lowercased() == "s" {
-            onSaveShortcut?()
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-}
 
 private final class FlippedSettingsView: NSView {
     var onAppearanceChanged: (() -> Void)?
