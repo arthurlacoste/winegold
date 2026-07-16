@@ -15,6 +15,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private var runGeneration = 0
     private var lastLayoutWidth: CGFloat = 0
     private var lastHadStatusArea = false
+    private var actionRenderWindow = ActionRenderWindow(batchSize: 20)
     private var isRefreshing = false
     private var lastFilesSignature = ""
     private var showsRecentRuns = false
@@ -96,6 +97,13 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         }
         (view as? PanelDropView)?.onDraggingChanged = draggingHandler
         scrollView.onDraggingChanged = draggingHandler
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(scrollBoundsChanged),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
         contentView.onDraggingChanged = draggingHandler
     }
 
@@ -377,6 +385,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
             isRunning: state.runningActionName != nil
         ) { return }
         lastFilesSignature = signature
+        actionRenderWindow.reset()
         dragPreviewFiles = []
         isDraggingFiles = false
 
@@ -501,7 +510,9 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
                 localOrderOverride: metadata?.localOrderOverride
             )
         }
-        let visible = ActionPresentationPolicy().present(presented, query: actionSearchQuery)
+        let filtered = ActionPresentationPolicy().present(presented, query: actionSearchQuery)
+        let renderedCount = actionRenderWindow.visibleCount(total: filtered.count)
+        let visible = Array(filtered.prefix(renderedCount))
         visibleActionItems = visible
         keyboardSelection.clamp(count: visible.count)
 
@@ -569,6 +580,49 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
             }
         }
         y += containerHeight + 12
+
+        if actionRenderWindow.hasMore(total: filtered.count) {
+            let remaining = filtered.count - visible.count
+            let more = NSTextField(labelWithString: "Scroll to load \(remaining) more actions")
+            more.font = .systemFont(ofSize: 11)
+            more.textColor = .secondaryLabelColor
+            more.alignment = .center
+            more.frame = NSRect(x: padding, y: y, width: w, height: 18)
+            contentView.addSubview(more)
+            y += 24
+        }
+    }
+
+    @objc private func scrollBoundsChanged() {
+        guard let documentView = scrollView.documentView else { return }
+        let visibleMaxY = scrollView.contentView.bounds.maxY
+        guard visibleMaxY >= documentView.bounds.height - 120 else { return }
+        let total = currentPresentedActions().count
+        guard actionRenderWindow.loadNext(total: total) else { return }
+        refresh(animatedStatusInsert: false)
+    }
+
+    private func currentPresentedActions() -> [PresentedAction] {
+        let matchedActions: [Action]
+        if !dragPreviewFiles.isEmpty {
+            matchedActions = previewMatchedActions
+        } else if state.files.isEmpty {
+            matchedActions = state.allActions.filter(\.enabled)
+        } else {
+            matchedActions = state.actions
+        }
+        let presented = matchedActions.map { action -> PresentedAction in
+            let metadata = state.actionMetadata[action.id]
+            return PresentedAction(
+                action: action,
+                parentName: metadata?.parentName,
+                parentExternalID: metadata?.parentExternalID,
+                childActionID: metadata?.childActionID,
+                usageCount: metadata?.usageCount ?? 0,
+                localOrderOverride: metadata?.localOrderOverride
+            )
+        }
+        return ActionPresentationPolicy().present(presented, query: actionSearchQuery)
     }
 
     func controlTextDidBeginEditing(_ obj: Notification) {
@@ -582,6 +636,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         guard obj.object as AnyObject? === actionSearchField else { return }
         actionSearchQuery = actionSearchField.stringValue
         if state.files.isEmpty { showsRecentRuns = !actionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        actionRenderWindow.reset()
         keyboardSelection.reset()
         refreshKeepingSearchFocus()
     }

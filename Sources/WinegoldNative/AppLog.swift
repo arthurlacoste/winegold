@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import WinegoldCore
 
 let osLogger = Logger(subsystem: "com.winegold.native", category: "debug")
 
@@ -8,12 +9,13 @@ func logMsg(_ msg: String) {
     print(msg)
 
     do {
-        let dir = try FileManager.default.url(
+        let base = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
-        ).appendingPathComponent("WinegoldNative")
+        )
+        let dir = RuntimePaths.applicationSupportDirectory(defaultBase: base)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appendingPathComponent("winegold.log")
         let line = "\(ISO8601DateFormatter().string(from: Date())) \(msg)\n"

@@ -78,12 +78,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupDatabase() {
         logMsg("[AppDelegate] setupDatabase")
         do {
-            let appSupport = try FileManager.default.url(
+            let appSupportBase = try FileManager.default.url(
                 for: .applicationSupportDirectory,
                 in: .userDomainMask,
                 appropriateFor: nil,
                 create: true
-            ).appendingPathComponent("WinegoldNative")
+            )
+            let appSupport = RuntimePaths.applicationSupportDirectory(defaultBase: appSupportBase)
 
             try FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
             let dbPath = appSupport.appendingPathComponent("winegold.db").path
@@ -97,8 +98,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             try migrateLegacyDefaultRows(store: store)
 
-            let recipeRoot = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".winegold/recipes", isDirectory: true)
+            let recipeRoot = RuntimePaths.recipeRoot()
             try LegacyRecipeMigrator(db: db, root: recipeRoot).migrateIfNeeded()
             let vStore = RecipeVariableStore(db: db)
             self.variableStore = vStore
@@ -419,8 +419,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         panel.show(staysOpen: invocation.staysOpen)
 
-        guard !files.isEmpty else { return }
-
         DispatchQueue.main.async { [weak self, weak panel] in
             guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else { return }
             guard let store = self.actionStore, let runHistoryStore = self.runHistoryStore else {
@@ -447,28 +445,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 savedHistory: savedHistory,
                 savedHistoryIds: Set(savedHistory.map { $0.id })
             )
+            panel.replaceActionMetadata((try? store.metadata(for: actions.map(\.id))) ?? [:])
+
+            if files.isEmpty {
+                panel.replaceActions(
+                    allActions: actions,
+                    actions: actions,
+                    setupRequirements: requirements,
+                    isMatchingActions: false
+                )
+                logMsg("[Perf] palette_published uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) actions=\(actions.count)")
+                return
+            }
 
             self.actionMatchingQueue.async { [weak self, weak panel] in
                 guard let self else { return }
+                let matchingStart = ProcessInfo.processInfo.systemUptime
+                logMsg("[Perf] matching_started uptime=\(matchingStart) generation=\(generation) actions=\(actions.count) files=\(files.count)")
                 let compiled = self.compiledActionCache.compiled(actions: actions)
                 let batches = ProgressiveActionMatcher().batches(for: files, compiled: compiled)
+                let matchingEnd = ProcessInfo.processInfo.systemUptime
+                logMsg("[Perf] matching_completed uptime=\(matchingEnd) generation=\(generation) batches=\(batches.count) matches=\(batches.last?.actions.count ?? 0) duration_ms=\((matchingEnd - matchingStart) * 1000)")
                 if batches.isEmpty {
                     DispatchQueue.main.async { [weak self, weak panel] in
-                        guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else { return }
+                        guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else {
+                            logMsg("[Perf] matching_discarded uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) reason=stale_or_hidden")
+                            return
+                        }
                         panel.replaceActions(allActions: actions, actions: [], setupRequirements: requirements)
+                        logMsg("[Perf] matching_published uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) tier=none matches=0 remaining=0")
                     }
                     return
                 }
                 for batch in batches {
                     let matched = self.prioritizeInstallActionIfNeeded(batch.actions, files: files)
                     DispatchQueue.main.async { [weak self, weak panel] in
-                        guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else { return }
+                        guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else {
+                            logMsg("[Perf] matching_discarded uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) reason=stale_or_hidden")
+                            return
+                        }
                         panel.replaceActions(
                             allActions: actions,
                             actions: matched,
                             setupRequirements: requirements,
                             isMatchingActions: batch.remaining > 0
                         )
+                        logMsg("[Perf] matching_published uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) tier=\(batch.cost) matches=\(matched.count) remaining=\(batch.remaining)")
                     }
                 }
             }
@@ -775,6 +797,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         actionPanelWindow?.markActionTriggered()
         guard let runHistoryStore = runHistoryStore else { return }
+        let actionMetadata = try? actionStore?.metadata(for: action.id)
+        try? actionStore?.incrementUsage(actionID: action.id)
 
         if action.name == DefaultActions.installRecipeName {
             importScripts(files, using: action, runHistoryStore: runHistoryStore)
@@ -785,7 +809,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             openNewScriptTemplate(for: files)
             let result = CommandResult(
                 actionId: action.id,
-                actionName: action.name,
+                actionName: historyActionName(action: action, metadata: actionMetadata),
+                parentRecipeID: actionMetadata?.parentExternalID,
+                childActionID: actionMetadata?.childActionID,
+                parentRecipeName: actionMetadata?.parentName,
+                childActionName: actionMetadata?.childActionID == nil ? nil : action.name,
                 inputFiles: files.map { $0.path },
                 status: .success,
                 stdout: "Opened script template.\n",
@@ -898,7 +926,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 })
                 result.actionId = action.id
-                result.actionName = resolvedActionName
+                result.actionName = historyActionName(actionName: resolvedActionName, metadata: actionMetadata)
+                result.parentRecipeID = actionMetadata?.parentExternalID
+                result.childActionID = actionMetadata?.childActionID
+                result.parentRecipeName = actionMetadata?.parentName
+                result.childActionName = actionMetadata?.childActionID == nil ? nil : resolvedActionName
                 result.inputFiles = [file.path]
                 if result.status == .success, let template = action.successMessage {
                     let message = resolver.resolve(template: template, for: file)
@@ -948,4 +980,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
+
+    private func historyActionName(action: Action, metadata: RecipeActionMetadata?) -> String {
+        historyActionName(actionName: action.name, metadata: metadata)
+    }
+
+    private func historyActionName(actionName: String, metadata: RecipeActionMetadata?) -> String {
+        guard let parentName = metadata?.parentName, metadata?.childActionID != nil else { return actionName }
+        return "\(actionName) - \(parentName)"
+    }
+
 }
