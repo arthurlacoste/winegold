@@ -2,7 +2,7 @@ import Cocoa
 import WinegoldCore
 import WinegoldUI
 
-class ActionPanelViewController: NSViewController {
+class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private let state: PanelState
     private let onRunAction: (Action, [URL]) -> Void
     private let onSetupAction: (Action, [URL]) -> Void
@@ -25,6 +25,9 @@ class ActionPanelViewController: NSViewController {
     private let footerBar = PanelFooterBarView(frame: .zero)
     private let actionSearchField = NSSearchField()
     private var actionSearchQuery = ""
+    private var keyboardSelection = KeyboardActionSelection()
+    private var visibleActionItems: [PresentedAction] = []
+    private var shouldRestoreSearchFocus = false
     private(set) var currentContentHeight: CGFloat = 0
 
     var shouldShowActions: Bool {
@@ -99,6 +102,7 @@ class ActionPanelViewController: NSViewController {
         super.viewDidLoad()
         logMsg("[PanelVC] viewDidLoad files=\(state.files.count) actions=\(state.actions.count)")
         applyTheme()
+        actionSearchField.delegate = self
         configureBottomTools()
         buildUI()
     }
@@ -487,6 +491,8 @@ class ActionPanelViewController: NSViewController {
             )
         }
         let visible = ActionPresentationPolicy().present(presented, query: actionSearchQuery)
+        visibleActionItems = visible
+        keyboardSelection.clamp(count: visible.count)
 
         let label = sectionLabel("ACTIONS · \(matchedActions.count)")
         label.frame.origin = CGPoint(x: padding + 2, y: y)
@@ -496,8 +502,8 @@ class ActionPanelViewController: NSViewController {
         if matchedActions.count > 10 || !actionSearchQuery.isEmpty {
             actionSearchField.placeholderString = "Search \(matchedActions.count) actions"
             actionSearchField.stringValue = actionSearchQuery
-            actionSearchField.target = self
-            actionSearchField.action = #selector(actionSearchChanged)
+            actionSearchField.target = nil
+            actionSearchField.action = nil
             actionSearchField.frame = NSRect(x: padding, y: y, width: w, height: 28)
             contentView.addSubview(actionSearchField)
             y += 36
@@ -526,6 +532,7 @@ class ActionPanelViewController: NSViewController {
                 action: action,
                 status: validator.validate(action),
                 isActive: state.activeActionId == action.id,
+                isKeyboardSelected: index == keyboardSelection.index,
                 setupRequirements: state.setupRequirements[action.id],
                 isGroupedRow: true,
                 parentName: item.parentName,
@@ -552,10 +559,62 @@ class ActionPanelViewController: NSViewController {
         y += containerHeight + 12
     }
 
-    @objc private func actionSearchChanged() {
+    func controlTextDidChange(_ obj: Notification) {
+        guard obj.object as AnyObject? === actionSearchField else { return }
         actionSearchQuery = actionSearchField.stringValue
+        keyboardSelection.reset()
+        refreshKeepingSearchFocus()
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard control === actionSearchField else { return false }
+        switch commandSelector {
+        case #selector(NSResponder.moveUp(_:)):
+            keyboardSelection.moveUp(count: visibleActionItems.count)
+            refreshKeepingSearchFocus()
+            return true
+        case #selector(NSResponder.moveDown(_:)):
+            keyboardSelection.moveDown(count: visibleActionItems.count)
+            refreshKeepingSearchFocus()
+            return true
+        case #selector(NSResponder.insertNewline(_:)):
+            runKeyboardSelectedAction()
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func refreshKeepingSearchFocus() {
+        shouldRestoreSearchFocus = true
         refresh()
         requestWindowResize(animated: false)
+        restoreSearchFocusIfNeeded()
+    }
+
+    private func restoreSearchFocusIfNeeded() {
+        guard shouldRestoreSearchFocus else { return }
+        shouldRestoreSearchFocus = false
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.actionSearchField.superview != nil else { return }
+            self.view.window?.makeFirstResponder(self.actionSearchField)
+            if let editor = self.actionSearchField.currentEditor() {
+                editor.selectedRange = NSRange(location: self.actionSearchField.stringValue.utf16.count, length: 0)
+            }
+        }
+    }
+
+    private func runKeyboardSelectedAction() {
+        guard !visibleActionItems.isEmpty else { return }
+        keyboardSelection.clamp(count: visibleActionItems.count)
+        let action = visibleActionItems[keyboardSelection.index].action
+        let files = state.files
+        guard !files.isEmpty else { return }
+        if state.setupRequirements[action.id] == nil {
+            startRun(action: action, files: files)
+        } else {
+            onSetupAction(action, files)
+        }
     }
 
     private func addLoading(actionName: String, y: CGFloat, w: CGFloat) -> CGFloat {
