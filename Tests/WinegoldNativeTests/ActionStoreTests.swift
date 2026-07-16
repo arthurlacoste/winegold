@@ -151,4 +151,103 @@ final class ActionStoreTests: XCTestCase {
         try store.moveAction(sourceID: second.id, before: first.id)
         XCTAssertEqual(try store.listActions().map { $0.name }, ["B", "A"])
     }
+
+    func testRecipeMetadataAndUsageRoundTrip() throws {
+        let action = Action(name: "Run tests", executablePath: "/bin/zsh", argumentsTemplate: ["-lc", "npm test"])
+        try store.upsertDerivedRecipe(
+            action,
+            externalID: "winegold.node/test",
+            parentExternalID: "winegold.node",
+            childActionID: "test",
+            parentName: "Node project",
+            path: "/tmp/node.wg.yml",
+            hash: "abc",
+            category: "development"
+        )
+        let usedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        try store.incrementUsage(actionID: action.id, at: usedAt)
+        try store.incrementUsage(actionID: action.id, at: usedAt)
+
+        let metadata = try XCTUnwrap(store.metadata(for: action.id))
+        XCTAssertEqual(metadata.externalID, "winegold.node/test")
+        XCTAssertEqual(metadata.parentExternalID, "winegold.node")
+        XCTAssertEqual(metadata.childActionID, "test")
+        XCTAssertEqual(metadata.parentName, "Node project")
+        XCTAssertEqual(metadata.usageCount, 2)
+        XCTAssertEqual(try XCTUnwrap(metadata.lastUsedAt).timeIntervalSince1970, usedAt.timeIntervalSince1970, accuracy: 1)
+    }
+
+    func testLocalEnabledOverrideIsTriStateAndSurvivesUpsert() throws {
+        let action = Action(name: "Build", enabled: true, executablePath: "/bin/zsh")
+        try store.upsertDerivedRecipe(
+            action,
+            externalID: "winegold.node/build",
+            parentExternalID: "winegold.node",
+            childActionID: "build",
+            parentName: "Node",
+            path: "/tmp/node.wg.yml",
+            hash: "one",
+            category: nil
+        )
+        try store.setLocalEnabledOverride(actionID: action.id, value: false)
+
+        var yamlChanged = action
+        yamlChanged.enabled = true
+        try store.upsertDerivedRecipe(
+            yamlChanged,
+            externalID: "winegold.node/build",
+            parentExternalID: "winegold.node",
+            childActionID: "build",
+            parentName: "Node",
+            path: "/tmp/node.wg.yml",
+            hash: "two",
+            category: nil
+        )
+
+        var metadata = try XCTUnwrap(store.metadata(for: action.id))
+        XCTAssertEqual(metadata.localEnabledOverride, false)
+        XCTAssertFalse(metadata.action.enabled)
+
+        try store.clearLocalEnabledOverride(actionID: action.id)
+        try store.upsertDerivedRecipe(
+            yamlChanged,
+            externalID: "winegold.node/build",
+            parentExternalID: "winegold.node",
+            childActionID: "build",
+            parentName: "Node",
+            path: "/tmp/node.wg.yml",
+            hash: "three",
+            category: nil
+        )
+        metadata = try XCTUnwrap(store.metadata(for: action.id))
+        XCTAssertNil(metadata.localEnabledOverride)
+        XCTAssertTrue(metadata.action.enabled)
+    }
+
+    func testLocalOrderCanBeSetAndClearedPerParent() throws {
+        let first = Action(name: "Dev", executablePath: "/bin/zsh", displayOrder: 0)
+        let second = Action(name: "Test", executablePath: "/bin/zsh", displayOrder: 1)
+        for (action, childID) in [(first, "dev"), (second, "test")] {
+            try store.upsertDerivedRecipe(
+                action,
+                externalID: "winegold.node/\(childID)",
+                parentExternalID: "winegold.node",
+                childActionID: childID,
+                parentName: "Node",
+                path: "/tmp/node.wg.yml",
+                hash: "abc",
+                category: nil
+            )
+        }
+
+        try store.setLocalOrder(parentID: "winegold.node", orderedActionIDs: [second.id, first.id])
+        var ordered = try store.listActions(forParentID: "winegold.node")
+        XCTAssertEqual(ordered.map(\.action.name), ["Test", "Dev"])
+        XCTAssertEqual(ordered.map(\.localOrderOverride), [0, 1])
+
+        try store.clearLocalOrder(parentID: "winegold.node")
+        ordered = try store.listActions(forParentID: "winegold.node")
+        XCTAssertTrue(ordered.allSatisfy { $0.localOrderOverride == nil })
+    }
+
 }

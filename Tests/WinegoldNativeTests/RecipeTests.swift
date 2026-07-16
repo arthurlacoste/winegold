@@ -616,4 +616,70 @@ final class RecipeTests: XCTestCase {
         XCTAssertEqual(Set(try ActionStore(db: db).listActions().map(\.name)), Set(["Dev", "Test", "Build"]))
     }
 
+
+    func testRemovedChildBecomesUnavailableAndReturnsWithPreferences() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("node.wg.yml")
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        let store = ActionStore(db: db)
+
+        func writeChildren(_ children: String) throws {
+            let text = """
+            id: winegold.node
+            name: Node
+            trigger: 'kind equals "directory"'
+            actions:
+            \(children)
+            """ + "\n"
+            try Data(text.utf8).write(to: url)
+        }
+
+        try writeChildren("""
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+          - id: test
+            name: Test
+            cmd:
+              exec: npm test
+        """)
+        try coordinator.reconcile()
+        let testAction = try XCTUnwrap(try store.listActions().first { $0.name == "Test" })
+        try store.setFavorite(id: testAction.id, isFavorite: true)
+        try store.setLocalEnabledOverride(actionID: testAction.id, value: false)
+
+        try writeChildren("""
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+        """)
+        try coordinator.reconcile()
+        XCTAssertEqual(try store.listActions().map(\.name), ["Dev"])
+        XCTAssertEqual(try store.listActions(forParentID: "winegold.node", includeUnavailable: true).count, 2)
+
+        try writeChildren("""
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+          - id: test
+            name: Tests renamed
+            cmd:
+              exec: npm test
+        """)
+        try coordinator.reconcile()
+
+        let restored = try XCTUnwrap(store.metadata(for: testAction.id))
+        XCTAssertEqual(restored.action.name, "Tests renamed")
+        XCTAssertTrue(restored.action.isFavorite)
+        XCTAssertEqual(restored.localEnabledOverride, false)
+        XCTAssertFalse(restored.action.enabled)
+    }
+
 }

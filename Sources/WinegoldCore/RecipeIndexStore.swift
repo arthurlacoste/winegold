@@ -44,8 +44,20 @@ public struct RecipeIndexStore {
             let disableRemoved = try db.prepare("UPDATE actions SET available=0 WHERE recipe_path=?")
             disableRemoved.bindText(record.url.path, at: 1)
             _ = disableRemoved.step()
-            for (action, actionExternalID) in zip(record.actions, record.document.actionExternalIDs) {
-                try actionStore.upsertDerivedRecipe(action, externalID: actionExternalID, path: record.url.path, hash: record.contentHash, category: category(for: record.url), available: !needsSetup)
+            for (index, pair) in zip(record.actions, record.document.actionExternalIDs).enumerated() {
+                let (action, actionExternalID) = pair
+                let child = record.document.actions.indices.contains(index) ? record.document.actions[index] : nil
+                try actionStore.upsertDerivedRecipe(
+                    action,
+                    externalID: actionExternalID,
+                    parentExternalID: child == nil ? nil : externalID,
+                    childActionID: child?.id,
+                    parentName: child == nil ? nil : record.document.name,
+                    path: record.url.path,
+                    hash: record.contentHash,
+                    category: category(for: record.url),
+                    available: !needsSetup
+                )
             }
             let stmt = try db.prepare("""
                 INSERT INTO recipe_index (recipe_path, external_id, content_hash, modification_time, file_size, status, parse_error)

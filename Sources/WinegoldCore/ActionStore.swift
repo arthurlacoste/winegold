@@ -1,6 +1,20 @@
 import Foundation
 import CSQLite
 
+public struct RecipeActionMetadata: Equatable {
+    public let action: Action
+    public let externalID: String?
+    public let parentExternalID: String?
+    public let childActionID: String?
+    public let parentName: String?
+    public let usageCount: Int
+    public let lastUsedAt: Date?
+    public let localEnabledOverride: Bool?
+    public let localOrderOverride: Int?
+
+    public var effectiveEnabled: Bool { localEnabledOverride ?? action.enabled }
+}
+
 public struct ActionStore {
     private let db: Database
     private let dateFormatter: DateFormatter
@@ -33,25 +47,42 @@ public struct ActionStore {
         return actions
     }
 
-    public func upsertDerivedRecipe(_ action: Action, externalID: String, path: String, hash: String, category: String?, available: Bool = true) throws {
+    public func upsertDerivedRecipe(
+        _ action: Action,
+        externalID: String,
+        parentExternalID: String? = nil,
+        childActionID: String? = nil,
+        parentName: String? = nil,
+        path: String,
+        hash: String,
+        category: String?,
+        available: Bool = true
+    ) throws {
         let claimLegacy = try db.prepare("UPDATE actions SET external_id=?, source_kind='recipe' WHERE id=? AND external_id IS NULL")
         claimLegacy.bindText(externalID, at: 1)
         claimLegacy.bindText(action.id.uuidString, at: 2)
         _ = claimLegacy.step()
-        let existing = try db.prepare("SELECT is_favorite, display_order, created_at FROM actions WHERE external_id=?")
+        let existing = try db.prepare("SELECT is_favorite, display_order, created_at, local_enabled_override, local_order_override FROM actions WHERE external_id=?")
         existing.bindText(externalID, at: 1)
         var derived = action
+        var localEnabledOverride: Bool?
+        var localOrderOverride: Int?
         if existing.step() {
             derived.isFavorite = existing.columnInt(at: 0) != 0
             derived.displayOrder = existing.columnInt(at: 1)
             derived.createdAt = dateFormatter.date(from: existing.columnText(at: 2)) ?? action.createdAt
+            localEnabledOverride = existing.columnIsNull(at: 3) ? nil : existing.columnInt(at: 3) != 0
+            localOrderOverride = existing.columnIsNull(at: 4) ? nil : existing.columnInt(at: 4)
         }
+        if let localEnabledOverride { derived.enabled = localEnabledOverride }
+        if let localOrderOverride { derived.displayOrder = localOrderOverride }
         let stmt = try db.prepare("""
             INSERT INTO actions (id, name, description, icon_name, enabled, accepted_extensions, accepted_utis,
             trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template,
             success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at,
-            source_kind, external_id, recipe_path, recipe_hash, available, category)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recipe', ?, ?, ?, ?, ?)
+            source_kind, external_id, recipe_path, recipe_hash, available, category, parent_external_id, child_action_id,
+            parent_name, local_enabled_override, local_order_override)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recipe', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(external_id) DO UPDATE SET id=excluded.id, name=excluded.name, description=excluded.description,
             icon_name=excluded.icon_name, enabled=excluded.enabled, accepted_extensions=excluded.accepted_extensions,
             accepted_utis=excluded.accepted_utis, trigger_expression=excluded.trigger_expression,
@@ -59,7 +90,10 @@ public struct ActionStore {
             working_directory_template=excluded.working_directory_template, output_path_template=excluded.output_path_template,
             success_message=excluded.success_message, requires_confirmation=excluded.requires_confirmation,
             timeout_seconds=excluded.timeout_seconds, updated_at=excluded.updated_at, recipe_path=excluded.recipe_path,
-            recipe_hash=excluded.recipe_hash, available=excluded.available, category=excluded.category
+            recipe_hash=excluded.recipe_hash, available=excluded.available, category=excluded.category,
+            parent_external_id=excluded.parent_external_id, child_action_id=excluded.child_action_id,
+            parent_name=excluded.parent_name, local_enabled_override=excluded.local_enabled_override,
+            local_order_override=excluded.local_order_override
         """)
         bindAction(derived, to: stmt)
         stmt.bindText(externalID, at: 20)
@@ -67,6 +101,11 @@ public struct ActionStore {
         stmt.bindText(hash, at: 22)
         stmt.bindInt(available ? 1 : 0, at: 23)
         if let category { stmt.bindText(category, at: 24) } else { stmt.bindNull(at: 24) }
+        if let parentExternalID { stmt.bindText(parentExternalID, at: 25) } else { stmt.bindNull(at: 25) }
+        if let childActionID { stmt.bindText(childActionID, at: 26) } else { stmt.bindNull(at: 26) }
+        if let parentName { stmt.bindText(parentName, at: 27) } else { stmt.bindNull(at: 27) }
+        if let localEnabledOverride { stmt.bindInt(localEnabledOverride ? 1 : 0, at: 28) } else { stmt.bindNull(at: 28) }
+        if let localOrderOverride { stmt.bindInt(localOrderOverride, at: 29) } else { stmt.bindNull(at: 29) }
         _ = stmt.step()
     }
 
@@ -162,6 +201,91 @@ public struct ActionStore {
             stmt.bindText(action.id.uuidString, at: 3)
             _ = stmt.step()
         }
+    }
+
+    public func metadata(for actionID: UUID) throws -> RecipeActionMetadata? {
+        let stmt = try db.prepare("""
+            SELECT \(actionColumns), external_id, parent_external_id, child_action_id, parent_name,
+                   usage_count, last_used_at, local_enabled_override, local_order_override
+            FROM actions WHERE id=?
+        """)
+        stmt.bindText(actionID.uuidString, at: 1)
+        guard stmt.step() else { return nil }
+        let action = try rowToAction(stmt)
+        return RecipeActionMetadata(
+            action: action,
+            externalID: stmt.columnIsNull(at: 20) ? nil : stmt.columnText(at: 20),
+            parentExternalID: stmt.columnIsNull(at: 21) ? nil : stmt.columnText(at: 21),
+            childActionID: stmt.columnIsNull(at: 22) ? nil : stmt.columnText(at: 22),
+            parentName: stmt.columnIsNull(at: 23) ? nil : stmt.columnText(at: 23),
+            usageCount: stmt.columnInt(at: 24),
+            lastUsedAt: stmt.columnIsNull(at: 25) ? nil : dateFormatter.date(from: stmt.columnText(at: 25)),
+            localEnabledOverride: stmt.columnIsNull(at: 26) ? nil : stmt.columnInt(at: 26) != 0,
+            localOrderOverride: stmt.columnIsNull(at: 27) ? nil : stmt.columnInt(at: 27)
+        )
+    }
+
+    public func listActions(forParentID parentID: String, includeUnavailable: Bool = false) throws -> [RecipeActionMetadata] {
+        let availability = includeUnavailable ? "" : " AND available=1"
+        let stmt = try db.prepare("SELECT id FROM actions WHERE parent_external_id=?\(availability) ORDER BY COALESCE(local_order_override, display_order), name")
+        stmt.bindText(parentID, at: 1)
+        var result: [RecipeActionMetadata] = []
+        while stmt.step(), let id = UUID(uuidString: stmt.columnText(at: 0)), let value = try metadata(for: id) { result.append(value) }
+        return result
+    }
+
+    public func setLocalEnabledOverride(actionID: UUID, value: Bool) throws {
+        let stmt = try db.prepare("UPDATE actions SET local_enabled_override=?, enabled=?, updated_at=? WHERE id=?")
+        stmt.bindInt(value ? 1 : 0, at: 1)
+        stmt.bindInt(value ? 1 : 0, at: 2)
+        stmt.bindText(dateFormatter.string(from: Date()), at: 3)
+        stmt.bindText(actionID.uuidString, at: 4)
+        _ = stmt.step()
+    }
+
+    public func clearLocalEnabledOverride(actionID: UUID) throws {
+        let stmt = try db.prepare("UPDATE actions SET local_enabled_override=NULL, updated_at=? WHERE id=?")
+        stmt.bindText(dateFormatter.string(from: Date()), at: 1)
+        stmt.bindText(actionID.uuidString, at: 2)
+        _ = stmt.step()
+    }
+
+    public func setLocalOrder(parentID: String, orderedActionIDs: [UUID]) throws {
+        try db.execute("BEGIN IMMEDIATE TRANSACTION")
+        do {
+            let clear = try db.prepare("UPDATE actions SET local_order_override=NULL WHERE parent_external_id=?")
+            clear.bindText(parentID, at: 1)
+            _ = clear.step()
+            for (index, id) in orderedActionIDs.enumerated() {
+                let stmt = try db.prepare("UPDATE actions SET local_order_override=?, display_order=?, updated_at=? WHERE id=? AND parent_external_id=?")
+                stmt.bindInt(index, at: 1)
+                stmt.bindInt(index, at: 2)
+                stmt.bindText(dateFormatter.string(from: Date()), at: 3)
+                stmt.bindText(id.uuidString, at: 4)
+                stmt.bindText(parentID, at: 5)
+                _ = stmt.step()
+            }
+            try db.execute("COMMIT")
+        } catch {
+            try? db.execute("ROLLBACK")
+            throw error
+        }
+    }
+
+    public func clearLocalOrder(parentID: String) throws {
+        let stmt = try db.prepare("UPDATE actions SET local_order_override=NULL, updated_at=? WHERE parent_external_id=?")
+        stmt.bindText(dateFormatter.string(from: Date()), at: 1)
+        stmt.bindText(parentID, at: 2)
+        _ = stmt.step()
+    }
+
+    public func incrementUsage(actionID: UUID, at date: Date = Date()) throws {
+        let stmt = try db.prepare("UPDATE actions SET usage_count=usage_count+1, last_used_at=?, updated_at=? WHERE id=?")
+        let timestamp = dateFormatter.string(from: date)
+        stmt.bindText(timestamp, at: 1)
+        stmt.bindText(timestamp, at: 2)
+        stmt.bindText(actionID.uuidString, at: 3)
+        _ = stmt.step()
     }
 
     public func count() throws -> Int {
