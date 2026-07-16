@@ -102,9 +102,10 @@ public struct Migrations {
         try ensureRecipeColumns()
         try ensureRecipeIndexColumns()
         try ensureMultiActionColumns()
+        try ensureRunHistoryActionColumns()
         let version = try currentVersion()
         if version == 0 {
-            try db.execute("INSERT INTO schema_version (version) VALUES (10)")
+            try db.execute("INSERT INTO schema_version (version) VALUES (11)")
         } else {
             if version < 2 {
                 try db.execute("ALTER TABLE actions ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
@@ -142,6 +143,10 @@ public struct Migrations {
             if version < 10 {
                 try ensureMultiActionColumns()
                 try db.execute("INSERT INTO schema_version (version) VALUES (10)")
+            }
+            if version < 11 {
+                try ensureRunHistoryActionColumns()
+                try db.execute("INSERT INTO schema_version (version) VALUES (11)")
             }
         }
     }
@@ -210,6 +215,15 @@ public struct Migrations {
         if !columns.contains("local_enabled_override") { try db.execute("ALTER TABLE actions ADD COLUMN local_enabled_override INTEGER") }
         if !columns.contains("local_order_override") { try db.execute("ALTER TABLE actions ADD COLUMN local_order_override INTEGER") }
         try db.execute("CREATE INDEX IF NOT EXISTS actions_parent_external_id_idx ON actions(parent_external_id)")
+    }
+
+
+    private func ensureRunHistoryActionColumns() throws {
+        let columns = try tableColumns("run_history")
+        if !columns.contains("parent_recipe_id") { try db.execute("ALTER TABLE run_history ADD COLUMN parent_recipe_id TEXT") }
+        if !columns.contains("child_action_id") { try db.execute("ALTER TABLE run_history ADD COLUMN child_action_id TEXT") }
+        if !columns.contains("parent_recipe_name") { try db.execute("ALTER TABLE run_history ADD COLUMN parent_recipe_name TEXT") }
+        if !columns.contains("child_action_name") { try db.execute("ALTER TABLE run_history ADD COLUMN child_action_name TEXT") }
     }
 
     private func tableColumns(_ table: String) throws -> Set<String> {

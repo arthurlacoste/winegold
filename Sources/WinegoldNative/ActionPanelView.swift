@@ -926,6 +926,10 @@ class ActionPanelViewController: NSViewController {
             id: item.id,
             actionId: item.actionId,
             actionName: item.actionName,
+            parentRecipeID: item.parentRecipeID,
+            childActionID: item.childActionID,
+            parentRecipeName: item.parentRecipeName,
+            childActionName: item.childActionName,
             inputFiles: item.inputFiles,
             outputFiles: item.outputFiles,
             status: item.status,
@@ -941,10 +945,9 @@ class ActionPanelViewController: NSViewController {
     }
 
     private func rerun(_ item: RunHistoryItem) {
-        let action = state.allActions.first { $0.id == item.actionId }
-            ?? state.allActions.first { $0.name == item.actionName }
-        guard let action else {
-            logMsg("[PanelVC] rerun failed, action not found: \(item.actionName)")
+        let resolution = SavedRunResolver().resolve(item, actions: state.allActions)
+        guard case let .available(action) = resolution else {
+            logMsg("[PanelVC] rerun unavailable: This action no longer exists in its recipe.")
             return
         }
 

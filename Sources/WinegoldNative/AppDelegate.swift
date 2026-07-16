@@ -708,6 +708,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         actionPanelWindow?.markActionTriggered()
         guard let runHistoryStore = runHistoryStore else { return }
+        let actionMetadata = try? actionStore?.metadata(for: action.id)
+        try? actionStore?.incrementUsage(actionID: action.id)
 
         if action.name == DefaultActions.installRecipeName {
             importScripts(files, using: action, runHistoryStore: runHistoryStore)
@@ -718,7 +720,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             openNewScriptTemplate(for: files)
             let result = CommandResult(
                 actionId: action.id,
-                actionName: action.name,
+                actionName: historyActionName(action: action, metadata: actionMetadata),
+                parentRecipeID: actionMetadata?.parentExternalID,
+                childActionID: actionMetadata?.childActionID,
+                parentRecipeName: actionMetadata?.parentName,
+                childActionName: actionMetadata?.childActionID == nil ? nil : action.name,
                 inputFiles: files.map { $0.path },
                 status: .success,
                 stdout: "Opened script template.\n",
@@ -787,7 +793,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 })
                 result.actionId = action.id
-                result.actionName = resolvedActionName
+                result.actionName = historyActionName(actionName: resolvedActionName, metadata: actionMetadata)
+                result.parentRecipeID = actionMetadata?.parentExternalID
+                result.childActionID = actionMetadata?.childActionID
+                result.parentRecipeName = actionMetadata?.parentName
+                result.childActionName = actionMetadata?.childActionID == nil ? nil : resolvedActionName
                 result.inputFiles = [file.path]
                 if result.status == .success, let template = action.successMessage {
                     let message = resolver.resolve(template: template, for: file)
@@ -831,10 +841,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if files.count > 1 {
                 let finalStatus: ExecutionStatus = batchHadFailure ? .failed : .success
                 await MainActor.run {
-                    let final = CommandResult(actionId: action.id, actionName: action.name, inputFiles: files.map { $0.path }, status: finalStatus, startedAt: Date(), endedAt: Date())
+                    let final = CommandResult(
+                        actionId: action.id,
+                        actionName: self.historyActionName(action: action, metadata: actionMetadata),
+                        parentRecipeID: actionMetadata?.parentExternalID,
+                        childActionID: actionMetadata?.childActionID,
+                        parentRecipeName: actionMetadata?.parentName,
+                        childActionName: actionMetadata?.childActionID == nil ? nil : action.name,
+                        inputFiles: files.map { $0.path },
+                        status: finalStatus,
+                        startedAt: Date(),
+                        endedAt: Date()
+                    )
                     self.actionPanelWindow?.showRunResult(result: final)
                 }
             }
         }
     }
+
+    private func historyActionName(action: Action, metadata: RecipeActionMetadata?) -> String {
+        historyActionName(actionName: action.name, metadata: metadata)
+    }
+
+    private func historyActionName(actionName: String, metadata: RecipeActionMetadata?) -> String {
+        guard let parentName = metadata?.parentName, metadata?.childActionID != nil else { return actionName }
+        return "\(actionName) - \(parentName)"
+    }
+
 }
