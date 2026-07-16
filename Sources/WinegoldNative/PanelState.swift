@@ -5,6 +5,7 @@ class PanelState {
     var files: [URL] = []
     var actions: [Action] = []
     var allActions: [Action] = []
+    var actionMetadata: [UUID: RecipeActionMetadata] = [:]
     var setupRequirements: [UUID: RecipeSetupRequirements] = [:]
     var history: [RunHistoryItem] = []
     var savedHistory: [RunHistoryItem] = []

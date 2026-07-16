@@ -149,6 +149,11 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelVC.refresh()
     }
 
+    func replaceActionMetadata(_ metadata: [UUID: RecipeActionMetadata]) {
+        panelState.actionMetadata = metadata
+        panelVC.refresh()
+    }
+
     func updateSavedHistory(_ savedHistory: [RunHistoryItem], savedIds: Set<UUID>) {
         panelState.savedHistory = savedHistory
         panelState.savedHistoryIds = savedIds

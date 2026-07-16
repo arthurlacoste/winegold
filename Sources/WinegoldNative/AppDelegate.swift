@@ -452,6 +452,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             actionPanelWindow = panel
             logMsg("[AppDelegate] created panel")
         }
+        panel.replaceActionMetadata((try? store.metadata(for: actions.map(\.id))) ?? [:])
         panel.show(staysOpen: invocation.staysOpen)
     }
 
@@ -478,6 +479,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             actions: matched,
             setupRequirements: setupRequirements(for: actions)
         )
+        actionPanelWindow?.replaceActionMetadata((try? actionStore.metadata(for: actions.map(\.id))) ?? [:])
     }
 
     private func panelStoredActions(_ store: ActionStore) -> [Action] {

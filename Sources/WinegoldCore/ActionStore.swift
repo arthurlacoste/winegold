@@ -225,6 +225,12 @@ public struct ActionStore {
         )
     }
 
+    public func metadata(for actionIDs: [UUID]) throws -> [UUID: RecipeActionMetadata] {
+        Dictionary(uniqueKeysWithValues: try actionIDs.compactMap { id in
+            try metadata(for: id).map { (id, $0) }
+        })
+    }
+
     public func listActions(forParentID parentID: String, includeUnavailable: Bool = false) throws -> [RecipeActionMetadata] {
         let availability = includeUnavailable ? "" : " AND available=1"
         let stmt = try db.prepare("SELECT id FROM actions WHERE parent_external_id=?\(availability) ORDER BY COALESCE(local_order_override, display_order), name")

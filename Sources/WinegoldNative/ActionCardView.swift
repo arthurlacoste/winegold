@@ -14,6 +14,7 @@ class ActionCardView: NSView {
     private let onToggleFavorite: (Action) -> Void
     private let onMoveBefore: (Action, Action) -> Void
     private let isGroupedRow: Bool
+    private let parentName: String?
 
     private var isPressed = false
     private var isHovered = false
@@ -34,6 +35,7 @@ class ActionCardView: NSView {
         isActive: Bool,
         setupRequirements: RecipeSetupRequirements? = nil,
         isGroupedRow: Bool = false,
+        parentName: String? = nil,
         onDrop: @escaping ([URL]) -> Void,
         onSetup: @escaping (Action) -> Void = { _ in },
         onToggleFavorite: @escaping (Action) -> Void,
@@ -44,6 +46,7 @@ class ActionCardView: NSView {
         self.isActive = isActive
         self.setupRequirements = setupRequirements
         self.isGroupedRow = isGroupedRow
+        self.parentName = parentName
         self.onDrop = onDrop
         self.onSetup = onSetup
         self.onToggleFavorite = onToggleFavorite
@@ -70,9 +73,10 @@ class ActionCardView: NSView {
             configureIcon(systemName: iconName, tint: .secondaryLabelColor)
             configureTitle(action.name, weight: .bold, color: .controlTextColor)
             let trigger = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let subtitle = trigger?.isEmpty == false
+            let fallbackSubtitle = trigger?.isEmpty == false
                 ? trigger!
                 : (action.acceptedExtensions.contains("*") ? "all files" : action.acceptedExtensions.joined(separator: ", "))
+            let subtitle = parentName ?? (!action.description.isEmpty ? action.description : fallbackSubtitle)
             configureSubtitle(setupRequirements?.summary ?? subtitle)
             if setupRequirements == nil { configureFavoriteButton() }
             else { favoriteButton.isHidden = true }
