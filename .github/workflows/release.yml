@@ -22,15 +22,7 @@ jobs:
 
       - name: Run tests
         shell: bash
-        run: |
-          set -euo pipefail
-          test_log="$RUNNER_TEMP/swift-test.log"
-          if ! swift test >"$test_log" 2>&1; then
-            echo "Swift tests failed. Last 200 log lines:"
-            tail -200 "$test_log"
-            exit 1
-          fi
-          cat "$test_log"
+        run: swift test >"$RUNNER_TEMP/swift-test.log" 2>&1 || { tail -30 "$RUNNER_TEMP/swift-test.log"; exit 1; }
 
       - name: Resolve build metadata
         id: metadata
