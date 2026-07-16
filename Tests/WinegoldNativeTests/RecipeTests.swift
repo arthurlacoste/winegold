@@ -682,4 +682,44 @@ final class RecipeTests: XCTestCase {
         XCTAssertFalse(restored.action.enabled)
     }
 
+
+    func testEndToEndMultiActionYAMLUpdatePreservesLocalOverrides() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        let yaml = """
+        id: winegold.node
+        name: Node project
+        trigger: 'kind equals "directory"'
+        actions:
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+          - id: test
+            name: Test
+            cmd:
+              exec: npm test
+        """
+
+        let selected = try coordinator.saveYAML(yaml, for: nil)
+        let store = ActionStore(db: db)
+        let testID = RecipeParser.runtimeUUID(for: "winegold.node/test")
+        XCTAssertEqual(selected, RecipeParser.runtimeUUID(for: "winegold.node/dev"))
+        try store.setLocalEnabledOverride(actionID: testID, value: false)
+        try store.incrementUsage(actionID: testID)
+
+        let updated = yaml.replacingOccurrences(of: "name: Test", with: "name: Run tests")
+        _ = try coordinator.saveYAML(updated, for: testID)
+
+        let metadata = try XCTUnwrap(store.metadata(for: testID))
+        XCTAssertEqual(metadata.action.name, "Run tests")
+        XCTAssertEqual(metadata.localEnabledOverride, false)
+        XCTAssertEqual(metadata.usageCount, 1)
+        XCTAssertFalse(metadata.action.enabled)
+    }
+
 }

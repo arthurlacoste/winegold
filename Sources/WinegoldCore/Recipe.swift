@@ -109,7 +109,6 @@ public struct RecipeParser {
         let triggerNode: TriggerExpression
         do { triggerNode = try TriggerParser().parse(document.trigger) }
         catch { throw RecipeError.invalidTrigger(document.trigger) }
-        let normalizedTrigger = TriggerSerializer().serialize(triggerNode)
         let actions = document.resolvedActions(recipeURL: url, triggerNode: triggerNode)
         let warnings = (!document.actions.isEmpty && !document.command.isEmpty)
             ? ["Recipe \"\(document.name)\" defines both cmd and actions. The top-level cmd was ignored."]
@@ -272,7 +271,7 @@ public struct RecipeParser {
 
     static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
-    static func extensions(from node: TriggerExpression) -> [String] {
+    public static func extensions(from node: TriggerExpression) -> [String] {
         guard case let .condition(field, op, value) = node, field == "extension", op == .in,
               case let .collection(values) = value else { return [] }
         return values

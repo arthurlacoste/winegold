@@ -299,21 +299,9 @@ class SettingsViewController: NSViewController {
         settingsContentView.addSubview(helpLine)
         y += 48
 
-        addFormLabel("Name", x: padding, y: y)
-        nameField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
-        settingsContentView.addSubview(nameField)
-        y += 38
-
-        addFormLabel("Trigger", x: padding, y: y)
-        triggerEditor = TriggerEditorView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 210))
-        settingsContentView.addSubview(triggerEditor)
-        y += 220
-
-        addFormLabel("On success", x: padding, y: y)
-        successMessageField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
-        successMessageField.placeholderString = "Optional, e.g. Created {basename}.jpg"
-        settingsContentView.addSubview(successMessageField)
-        y += 38
+        nameField = NSTextField()
+        triggerEditor = TriggerEditorView(frame: .zero)
+        successMessageField = NSTextField()
 
         addFormLabel("Recipe YAML", x: padding, y: y)
         let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 300))
@@ -785,9 +773,11 @@ class SettingsViewController: NSViewController {
     }
 
     private func helpPromptFromForm() -> String {
-        ScriptingHelpPrompt.make(
-            scriptName: nameField.stringValue,
-            extensions: currentExtensions(),
+        let validation = RecipeYAMLEditor().validate(commandTextView.string)
+        let document = validation.document
+        return ScriptingHelpPrompt.make(
+            scriptName: document?.name ?? "",
+            extensions: document.flatMap { try? TriggerParser().parse($0.trigger) }.map { RecipeParser.extensions(from: $0) } ?? [],
             command: commandTextView.string
         )
     }
@@ -809,7 +799,7 @@ class SettingsViewController: NSViewController {
 
     @objc private func newAction() {
         clearForm()
-        nameField.becomeFirstResponder()
+        commandTextView.window?.makeFirstResponder(commandTextView)
     }
 
     @objc private func saveAction() {
