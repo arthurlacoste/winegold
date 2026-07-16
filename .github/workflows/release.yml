@@ -55,15 +55,18 @@ jobs:
           OUTPUT_DIR: ${{ github.workspace }}/dist
         run: scripts/build-app.sh
 
-      - name: Package ZIP
-        run: scripts/package-release.sh dist/Winegold.app "dist/${{ steps.metadata.outputs.archive }}.zip"
+      - name: Package DMG
+        run: bash scripts/create-dmg.sh dist/Winegold.app "dist/${{ steps.metadata.outputs.archive }}.dmg" Winegold
+
+      - name: Verify DMG contents
+        run: bash scripts/test-dmg.sh "dist/${{ steps.metadata.outputs.archive }}.dmg"
 
       - name: Upload workflow artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.metadata.outputs.archive }}
-          path: dist/${{ steps.metadata.outputs.archive }}.zip
+          path: dist/${{ steps.metadata.outputs.archive }}.dmg
           if-no-files-found: error
 
       - name: Create GitHub release
@@ -72,7 +75,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/${{ steps.metadata.outputs.archive }}.zip" \
+            "dist/${{ steps.metadata.outputs.archive }}.dmg" \
             --verify-tag \
             --generate-notes \
             --title "Winegold ${{ steps.metadata.outputs.version }}"
