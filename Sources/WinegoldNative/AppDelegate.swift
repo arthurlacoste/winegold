@@ -460,10 +460,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func runtimeActions(_ actions: [Action], for file: URL?) -> [Action] {
         guard let file else { return actions }
         let resolver = ActionTemplateResolver()
+        let item = DraggedItem(executionURL: file)
         return actions.map { action in
             var runtime = action
             runtime.runtimeNameTemplate = action.name
-            runtime.name = resolver.resolve(template: action.name, for: file)
+            runtime.name = resolver.resolve(template: action.name, for: item)
             return runtime
         }
     }

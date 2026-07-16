@@ -10,7 +10,8 @@ public struct ActionTemplateResolver {
     public func resolve(template: String, for item: DraggedItem) -> String { resolvePlaceholders(in: template, for: item) }
 
     public func resolve(argumentsTemplate: [String], for inputFile: URL) -> [String] {
-        argumentsTemplate.map { resolvePlaceholders(in: $0, for: DraggedItem(executionURL: inputFile)) }
+        let item = DraggedItem(executionURL: inputFile)
+        return argumentsTemplate.map { resolvePlaceholders(in: $0, for: item) }
     }
 
     public func resolve(workingDirectoryTemplate: String?, for inputFile: URL) -> String? {

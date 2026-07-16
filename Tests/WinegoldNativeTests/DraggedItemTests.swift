@@ -22,4 +22,15 @@ final class DraggedItemTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         XCTAssertEqual(DraggedItem(executionURL: directory).kind, .directory)
     }
+
+    func testBinaryImageDoesNotExposeInside() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("png")
+        try Data([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff]).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let values = DraggedItem(executionURL: url).values
+
+        XCTAssertNil(values["inside"])
+    }
+
 }

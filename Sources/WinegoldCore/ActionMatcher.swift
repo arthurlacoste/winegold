@@ -12,10 +12,11 @@ public struct ActionMatcher {
     public func matchingActions(forItems items: [DraggedItem], actions: [Action]) -> [Action] {
         guard !items.isEmpty else { return [] }
         let enabled = actions.filter { $0.enabled }
+        let itemValues = items.map { $0.values }
         return enabled.filter { action in
             if let source = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines), !source.isEmpty {
                 guard let expression = try? TriggerParser().parse(source) else { return false }
-                return items.allSatisfy { TriggerEvaluator().evaluate(expression, values: $0.values) }
+                return itemValues.allSatisfy { TriggerEvaluator().evaluate(expression, values: $0) }
             }
             let acceptedExtensions = normalizedExtensions(action.acceptedExtensions)
             guard !acceptedExtensions.isEmpty else { return false }
