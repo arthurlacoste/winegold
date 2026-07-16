@@ -12,6 +12,8 @@ public struct Action: Identifiable, Codable, Equatable {
     public var acceptedExtensions: [String]
     public var acceptedUTIs: [String]
     public var triggerExpression: String?
+    public var minimumInputCount: Int
+    public var maximumInputCount: Int?
 
     public var executablePath: String
     public var argumentsTemplate: [String]
@@ -39,6 +41,8 @@ public struct Action: Identifiable, Codable, Equatable {
         acceptedExtensions: [String] = [],
         acceptedUTIs: [String] = [],
         triggerExpression: String? = nil,
+        minimumInputCount: Int = 0,
+        maximumInputCount: Int? = nil,
         executablePath: String,
         argumentsTemplate: [String] = [],
         workingDirectoryTemplate: String? = nil,
@@ -61,6 +65,8 @@ public struct Action: Identifiable, Codable, Equatable {
         self.acceptedExtensions = acceptedExtensions
         self.acceptedUTIs = acceptedUTIs
         self.triggerExpression = triggerExpression
+        self.minimumInputCount = minimumInputCount
+        self.maximumInputCount = maximumInputCount
         self.executablePath = executablePath
         self.argumentsTemplate = argumentsTemplate
         self.workingDirectoryTemplate = workingDirectoryTemplate

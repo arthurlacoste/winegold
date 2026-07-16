@@ -26,7 +26,7 @@ public struct ActionStore {
     }
 
     private var actionColumns: String {
-        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at, category"
+        "id, name, description, icon_name, enabled, accepted_extensions, accepted_utis, trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at, category, minimum_input_count, maximum_input_count"
     }
 
     public func listActions() throws -> [Action] {
@@ -81,8 +81,8 @@ public struct ActionStore {
             trigger_expression, executable_path, arguments_template, working_directory_template, output_path_template,
             success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at,
             source_kind, external_id, recipe_path, recipe_hash, available, category, parent_external_id, child_action_id,
-            parent_name, local_enabled_override, local_order_override)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recipe', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            parent_name, local_enabled_override, local_order_override, minimum_input_count, maximum_input_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recipe', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(external_id) DO UPDATE SET id=excluded.id, name=excluded.name, description=excluded.description,
             icon_name=excluded.icon_name, enabled=excluded.enabled, accepted_extensions=excluded.accepted_extensions,
             accepted_utis=excluded.accepted_utis, trigger_expression=excluded.trigger_expression,
@@ -93,7 +93,8 @@ public struct ActionStore {
             recipe_hash=excluded.recipe_hash, available=excluded.available, category=excluded.category,
             parent_external_id=excluded.parent_external_id, child_action_id=excluded.child_action_id,
             parent_name=excluded.parent_name, local_enabled_override=excluded.local_enabled_override,
-            local_order_override=excluded.local_order_override
+            local_order_override=excluded.local_order_override, minimum_input_count=excluded.minimum_input_count,
+            maximum_input_count=excluded.maximum_input_count
         """)
         bindAction(derived, to: stmt)
         stmt.bindText(externalID, at: 20)
@@ -106,6 +107,8 @@ public struct ActionStore {
         if let parentName { stmt.bindText(parentName, at: 27) } else { stmt.bindNull(at: 27) }
         if let localEnabledOverride { stmt.bindInt(localEnabledOverride ? 1 : 0, at: 28) } else { stmt.bindNull(at: 28) }
         if let localOrderOverride { stmt.bindInt(localOrderOverride, at: 29) } else { stmt.bindNull(at: 29) }
+        stmt.bindInt(derived.minimumInputCount, at: 30)
+        if let maximum = derived.maximumInputCount { stmt.bindInt(maximum, at: 31) } else { stmt.bindNull(at: 31) }
         _ = stmt.step()
     }
 
@@ -113,8 +116,8 @@ public struct ActionStore {
         let stmt = try db.prepare("""
             INSERT INTO actions (id, name, description, icon_name, enabled, accepted_extensions,
             accepted_utis, trigger_expression, executable_path, arguments_template, working_directory_template,
-            output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            output_path_template, success_message, requires_confirmation, timeout_seconds, is_favorite, display_order, created_at, updated_at, minimum_input_count, maximum_input_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """)
         bindAction(action, to: stmt)
         _ = stmt.step()
@@ -133,6 +136,8 @@ public struct ActionStore {
                 acceptedExtensions: action.acceptedExtensions,
                 acceptedUTIs: action.acceptedUTIs,
                 triggerExpression: action.triggerExpression,
+                minimumInputCount: action.minimumInputCount,
+                maximumInputCount: action.maximumInputCount,
                 executablePath: action.executablePath,
                 argumentsTemplate: action.argumentsTemplate,
                 workingDirectoryTemplate: action.workingDirectoryTemplate,
@@ -166,7 +171,7 @@ public struct ActionStore {
             UPDATE actions SET name=?, description=?, icon_name=?, enabled=?, accepted_extensions=?,
             accepted_utis=?, trigger_expression=?, executable_path=?, arguments_template=?, working_directory_template=?,
             output_path_template=?, success_message=?, requires_confirmation=?, timeout_seconds=?, is_favorite=?,
-            display_order=?, created_at=?, updated_at=? WHERE id=?
+            display_order=?, created_at=?, updated_at=?, minimum_input_count=?, maximum_input_count=? WHERE id=?
         """)
         bindActionForUpdate(action, to: stmt)
         _ = stmt.step()
@@ -214,14 +219,14 @@ public struct ActionStore {
         let action = try rowToAction(stmt)
         return RecipeActionMetadata(
             action: action,
-            externalID: stmt.columnIsNull(at: 20) ? nil : stmt.columnText(at: 20),
-            parentExternalID: stmt.columnIsNull(at: 21) ? nil : stmt.columnText(at: 21),
-            childActionID: stmt.columnIsNull(at: 22) ? nil : stmt.columnText(at: 22),
-            parentName: stmt.columnIsNull(at: 23) ? nil : stmt.columnText(at: 23),
-            usageCount: stmt.columnInt(at: 24),
-            lastUsedAt: stmt.columnIsNull(at: 25) ? nil : dateFormatter.date(from: stmt.columnText(at: 25)),
-            localEnabledOverride: stmt.columnIsNull(at: 26) ? nil : stmt.columnInt(at: 26) != 0,
-            localOrderOverride: stmt.columnIsNull(at: 27) ? nil : stmt.columnInt(at: 27)
+            externalID: stmt.columnIsNull(at: 22) ? nil : stmt.columnText(at: 22),
+            parentExternalID: stmt.columnIsNull(at: 23) ? nil : stmt.columnText(at: 23),
+            childActionID: stmt.columnIsNull(at: 24) ? nil : stmt.columnText(at: 24),
+            parentName: stmt.columnIsNull(at: 25) ? nil : stmt.columnText(at: 25),
+            usageCount: stmt.columnInt(at: 26),
+            lastUsedAt: stmt.columnIsNull(at: 27) ? nil : dateFormatter.date(from: stmt.columnText(at: 27)),
+            localEnabledOverride: stmt.columnIsNull(at: 28) ? nil : stmt.columnInt(at: 28) != 0,
+            localOrderOverride: stmt.columnIsNull(at: 29) ? nil : stmt.columnInt(at: 29)
         )
     }
 
@@ -334,6 +339,8 @@ public struct ActionStore {
             acceptedExtensions: extsStr.isEmpty ? [] : extsStr.components(separatedBy: ","),
             acceptedUTIs: utisStr.isEmpty ? [] : utisStr.components(separatedBy: ","),
             triggerExpression: stmt.columnIsNull(at: 7) ? nil : stmt.columnText(at: 7),
+            minimumInputCount: stmt.columnInt(at: 20),
+            maximumInputCount: stmt.columnIsNull(at: 21) ? nil : stmt.columnInt(at: 21),
             executablePath: stmt.columnText(at: 8),
             argumentsTemplate: decodeArgumentsTemplate(argsStr, executablePath: stmt.columnText(at: 8)),
             workingDirectoryTemplate: stmt.columnIsNull(at: 10) ? nil : stmt.columnText(at: 10),
@@ -355,7 +362,7 @@ public struct ActionStore {
 
     private func bindActionForUpdate(_ action: Action, to stmt: Statement) {
         bindActionFields(action, to: stmt, startingAt: 1)
-        stmt.bindText(action.id.uuidString, at: 19)
+        stmt.bindText(action.id.uuidString, at: 21)
     }
 
     private func encodeArgumentsTemplate(_ arguments: [String]) -> String {
@@ -416,5 +423,7 @@ public struct ActionStore {
         stmt.bindInt(action.displayOrder, at: start + 15)
         stmt.bindText(dateFormatter.string(from: action.createdAt), at: start + 16)
         stmt.bindText(dateFormatter.string(from: action.updatedAt), at: start + 17)
+        stmt.bindInt(action.minimumInputCount, at: start + 18)
+        if let maximum = action.maximumInputCount { stmt.bindInt(maximum, at: start + 19) } else { stmt.bindNull(at: start + 19) }
     }
 }

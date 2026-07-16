@@ -8,12 +8,14 @@ class ActionCardView: NSView {
     private let action: Action
     private let status: ActionValidationStatus
     private let isActive: Bool
-    private let isKeyboardSelected: Bool
+    private var isKeyboardSelected: Bool
     private let setupRequirements: RecipeSetupRequirements?
+    private let inputActionLabel: String?
     private let onDrop: ([URL]) -> Void
     private let onSetup: (Action) -> Void
     private let onToggleFavorite: (Action) -> Void
     private let onMoveBefore: (Action, Action) -> Void
+    private let onSelection: () -> Void
     private let isGroupedRow: Bool
     private let parentName: String?
 
@@ -36,24 +38,28 @@ class ActionCardView: NSView {
         isActive: Bool,
         isKeyboardSelected: Bool = false,
         setupRequirements: RecipeSetupRequirements? = nil,
+        inputActionLabel: String? = nil,
         isGroupedRow: Bool = false,
         parentName: String? = nil,
         onDrop: @escaping ([URL]) -> Void,
         onSetup: @escaping (Action) -> Void = { _ in },
         onToggleFavorite: @escaping (Action) -> Void,
-        onMoveBefore: @escaping (Action, Action) -> Void
+        onMoveBefore: @escaping (Action, Action) -> Void,
+        onSelection: @escaping () -> Void = {}
     ) {
         self.action = action
         self.status = status
         self.isActive = isActive
         self.isKeyboardSelected = isKeyboardSelected
         self.setupRequirements = setupRequirements
+        self.inputActionLabel = inputActionLabel
         self.isGroupedRow = isGroupedRow
         self.parentName = parentName
         self.onDrop = onDrop
         self.onSetup = onSetup
         self.onToggleFavorite = onToggleFavorite
         self.onMoveBefore = onMoveBefore
+        self.onSelection = onSelection
         super.init(frame: NSRect(x: 0, y: 0, width: 312, height: 64))
         wantsLayer = true
         layer?.cornerRadius = isGroupedRow ? 0 : 8
@@ -83,7 +89,7 @@ class ActionCardView: NSView {
             configureSubtitle(setupRequirements?.summary ?? subtitle)
             if setupRequirements == nil { configureFavoriteButton() }
             else { favoriteButton.isHidden = true }
-            configureRunCard(label: setupRequirements?.actionLabel)
+            configureRunCard(label: setupRequirements?.actionLabel ?? inputActionLabel)
         case .missingDependency(let reason), .configError(let reason):
             layer?.backgroundColor = WinegoldTheme.layerColor(
                 WinegoldTheme.cardBackground(in: self, disabled: true),
@@ -125,6 +131,7 @@ class ActionCardView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         guard caseAvailable else { return }
+        onSelection()
         isHovered = true
         applyVisualState(animated: true)
     }
@@ -139,9 +146,10 @@ class ActionCardView: NSView {
         super.layout()
         let rightInset: CGFloat = 12
         let leftTextX: CGFloat = 48
-        let buttonSize = NSSize(width: setupRequirements == nil ? 34 : 116, height: 30)
+        let hasLabel = setupRequirements != nil || inputActionLabel != nil
+        let buttonSize = NSSize(width: hasLabel ? 116 : 34, height: 30)
         let buttonX = max(leftTextX + 120, bounds.width - rightInset - buttonSize.width)
-        let textRightPadding: CGFloat = caseAvailable ? (setupRequirements == nil ? 88 : 150) : 12
+        let textRightPadding: CGFloat = caseAvailable ? (hasLabel ? 150 : 88) : 12
         let textWidth = max(80, bounds.width - leftTextX - textRightPadding)
 
         leadingIcon.frame = NSRect(x: 12, y: 20, width: 24, height: 24)
@@ -157,6 +165,22 @@ class ActionCardView: NSView {
         )
     }
 
+
+    func setSelected(_ selected: Bool) {
+        isKeyboardSelected = selected
+        if !selected {
+            isHovered = false
+            isPressed = false
+        }
+        applyVisualState(animated: false)
+    }
+
+    func releaseInteractionState() {
+        isHovered = false
+        isPressed = false
+        applyVisualState(animated: false)
+    }
+
     override func resetCursorRects() {
         super.resetCursorRects()
         if caseAvailable {
@@ -166,6 +190,7 @@ class ActionCardView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         guard caseAvailable else { return }
+        onSelection()
         isPressed = true
         applyVisualState(animated: true)
     }

@@ -805,6 +805,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         actionPanelWindow?.beginRun(actionName: action.name, files: files)
 
+        if files.isEmpty {
+            Task {
+                let wd = resolver.resolveWithoutInput(workingDirectoryTemplate: action.workingDirectoryTemplate)
+                let args = resolver.resolveWithoutInput(argumentsTemplate: action.argumentsTemplate)
+                    .map { $0.replacingOccurrences(of: "{recipeDir}", with: wd ?? "") }
+                var request = CommandExecutionRequest(
+                    executablePath: action.executablePath,
+                    arguments: args,
+                    workingDirectory: wd,
+                    timeoutSeconds: action.timeoutSeconds
+                )
+                if let recipeEnvironment, !recipeEnvironment.isEmpty { request.environment = recipeEnvironment }
+                let redactor = SecretRedactor()
+                let redactedRequest = redactor.redactCommand(request, secretValues: secretValues)
+                var result = await runner.run(request: request)
+                result.actionId = action.id
+                result.actionName = self.historyActionName(action: action, metadata: actionMetadata)
+                result.parentRecipeID = actionMetadata?.parentExternalID
+                result.childActionID = actionMetadata?.childActionID
+                result.parentRecipeName = actionMetadata?.parentName
+                result.childActionName = actionMetadata?.childActionID == nil ? nil : action.name
+                result.inputFiles = []
+                if let message = action.successMessage?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                    result.completionMessage = message
+                }
+                if !secretValues.isEmpty {
+                    result.stdout = redactor.redact(result.stdout, secretValues: secretValues)
+                    result.stderr = redactor.redact(result.stderr, secretValues: secretValues)
+                }
+                if result.status != .success {
+                    result.stderr = self.failureDebugText(
+                        existingStderr: result.stderr,
+                        action: action,
+                        request: redactedRequest,
+                        secretValues: secretValues
+                    )
+                }
+                try? runHistoryStore.addRun(result)
+                let finalResult = result
+                await MainActor.run { self.actionPanelWindow?.showRunResult(result: finalResult) }
+            }
+            return
+        }
+
         Task {
             var batchHadFailure = false
             for (offset, file) in files.enumerated() {

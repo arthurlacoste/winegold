@@ -103,9 +103,10 @@ public struct Migrations {
         try ensureRecipeIndexColumns()
         try ensureMultiActionColumns()
         try ensureRunHistoryActionColumns()
+        try ensureActionInputColumns()
         let version = try currentVersion()
         if version == 0 {
-            try db.execute("INSERT INTO schema_version (version) VALUES (11)")
+            try db.execute("INSERT INTO schema_version (version) VALUES (12)")
         } else {
             if version < 2 {
                 try db.execute("ALTER TABLE actions ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
@@ -147,6 +148,10 @@ public struct Migrations {
             if version < 11 {
                 try ensureRunHistoryActionColumns()
                 try db.execute("INSERT INTO schema_version (version) VALUES (11)")
+            }
+            if version < 12 {
+                try ensureActionInputColumns()
+                try db.execute("INSERT INTO schema_version (version) VALUES (12)")
             }
         }
     }
@@ -224,6 +229,13 @@ public struct Migrations {
         if !columns.contains("child_action_id") { try db.execute("ALTER TABLE run_history ADD COLUMN child_action_id TEXT") }
         if !columns.contains("parent_recipe_name") { try db.execute("ALTER TABLE run_history ADD COLUMN parent_recipe_name TEXT") }
         if !columns.contains("child_action_name") { try db.execute("ALTER TABLE run_history ADD COLUMN child_action_name TEXT") }
+    }
+
+
+    private func ensureActionInputColumns() throws {
+        let columns = try tableColumns("actions")
+        if !columns.contains("minimum_input_count") { try db.execute("ALTER TABLE actions ADD COLUMN minimum_input_count INTEGER NOT NULL DEFAULT 1") }
+        if !columns.contains("maximum_input_count") { try db.execute("ALTER TABLE actions ADD COLUMN maximum_input_count INTEGER") }
     }
 
     private func tableColumns(_ table: String) throws -> Set<String> {

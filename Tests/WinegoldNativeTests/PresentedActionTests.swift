@@ -34,6 +34,18 @@ final class PresentedActionTests: XCTestCase {
         XCTAssertEqual(policy.present([item], query: "test").count, 1)
     }
 
+    func testSearchRanksExactThenPrefixThenSubstring() {
+        let items = [item("Run test suite"), item("Test project"), item("Test")]
+        XCTAssertEqual(ActionPresentationPolicy().present(items, query: "test").map(\.action.name), ["Test", "Test project", "Run test suite"])
+    }
+
+    func testSearchMatchesExtensionsAndTriggerText() {
+        var png = Action(name: "Convert", acceptedExtensions: ["png"], executablePath: "/bin/zsh")
+        png.triggerExpression = "extension equals \"png\""
+        let item = PresentedAction(action: png)
+        XCTAssertEqual(ActionPresentationPolicy().present([item], query: "png").count, 1)
+    }
+
     private func item(
         _ name: String,
         parent: String? = nil,

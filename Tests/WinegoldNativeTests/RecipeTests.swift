@@ -53,7 +53,7 @@ final class RecipeTests: XCTestCase {
         XCTAssertEqual(restored.displayOrder, 42)
     }
 
-    func testRepairInvalidRecipeAddsMissingTriggerAndPreservesOtherFields() throws {
+    func testRepairRecipeCanAddTriggerToPreviouslyTriggerlessRecipe() throws {
         let temp = temporaryDirectory()
         let root = temp.appendingPathComponent("recipes")
         let url = root.appendingPathComponent("convert/convert.wg.yml")
@@ -76,7 +76,7 @@ final class RecipeTests: XCTestCase {
         try Migrations(db: db).run()
         let coordinator = RecipeCoordinator(root: root, db: db)
         try coordinator.reconcile()
-        XCTAssertEqual(try coordinator.entries().first?.status, "invalid")
+        XCTAssertEqual(try coordinator.entries().first?.status, "valid")
 
         let draft = try coordinator.repairDraft(at: url)
         XCTAssertEqual(draft.name, "Convert webp to jpg")

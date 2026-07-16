@@ -37,6 +37,8 @@ public struct RecipeDocument: Equatable {
     public var homepage: String?
     public var enabled: Bool
     public var trigger: String
+    public var minimumInputCount: Int?
+    public var maximumInputCount: Int?
     public var command: String
     public var actions: [RecipeChildAction]
     public var successMessage: String?
@@ -44,7 +46,7 @@ public struct RecipeDocument: Equatable {
     public var requirements: [String]
     public var variables: [RecipeVariable]?
 
-    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, author: String? = nil, category: String? = nil, homepage: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil, actions: [RecipeChildAction] = []) {
+    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, author: String? = nil, category: String? = nil, homepage: String? = nil, enabled: Bool = true, trigger: String, minimumInputCount: Int? = nil, maximumInputCount: Int? = nil, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil, actions: [RecipeChildAction] = []) {
         self.id = id
         self.name = name
         self.description = description
@@ -54,6 +56,8 @@ public struct RecipeDocument: Equatable {
         self.homepage = homepage
         self.enabled = enabled
         self.trigger = trigger
+        self.minimumInputCount = minimumInputCount
+        self.maximumInputCount = maximumInputCount
         self.command = command
         self.actions = actions
         self.successMessage = successMessage
@@ -106,9 +110,13 @@ public struct RecipeParser {
         var document = try parse(text: text)
         let externalID = document.id ?? Self.generatedID()
         document.id = externalID
-        let triggerNode: TriggerExpression
-        do { triggerNode = try TriggerParser().parse(document.trigger) }
-        catch { throw RecipeError.invalidTrigger(document.trigger) }
+        let triggerNode: TriggerExpression?
+        if document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            triggerNode = nil
+        } else {
+            do { triggerNode = try TriggerParser().parse(document.trigger) }
+            catch { throw RecipeError.invalidTrigger(document.trigger) }
+        }
         let actions = document.resolvedActions(recipeURL: url, triggerNode: triggerNode)
         let warnings = (!document.actions.isEmpty && !document.command.isEmpty)
             ? ["Recipe \"\(document.name)\" defines both cmd and actions. The top-level cmd was ignored."]
@@ -144,6 +152,8 @@ public struct RecipeParser {
             homepage: scalar("homepage", lines: lines) ?? scalar("source", lines: lines),
             enabled: (scalar("enabled", lines: lines) ?? "true").lowercased() != "false",
             trigger: trigger,
+            minimumInputCount: nestedInt(section: "input", key: "min", lines: lines),
+            maximumInputCount: nestedInt(section: "input", key: "max", lines: lines),
             command: command,
             successMessage: scalar("successMessage", lines: lines),
             supportFiles: topLevelList("files", lines: lines),
@@ -166,7 +176,9 @@ public struct RecipeParser {
         case "false", "no", "0": enabled = false
         default: throw RecipeError.invalidBoolean(enabledText)
         }
-        _ = try TriggerParser().parse(trigger)
+        if !trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            _ = try TriggerParser().parse(trigger)
+        }
         let variables = try RecipeVariableParser().parseVariables(lines: lines)
         return RecipeDocument(
             id: scalar("id", lines: lines),
@@ -178,6 +190,8 @@ public struct RecipeParser {
             homepage: scalar("homepage", lines: lines) ?? scalar("source", lines: lines),
             enabled: enabled,
             trigger: trigger,
+            minimumInputCount: nestedInt(section: "input", key: "min", lines: lines),
+            maximumInputCount: nestedInt(section: "input", key: "max", lines: lines),
             command: command,
             successMessage: scalar("successMessage", lines: lines),
             supportFiles: topLevelList("files", lines: lines),
@@ -190,7 +204,7 @@ public struct RecipeParser {
     private func triggerValue(lines: [String]) throws -> String {
         if let direct = scalar("trigger", lines: lines), !direct.isEmpty { return direct }
         let extensions = nestedList(section: "trigger", key: "fileExtension", lines: lines)
-        guard !extensions.isEmpty else { throw RecipeError.missingField("trigger") }
+        guard !extensions.isEmpty else { return "" }
         return TriggerSerializer().serialize(.condition(field: "extension", operator: .in, value: .collection(extensions)))
     }
 
@@ -216,6 +230,10 @@ public struct RecipeParser {
             return value.unquoted
         }
         return nil
+    }
+
+    private func nestedInt(section: String, key: String, lines: [String]) -> Int? {
+        nestedScalar(section: section, key: key, lines: lines).flatMap(Int.init)
     }
 
     private func nestedList(section: String, key: String, lines: [String]) -> [String] {
@@ -307,8 +325,16 @@ public struct RecipeSerializer {
             lines.append("  commands:")
             lines.append(contentsOf: document.requirements.map { "    - \(quote($0))" })
         }
+        if document.minimumInputCount != nil || document.maximumInputCount != nil {
+            lines.append("")
+            lines.append("input:")
+            if let minimum = document.minimumInputCount { lines.append("  min: \(minimum)") }
+            if let maximum = document.maximumInputCount { lines.append("  max: \(maximum)") }
+        }
         lines.append("")
-        lines.append("trigger: \(quote(document.trigger))")
+        if !document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lines.append("trigger: \(quote(document.trigger))")
+        }
         if !document.actions.isEmpty {
             lines.append("")
             lines.append("actions:")
@@ -478,7 +504,7 @@ private struct RecipeRepairTextEditor {
         let serializer = RecipeSerializer()
         let replacements: [String: [String]] = [
             "name": ["name: \(serializer.quote(document.name))"],
-            "trigger": ["trigger: \(serializer.quote(document.trigger))"],
+            "trigger": document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : ["trigger: \(serializer.quote(document.trigger))"],
             "cmd": commandBlock(document.command),
             "successMessage": document.successMessage.map { ["successMessage: \(serializer.quote($0))"] } ?? []
         ]
@@ -549,7 +575,7 @@ private struct RecipeTextEditor {
         var values: [String: [String]] = [
             "name": ["name: \(serializer.quote(document.name))"],
             "enabled": ["enabled: \(document.enabled ? "true" : "false")"],
-            "trigger": ["trigger: \(serializer.quote(document.trigger))"],
+            "trigger": document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : ["trigger: \(serializer.quote(document.trigger))"],
             "cmd": commandBlock(document.command)
         ]
         if let id = document.id { values["id"] = ["id: \(serializer.quote(id))"] }
