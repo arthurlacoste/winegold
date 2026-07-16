@@ -41,7 +41,24 @@ public struct RecipeIndexStore {
         try db.execute("BEGIN IMMEDIATE TRANSACTION")
         do {
             let actionStore = ActionStore(db: db)
-            try actionStore.upsertDerivedRecipe(record.action, externalID: externalID, path: record.url.path, hash: record.contentHash, category: category(for: record.url), available: !needsSetup)
+            let disableRemoved = try db.prepare("UPDATE actions SET available=0 WHERE recipe_path=?")
+            disableRemoved.bindText(record.url.path, at: 1)
+            _ = disableRemoved.step()
+            for (index, pair) in zip(record.actions, record.document.actionExternalIDs).enumerated() {
+                let (action, actionExternalID) = pair
+                let child = record.document.actions.indices.contains(index) ? record.document.actions[index] : nil
+                try actionStore.upsertDerivedRecipe(
+                    action,
+                    externalID: actionExternalID,
+                    parentExternalID: child == nil ? nil : externalID,
+                    childActionID: child?.id,
+                    parentName: child == nil ? nil : record.document.name,
+                    path: record.url.path,
+                    hash: record.contentHash,
+                    category: category(for: record.url),
+                    available: !needsSetup
+                )
+            }
             let stmt = try db.prepare("""
                 INSERT INTO recipe_index (recipe_path, external_id, content_hash, modification_time, file_size, status, parse_error)
                 VALUES (?, ?, ?, ?, ?, 'valid', NULL)
@@ -99,8 +116,9 @@ public struct RecipeIndexStore {
     }
     public func hasAvailableAction(externalID: String?) throws -> Bool {
         guard let externalID else { return false }
-        let stmt = try db.prepare("SELECT COUNT(*) FROM actions WHERE external_id=? AND available=1")
+        let stmt = try db.prepare("SELECT COUNT(*) FROM actions WHERE (external_id=? OR external_id LIKE ?) AND available=1")
         stmt.bindText(externalID, at: 1)
+        stmt.bindText(externalID + "/%", at: 2)
         return stmt.step() && stmt.columnInt(at: 0) > 0
     }
 
@@ -272,6 +290,39 @@ public final class RecipeCoordinator {
     public func entries() throws -> [RecipeIndexEntry] { try index.entries() }
 
     public func path(for actionID: UUID) throws -> URL? { try index.path(for: actionID) }
+
+    public func yaml(for actionID: UUID) throws -> String? {
+        guard let path = try index.path(for: actionID) else { return nil }
+        return try String(contentsOf: path, encoding: .utf8)
+    }
+
+    public func saveYAML(_ text: String, for actionID: UUID?) throws -> UUID {
+        let editor = RecipeYAMLEditor()
+        let validation = editor.validate(text)
+        guard var document = validation.document else {
+            throw RecipeYAMLEditorError.invalid(validation.errors.joined(separator: "\n"))
+        }
+        if document.id == nil { document.id = RecipeParser.generatedID() }
+        let persistedText = document.id == validation.document?.id
+            ? text
+            : RecipeSerializer().serialize(document)
+        let destination: URL
+        if let actionID, let existing = try index.path(for: actionID) {
+            destination = existing
+        } else {
+            destination = editor.destination(for: document, root: root)
+        }
+        try editor.save(persistedText, to: destination, inside: root)
+        _ = try reconcile()
+        let externalID = document.id ?? ""
+        let selectedID = document.actions.first.map { RecipeParser.runtimeUUID(for: "\(externalID)/\($0.id)") }
+            ?? RecipeParser.runtimeUUID(for: externalID)
+        return selectedID
+    }
+
+    public func validateYAML(_ text: String) -> RecipeYAMLValidation {
+        RecipeYAMLEditor().validate(text)
+    }
 
     public func resolveRecipeVariables(for actionID: UUID) -> (environment: [String: String], secretValues: [String])? {
         guard let variableStore, let keychainStore else { return nil }

@@ -58,4 +58,48 @@ final class RunHistoryStoreTests: XCTestCase {
         XCTAssertEqual(items[0].actionName, "second")
         XCTAssertEqual(items[1].actionName, "first")
     }
+
+    func testChildActionMetadataRoundTrip() throws {
+        let actionID = UUID()
+        let result = CommandResult(
+            actionId: actionID,
+            actionName: "Run tests - Node project",
+            parentRecipeID: "winegold.node-project",
+            childActionID: "test",
+            parentRecipeName: "Node project",
+            childActionName: "Run tests",
+            inputFiles: ["/tmp/project"],
+            status: .failed,
+            exitCode: 1
+        )
+
+        try store.addRun(result)
+
+        let item = try XCTUnwrap(store.recentRuns().first)
+        XCTAssertEqual(item.actionId, actionID)
+        XCTAssertEqual(item.actionName, "Run tests - Node project")
+        XCTAssertEqual(item.parentRecipeID, "winegold.node-project")
+        XCTAssertEqual(item.childActionID, "test")
+        XCTAssertEqual(item.parentRecipeName, "Node project")
+        XCTAssertEqual(item.childActionName, "Run tests")
+    }
+
+    func testLegacyHistoryRowKeepsWorkingWithNullChildMetadata() throws {
+        let id = UUID()
+        let actionID = UUID()
+        let stmt = try db.prepare("""
+            INSERT INTO run_history (id, action_id, action_name, input_files, output_files, status,
+            exit_code, stdout, stderr, started_at, ended_at)
+            VALUES (?, ?, 'Legacy action', '', '', 'success', 0, '', '', '2026-01-01T00:00:00+0000', NULL)
+        """)
+        stmt.bindText(id.uuidString, at: 1)
+        stmt.bindText(actionID.uuidString, at: 2)
+        _ = stmt.step()
+
+        let item = try XCTUnwrap(store.recentRuns().first)
+        XCTAssertEqual(item.actionName, "Legacy action")
+        XCTAssertNil(item.parentRecipeID)
+        XCTAssertNil(item.childActionID)
+    }
+
 }

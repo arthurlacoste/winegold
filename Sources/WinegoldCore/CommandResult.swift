@@ -13,6 +13,10 @@ public struct CommandResult: Identifiable, Codable {
     public var id: UUID
     public var actionId: UUID
     public var actionName: String
+    public var parentRecipeID: String?
+    public var childActionID: String?
+    public var parentRecipeName: String?
+    public var childActionName: String?
     public var inputFiles: [String]
     public var outputFiles: [String]
     public var completionMessage: String?
@@ -27,6 +31,10 @@ public struct CommandResult: Identifiable, Codable {
         id: UUID = UUID(),
         actionId: UUID,
         actionName: String = "",
+        parentRecipeID: String? = nil,
+        childActionID: String? = nil,
+        parentRecipeName: String? = nil,
+        childActionName: String? = nil,
         inputFiles: [String] = [],
         outputFiles: [String] = [],
         completionMessage: String? = nil,
@@ -40,6 +48,10 @@ public struct CommandResult: Identifiable, Codable {
         self.id = id
         self.actionId = actionId
         self.actionName = actionName
+        self.parentRecipeID = parentRecipeID
+        self.childActionID = childActionID
+        self.parentRecipeName = parentRecipeName
+        self.childActionName = childActionName
         self.inputFiles = inputFiles
         self.outputFiles = outputFiles
         self.completionMessage = completionMessage

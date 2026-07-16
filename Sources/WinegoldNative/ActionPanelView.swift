@@ -2,7 +2,7 @@ import Cocoa
 import WinegoldCore
 import WinegoldUI
 
-class ActionPanelViewController: NSViewController {
+class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private let state: PanelState
     private let onRunAction: (Action, [URL]) -> Void
     private let onSetupAction: (Action, [URL]) -> Void
@@ -14,7 +14,6 @@ class ActionPanelViewController: NSViewController {
     private var runGeneration = 0
     private var lastLayoutWidth: CGFloat = 0
     private var lastHadStatusArea = false
-    private var actionRenderWindow = ActionRenderWindow(batchSize: 20)
     private var isRefreshing = false
     private var lastFilesSignature = ""
     private var showsRecentRuns = false
@@ -24,6 +23,11 @@ class ActionPanelViewController: NSViewController {
     private let settingsButton = NSButton()
     private let helpButton = NSButton()
     private let footerBar = PanelFooterBarView(frame: .zero)
+    private let actionSearchField = NSSearchField()
+    private var actionSearchQuery = ""
+    private var keyboardSelection = KeyboardActionSelection()
+    private var visibleActionItems: [PresentedAction] = []
+    private var shouldRestoreSearchFocus = false
     private(set) var currentContentHeight: CGFloat = 0
 
     var shouldShowActions: Bool {
@@ -91,13 +95,6 @@ class ActionPanelViewController: NSViewController {
         }
         (view as? PanelDropView)?.onDraggingChanged = draggingHandler
         scrollView.onDraggingChanged = draggingHandler
-        scrollView.contentView.postsBoundsChangedNotifications = true
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(scrollBoundsChanged),
-            name: NSView.boundsDidChangeNotification,
-            object: scrollView.contentView
-        )
         contentView.onDraggingChanged = draggingHandler
     }
 
@@ -105,6 +102,7 @@ class ActionPanelViewController: NSViewController {
         super.viewDidLoad()
         logMsg("[PanelVC] viewDidLoad files=\(state.files.count) actions=\(state.actions.count)")
         applyTheme()
+        actionSearchField.delegate = self
         configureBottomTools()
         buildUI()
     }
@@ -352,7 +350,6 @@ class ActionPanelViewController: NSViewController {
         let signature = files.map { $0.path }.joined(separator: "\n")
         guard signature != dragPreviewFiles.map({ $0.path }).joined(separator: "\n") else { return }
         dragPreviewFiles = files
-        actionRenderWindow.reset()
         isDraggingFiles = true
         refresh()
         requestWindowResize(animated: true)
@@ -380,7 +377,6 @@ class ActionPanelViewController: NSViewController {
         isDraggingFiles = false
 
         state.files = files
-        actionRenderWindow.reset()
         state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
         state.lastResult = nil
         state.batchResults = []
@@ -481,19 +477,41 @@ class ActionPanelViewController: NSViewController {
     }
 
     private func addActionsSection(y: inout CGFloat, w: CGFloat) {
-        let label = sectionLabel("ACTIONS")
+        let dragActions = previewMatchedActions
+        let matchedActions = !dragPreviewFiles.isEmpty ? dragActions : state.actions
+        let presented = matchedActions.map { action -> PresentedAction in
+            let metadata = state.actionMetadata[action.id]
+            return PresentedAction(
+                action: action,
+                parentName: metadata?.parentName,
+                parentExternalID: metadata?.parentExternalID,
+                childActionID: metadata?.childActionID,
+                usageCount: metadata?.usageCount ?? 0,
+                localOrderOverride: metadata?.localOrderOverride
+            )
+        }
+        let visible = ActionPresentationPolicy().present(presented, query: actionSearchQuery)
+        visibleActionItems = visible
+        keyboardSelection.clamp(count: visible.count)
+
+        let label = sectionLabel("ACTIONS · \(matchedActions.count)")
         label.frame.origin = CGPoint(x: padding + 2, y: y)
         contentView.addSubview(label)
         y += 20
 
-        let dragActions = previewMatchedActions
-        let allVisibleActions = !dragPreviewFiles.isEmpty ? dragActions : (state.actions.isEmpty ? state.allActions : state.actions)
-        let renderedCount = actionRenderWindow.visibleCount(total: allVisibleActions.count)
-        let visibleActions = Array(allVisibleActions.prefix(renderedCount))
+        if matchedActions.count > 10 || !actionSearchQuery.isEmpty {
+            actionSearchField.placeholderString = "Search \(matchedActions.count) actions"
+            actionSearchField.stringValue = actionSearchQuery
+            actionSearchField.target = nil
+            actionSearchField.action = nil
+            actionSearchField.frame = NSRect(x: padding, y: y, width: w, height: 28)
+            contentView.addSubview(actionSearchField)
+            y += 36
+        }
 
-        if visibleActions.isEmpty {
-            let message = state.isMatchingActions ? "Finding actions…" : "No compatible actions"
-            let empty = NSTextField(labelWithString: message)
+        if visible.isEmpty {
+            let text = actionSearchQuery.isEmpty ? "No compatible actions" : "No matching actions"
+            let empty = NSTextField(labelWithString: text)
             empty.font = .systemFont(ofSize: 13)
             empty.textColor = .secondaryLabelColor
             empty.frame = NSRect(x: padding, y: y, width: w, height: 20)
@@ -503,92 +521,100 @@ class ActionPanelViewController: NSViewController {
         }
 
         let rowHeight: CGFloat = 58
-        let hasCategories = visibleActions.contains { $0.category != nil }
-        var grouped: [(name: String?, actions: [Action])] = []
-        if hasCategories {
-            for action in visibleActions {
-                let name = action.category ?? "General"
-                if let index = grouped.firstIndex(where: { $0.name == name }) {
-                    grouped[index].actions.append(action)
-                } else {
-                    grouped.append((name, [action]))
-                }
-            }
-        } else {
-            grouped = [(nil, visibleActions)]
-        }
-
+        let containerHeight = CGFloat(visible.count) * rowHeight
+        let container = PanelActionListView(frame: NSRect(x: padding, y: y, width: w, height: containerHeight))
+        contentView.addSubview(container)
         let validator = ActionValidator()
-        for group in grouped {
-            if let category = group.name {
-                let categoryLabel = sectionLabel(category.uppercased())
-                categoryLabel.font = .systemFont(ofSize: 10, weight: .semibold)
-                categoryLabel.frame = NSRect(x: padding + 8, y: y, width: w - 16, height: 16)
-                contentView.addSubview(categoryLabel)
-                y += 18
+
+        for (index, item) in visible.enumerated() {
+            let action = item.action
+            let card = ActionCardView(
+                action: action,
+                status: validator.validate(action),
+                isActive: state.activeActionId == action.id,
+                isKeyboardSelected: index == keyboardSelection.index,
+                setupRequirements: state.setupRequirements[action.id],
+                isGroupedRow: true,
+                parentName: item.parentName,
+                onDrop: { [weak self] droppedFiles in
+                    let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
+                    guard !files.isEmpty else { return }
+                    self?.startRun(action: action, files: files)
+                },
+                onSetup: { [weak self] action in self?.onSetupAction(action, self?.state.files ?? []) },
+                onToggleFavorite: { [weak self] action in self?.onToggleFavorite(action) },
+                onMoveBefore: { [weak self] source, target in self?.onMoveAction(source, target) }
+            )
+            card.frame = NSRect(x: 0, y: CGFloat(index) * rowHeight, width: w, height: rowHeight)
+            container.addSubview(card)
+            cardViews.append(card)
+
+            if index < visible.count - 1 {
+                let separator = NSView(frame: NSRect(x: 0, y: CGFloat(index + 1) * rowHeight, width: w, height: 1))
+                separator.wantsLayer = true
+                separator.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.separator(in: view), in: view)
+                container.addSubview(separator)
             }
-
-            let containerHeight = CGFloat(group.actions.count) * rowHeight
-            let container = PanelActionListView(frame: NSRect(x: padding, y: y, width: w, height: containerHeight))
-            contentView.addSubview(container)
-
-            for (index, action) in group.actions.enumerated() {
-                let status = validator.validate(action)
-                let setupRequirements = state.setupRequirements[action.id]
-                let card = ActionCardView(
-                    action: action,
-                    status: status,
-                    isActive: state.activeActionId == action.id,
-                    setupRequirements: setupRequirements,
-                    isGroupedRow: true,
-                    onDrop: { [weak self] droppedFiles in
-                        let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
-                        logMsg("[PanelVC] onDrop action=\(action.name) files=\(files.map { $0.lastPathComponent })")
-                        guard !files.isEmpty else { return }
-                        self?.startRun(action: action, files: files)
-                    },
-                    onSetup: { [weak self] action in
-                        self?.onSetupAction(action, self?.state.files ?? [])
-                    },
-                    onToggleFavorite: { [weak self] action in
-                        self?.onToggleFavorite(action)
-                    },
-                    onMoveBefore: { [weak self] source, target in
-                        self?.onMoveAction(source, target)
-                    }
-                )
-                card.frame = NSRect(x: 0, y: CGFloat(index) * rowHeight, width: w, height: rowHeight)
-                container.addSubview(card)
-                cardViews.append(card)
-
-                if index < group.actions.count - 1 {
-                    let separator = NSView(frame: NSRect(x: 0, y: CGFloat(index + 1) * rowHeight, width: w, height: 1))
-                    separator.wantsLayer = true
-                    separator.layer?.backgroundColor = WinegoldTheme.layerColor(WinegoldTheme.separator(in: view), in: view)
-                    container.addSubview(separator)
-                }
-            }
-            y += containerHeight + 12
         }
-        if actionRenderWindow.hasMore(total: allVisibleActions.count) {
-            let remaining = allVisibleActions.count - visibleActions.count
-            let more = NSTextField(labelWithString: "Scroll to load \(remaining) more actions")
-            more.font = .systemFont(ofSize: 11)
-            more.textColor = .secondaryLabelColor
-            more.alignment = .center
-            more.frame = NSRect(x: padding, y: y, width: w, height: 18)
-            contentView.addSubview(more)
-            y += 24
+        y += containerHeight + 12
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        guard obj.object as AnyObject? === actionSearchField else { return }
+        actionSearchQuery = actionSearchField.stringValue
+        keyboardSelection.reset()
+        refreshKeepingSearchFocus()
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        guard control === actionSearchField else { return false }
+        switch commandSelector {
+        case #selector(NSResponder.moveUp(_:)):
+            keyboardSelection.moveUp(count: visibleActionItems.count)
+            refreshKeepingSearchFocus()
+            return true
+        case #selector(NSResponder.moveDown(_:)):
+            keyboardSelection.moveDown(count: visibleActionItems.count)
+            refreshKeepingSearchFocus()
+            return true
+        case #selector(NSResponder.insertNewline(_:)):
+            runKeyboardSelectedAction()
+            return true
+        default:
+            return false
         }
     }
 
-    @objc private func scrollBoundsChanged() {
-        guard let documentView = scrollView.documentView else { return }
-        let visibleMaxY = scrollView.contentView.bounds.maxY
-        guard visibleMaxY >= documentView.bounds.height - 120 else { return }
-        let total = !dragPreviewFiles.isEmpty ? previewMatchedActions.count : (state.actions.isEmpty ? state.allActions.count : state.actions.count)
-        guard actionRenderWindow.loadNext(total: total) else { return }
-        refresh(animatedStatusInsert: false)
+    private func refreshKeepingSearchFocus() {
+        shouldRestoreSearchFocus = true
+        refresh()
+        requestWindowResize(animated: false)
+        restoreSearchFocusIfNeeded()
+    }
+
+    private func restoreSearchFocusIfNeeded() {
+        guard shouldRestoreSearchFocus else { return }
+        shouldRestoreSearchFocus = false
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.actionSearchField.superview != nil else { return }
+            self.view.window?.makeFirstResponder(self.actionSearchField)
+            if let editor = self.actionSearchField.currentEditor() {
+                editor.selectedRange = NSRange(location: self.actionSearchField.stringValue.utf16.count, length: 0)
+            }
+        }
+    }
+
+    private func runKeyboardSelectedAction() {
+        guard !visibleActionItems.isEmpty else { return }
+        keyboardSelection.clamp(count: visibleActionItems.count)
+        let action = visibleActionItems[keyboardSelection.index].action
+        let files = state.files
+        guard !files.isEmpty else { return }
+        if state.setupRequirements[action.id] == nil {
+            startRun(action: action, files: files)
+        } else {
+            onSetupAction(action, files)
+        }
     }
 
     private func addLoading(actionName: String, y: CGFloat, w: CGFloat) -> CGFloat {
@@ -959,6 +985,10 @@ class ActionPanelViewController: NSViewController {
             id: item.id,
             actionId: item.actionId,
             actionName: item.actionName,
+            parentRecipeID: item.parentRecipeID,
+            childActionID: item.childActionID,
+            parentRecipeName: item.parentRecipeName,
+            childActionName: item.childActionName,
             inputFiles: item.inputFiles,
             outputFiles: item.outputFiles,
             status: item.status,
@@ -974,10 +1004,9 @@ class ActionPanelViewController: NSViewController {
     }
 
     private func rerun(_ item: RunHistoryItem) {
-        let action = state.allActions.first { $0.id == item.actionId }
-            ?? state.allActions.first { $0.name == item.actionName }
-        guard let action else {
-            logMsg("[PanelVC] rerun failed, action not found: \(item.actionName)")
+        let resolution = SavedRunResolver().resolve(item, actions: state.allActions)
+        guard case let .available(action) = resolution else {
+            logMsg("[PanelVC] rerun unavailable: This action no longer exists in its recipe.")
             return
         }
 
@@ -988,7 +1017,6 @@ class ActionPanelViewController: NSViewController {
         }
 
         state.files = files
-        actionRenderWindow.reset()
         state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
         state.lastResult = nil
         state.batchResults = []

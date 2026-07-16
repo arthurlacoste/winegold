@@ -64,15 +64,20 @@ public struct DraggedItem: Equatable {
         result["dotExtension"] = .string(ext.isEmpty ? "" : ".\(ext)")
 
         let keys: Set<URLResourceKey> = [.fileSizeKey, .contentTypeKey, .tagNamesKey]
+        var shouldReadTextContents = false
         if let values = try? executionURL.resourceValues(forKeys: keys) {
             if let size = values.fileSize { result["size"] = .number(Double(size)) }
             if let type = values.contentType {
                 result["uti"] = .string(type.identifier)
                 if let mime = type.preferredMIMEType { result["mimeType"] = .string(mime) }
+                shouldReadTextContents = type.conforms(to: .text)
             }
             if let tags = values.tagNames { result["finderTags"] = .collection(tags) }
         }
-        if includeInside, kind == .file, let inside = Self.smallUTF8Contents(of: executionURL) { result["inside"] = .string(inside) }
+        if includeInside, kind == .file, shouldReadTextContents,
+           let inside = Self.smallUTF8Contents(of: executionURL) {
+            result["inside"] = .string(inside)
+        }
     }
 
     private static func inferKind(for url: URL) -> Kind {

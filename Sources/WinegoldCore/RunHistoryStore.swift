@@ -4,6 +4,10 @@ public struct RunHistoryItem: Identifiable, Codable {
     public var id: UUID
     public var actionId: UUID
     public var actionName: String
+    public var parentRecipeID: String?
+    public var childActionID: String?
+    public var parentRecipeName: String?
+    public var childActionName: String?
     public var inputFiles: [String]
     public var outputFiles: [String]
     public var status: ExecutionStatus
@@ -17,6 +21,10 @@ public struct RunHistoryItem: Identifiable, Codable {
         id: UUID = UUID(),
         actionId: UUID,
         actionName: String,
+        parentRecipeID: String? = nil,
+        childActionID: String? = nil,
+        parentRecipeName: String? = nil,
+        childActionName: String? = nil,
         inputFiles: [String] = [],
         outputFiles: [String] = [],
         status: ExecutionStatus = .pending,
@@ -29,6 +37,10 @@ public struct RunHistoryItem: Identifiable, Codable {
         self.id = id
         self.actionId = actionId
         self.actionName = actionName
+        self.parentRecipeID = parentRecipeID
+        self.childActionID = childActionID
+        self.parentRecipeName = parentRecipeName
+        self.childActionName = childActionName
         self.inputFiles = inputFiles
         self.outputFiles = outputFiles
         self.status = status
@@ -43,6 +55,10 @@ public struct RunHistoryItem: Identifiable, Codable {
         self.id = result.id
         self.actionId = result.actionId
         self.actionName = result.actionName
+        self.parentRecipeID = result.parentRecipeID
+        self.childActionID = result.childActionID
+        self.parentRecipeName = result.parentRecipeName
+        self.childActionName = result.childActionName
         self.inputFiles = result.inputFiles
         self.outputFiles = result.outputFiles
         self.status = result.status
@@ -68,8 +84,9 @@ public struct RunHistoryStore {
         let item = RunHistoryItem(from: result)
         let stmt = try db.prepare("""
             INSERT INTO run_history (id, action_id, action_name, input_files, output_files,
-            status, exit_code, stdout, stderr, started_at, ended_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            status, exit_code, stdout, stderr, started_at, ended_at, parent_recipe_id, child_action_id,
+            parent_recipe_name, child_action_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """)
         stmt.bindText(item.id.uuidString, at: 1)
         stmt.bindText(item.actionId.uuidString, at: 2)
@@ -85,16 +102,16 @@ public struct RunHistoryStore {
         stmt.bindText(item.stdout, at: 8)
         stmt.bindText(item.stderr, at: 9)
         stmt.bindText(dateFormatter.string(from: item.startedAt), at: 10)
-        if let ended = item.endedAt {
-            stmt.bindText(dateFormatter.string(from: ended), at: 11)
-        } else {
-            stmt.bindNull(at: 11)
-        }
+        if let ended = item.endedAt { stmt.bindText(dateFormatter.string(from: ended), at: 11) } else { stmt.bindNull(at: 11) }
+        if let value = item.parentRecipeID { stmt.bindText(value, at: 12) } else { stmt.bindNull(at: 12) }
+        if let value = item.childActionID { stmt.bindText(value, at: 13) } else { stmt.bindNull(at: 13) }
+        if let value = item.parentRecipeName { stmt.bindText(value, at: 14) } else { stmt.bindNull(at: 14) }
+        if let value = item.childActionName { stmt.bindText(value, at: 15) } else { stmt.bindNull(at: 15) }
         _ = stmt.step()
     }
 
     public func recentRuns(limit: Int = 100) throws -> [RunHistoryItem] {
-        let stmt = try db.prepare("SELECT * FROM run_history ORDER BY started_at DESC LIMIT ?")
+        let stmt = try db.prepare("SELECT id, action_id, action_name, input_files, output_files, status, exit_code, stdout, stderr, started_at, ended_at, parent_recipe_id, child_action_id, parent_recipe_name, child_action_name FROM run_history ORDER BY started_at DESC LIMIT ?")
         stmt.bindInt(limit, at: 1)
         var items: [RunHistoryItem] = []
         while stmt.step() {
@@ -112,6 +129,10 @@ public struct RunHistoryStore {
             id: UUID(uuidString: stmt.columnText(at: 0)) ?? UUID(),
             actionId: UUID(uuidString: stmt.columnText(at: 1)) ?? UUID(),
             actionName: stmt.columnText(at: 2),
+            parentRecipeID: stmt.columnIsNull(at: 11) ? nil : stmt.columnText(at: 11),
+            childActionID: stmt.columnIsNull(at: 12) ? nil : stmt.columnText(at: 12),
+            parentRecipeName: stmt.columnIsNull(at: 13) ? nil : stmt.columnText(at: 13),
+            childActionName: stmt.columnIsNull(at: 14) ? nil : stmt.columnText(at: 14),
             inputFiles: stmt.columnText(at: 3).components(separatedBy: "\n").filter { !$0.isEmpty },
             outputFiles: stmt.columnText(at: 4).components(separatedBy: "\n").filter { !$0.isEmpty },
             status: ExecutionStatus(rawValue: stmt.columnText(at: 5)) ?? .failed,

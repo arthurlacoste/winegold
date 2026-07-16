@@ -7,6 +7,7 @@ public indirect enum TriggerExpression: Codable, Equatable {
     case not(TriggerExpression)
 }
 
+
 public extension TriggerExpression {
     var referencedFields: Set<String> {
         switch self {

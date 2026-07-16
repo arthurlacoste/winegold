@@ -19,6 +19,47 @@ cmd:
 
 `trigger` is one readable expression. The same expression is used by imported recipes, the Settings builder, and direct expression editing.
 
+## Multiple actions in one recipe
+
+A recipe can expose several actions while sharing one trigger, variables, support files, and parent requirements:
+
+```yml
+id: winegold.node-project
+name: Node project
+description: Common Node.js project commands
+trigger: kind equals "directory" and "package.json" exists
+requires:
+  commands:
+    - npm
+actions:
+  - id: dev
+    name: Start development server
+    icon: play
+    cmd:
+      exec: 'cd "{input}" && npm run dev'
+
+  - id: test
+    name: Run tests
+    description: Run the test suite.
+    requires:
+      commands:
+        - node
+    cmd:
+      exec: |
+        cd "{input}"
+        npm test
+    requiresConfirmation: true
+    timeout: 0
+```
+
+Each child action requires a stable `id`, a `name`, and `cmd.exec`. Child IDs must match `[a-zA-Z0-9][a-zA-Z0-9._-]*`, be unique inside the recipe, and cannot contain `/`.
+
+Winegold derives the runtime identity from the parent and child IDs, for example `winegold.node-project/test`. Renaming the visible action does not lose its identity. Changing its `id` creates a different action.
+
+Parent requirements are merged with child requirements. Parent values provide the shared trigger and recipe context. Child values control the visible name, description, icon, command, success message, confirmation, timeout, and initial enabled state.
+
+Legacy recipes with top-level `cmd` remain supported. When both `cmd` and `actions` exist, `actions` wins and Winegold reports a non-blocking warning.
+
 ## Nested expressions
 
 ```yml
@@ -122,6 +163,16 @@ enabled
 variables
 trigger
 cmd.exec
+actions[].id
+actions[].name
+actions[].cmd.exec
+actions[].description
+actions[].icon
+actions[].enabled
+actions[].requires.commands
+actions[].successMessage
+actions[].requiresConfirmation
+actions[].timeout
 successMessage
 files
 requirements

@@ -8,12 +8,14 @@ class ActionCardView: NSView {
     private let action: Action
     private let status: ActionValidationStatus
     private let isActive: Bool
+    private let isKeyboardSelected: Bool
     private let setupRequirements: RecipeSetupRequirements?
     private let onDrop: ([URL]) -> Void
     private let onSetup: (Action) -> Void
     private let onToggleFavorite: (Action) -> Void
     private let onMoveBefore: (Action, Action) -> Void
     private let isGroupedRow: Bool
+    private let parentName: String?
 
     private var isPressed = false
     private var isHovered = false
@@ -32,8 +34,10 @@ class ActionCardView: NSView {
         action: Action,
         status: ActionValidationStatus,
         isActive: Bool,
+        isKeyboardSelected: Bool = false,
         setupRequirements: RecipeSetupRequirements? = nil,
         isGroupedRow: Bool = false,
+        parentName: String? = nil,
         onDrop: @escaping ([URL]) -> Void,
         onSetup: @escaping (Action) -> Void = { _ in },
         onToggleFavorite: @escaping (Action) -> Void,
@@ -42,8 +46,10 @@ class ActionCardView: NSView {
         self.action = action
         self.status = status
         self.isActive = isActive
+        self.isKeyboardSelected = isKeyboardSelected
         self.setupRequirements = setupRequirements
         self.isGroupedRow = isGroupedRow
+        self.parentName = parentName
         self.onDrop = onDrop
         self.onSetup = onSetup
         self.onToggleFavorite = onToggleFavorite
@@ -70,9 +76,10 @@ class ActionCardView: NSView {
             configureIcon(systemName: iconName, tint: .secondaryLabelColor)
             configureTitle(action.name, weight: .bold, color: .controlTextColor)
             let trigger = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let subtitle = trigger?.isEmpty == false
+            let fallbackSubtitle = trigger?.isEmpty == false
                 ? trigger!
                 : (action.acceptedExtensions.contains("*") ? "all files" : action.acceptedExtensions.joined(separator: ", "))
+            let subtitle = parentName ?? (!action.description.isEmpty ? action.description : fallbackSubtitle)
             configureSubtitle(setupRequirements?.summary ?? subtitle)
             if setupRequirements == nil { configureFavoriteButton() }
             else { favoriteButton.isHidden = true }
@@ -229,7 +236,7 @@ class ActionCardView: NSView {
 
 
     private func applyVisualState(animated: Bool) {
-        let isEmphasized = isActive || isPressed || isHovered
+        let isEmphasized = isActive || isKeyboardSelected || isPressed || isHovered
         let borderWidth: CGFloat = isGroupedRow ? 0 : (isEmphasized ? 1.5 : 1)
         let borderColor: NSColor
         let backgroundColor: NSColor
@@ -321,9 +328,9 @@ class ActionCardView: NSView {
             addSubview(runLabel)
         } else {
             runIcon.image = NSImage(
-                systemSymbolName: "play.fill",
-                accessibilityDescription: "Run"
-            )?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .medium))
+                systemSymbolName: isKeyboardSelected ? "return" : "play.fill",
+                accessibilityDescription: isKeyboardSelected ? "Press Return to run" : "Run"
+            )?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: isKeyboardSelected ? 15 : 12, weight: .semibold))
             runIcon.imageAlignment = .alignCenter
             runIcon.imageScaling = .scaleNone
             runIcon.contentTintColor = NSColor.controlAccentColor.withAlphaComponent(0.82)

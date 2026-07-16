@@ -458,4 +458,268 @@ final class RecipeTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         return url
     }
+    func testParserCreatesMultipleChildActionsWithStableIdentities() throws {
+        let root = temporaryDirectory()
+        let url = root.appendingPathComponent("node.wg.yml")
+        let text = """
+        id: winegold.node-project
+        name: Node project
+        description: Common Node.js commands
+        enabled: true
+        trigger: 'kind equals "directory"'
+        requires:
+          commands:
+            - npm
+        actions:
+          - id: dev
+            name: Start development server
+            icon: play
+            cmd:
+              exec: 'cd "{input}" && npm run dev'
+          - id: test
+            name: Run tests
+            description: Run the test suite.
+            requires:
+              commands:
+                - node
+                - npm
+            cmd:
+              exec: |
+                cd "{input}"
+                npm test
+            requiresConfirmation: true
+            timeout: 0
+        """ + "\n"
+        try Data(text.utf8).write(to: url)
+
+        let record = try RecipeParser().parse(url: url)
+
+        XCTAssertEqual(record.actions.map(\.name), ["Start development server", "Run tests"])
+        XCTAssertEqual(record.actions.map(\.id), [
+            RecipeParser.runtimeUUID(for: "winegold.node-project/dev"),
+            RecipeParser.runtimeUUID(for: "winegold.node-project/test")
+        ])
+        XCTAssertEqual(record.actions[1].argumentsTemplate[1], "cd \"{input}\"\nnpm test")
+        XCTAssertTrue(record.actions[1].requiresConfirmation)
+        XCTAssertEqual(record.actions[1].timeoutSeconds, 0)
+        XCTAssertEqual(record.document.requirements(forActionExternalID: "winegold.node-project/test"), ["npm", "node"])
+    }
+
+    func testActionsOverrideTopLevelCommandWithWarning() throws {
+        let root = temporaryDirectory()
+        let url = root.appendingPathComponent("mixed.wg.yml")
+        let text = """
+        id: winegold.mixed
+        name: Mixed
+        trigger: 'extension equals "txt"'
+        cmd:
+          exec: 'echo ignored'
+        actions:
+          - id: real
+            name: Real action
+            cmd:
+              exec: 'echo real'
+        """ + "\n"
+        try Data(text.utf8).write(to: url)
+
+        let record = try RecipeParser().parse(url: url)
+
+        XCTAssertEqual(record.actions.count, 1)
+        XCTAssertEqual(record.actions[0].argumentsTemplate[1], "echo real")
+        XCTAssertEqual(record.warnings, ["Recipe \"Mixed\" defines both cmd and actions. The top-level cmd was ignored."])
+    }
+
+    func testChildActionValidationRejectsDuplicateInvalidAndMissingCommand() throws {
+        let parser = RecipeParser()
+        let duplicate = """
+        name: Duplicate
+        trigger: 'extension equals "txt"'
+        actions:
+          - id: run
+            name: One
+            cmd:
+              exec: one
+          - id: run
+            name: Two
+            cmd:
+              exec: two
+        """
+        XCTAssertThrowsError(try parser.parse(text: duplicate)) { error in
+            XCTAssertEqual(error as? RecipeError, .duplicateChildActionID("run"))
+        }
+
+        let invalid = duplicate.replacingOccurrences(of: "id: run", with: "id: bad/id", options: [], range: duplicate.range(of: "id: run"))
+        XCTAssertThrowsError(try parser.parse(text: invalid)) { error in
+            XCTAssertEqual(error as? RecipeError, .invalidChildActionID("bad/id"))
+        }
+
+        let missing = """
+        name: Missing
+        trigger: 'extension equals "txt"'
+        actions:
+          - id: run
+            name: Run
+        """
+        XCTAssertThrowsError(try parser.parse(text: missing)) { error in
+            XCTAssertEqual(error as? RecipeError, .missingField("actions[run].cmd.exec"))
+        }
+    }
+
+    func testMultiActionSerializationRoundTrip() throws {
+        let document = RecipeDocument(
+            id: "winegold.node",
+            name: "Node",
+            trigger: "kind equals \"directory\"",
+            command: "",
+            requirements: ["npm"],
+            actions: [
+                RecipeChildAction(id: "test", name: "Run tests", command: "npm test", requirements: ["node"]),
+                RecipeChildAction(id: "build", name: "Build", command: "npm run build", enabled: false)
+            ]
+        )
+
+        let text = RecipeSerializer().serialize(document)
+        let parsed = try RecipeParser().parse(text: text)
+
+        XCTAssertEqual(parsed, document)
+    }
+
+    func testCoordinatorPersistsEveryChildAction() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("node.wg.yml")
+        let text = """
+        id: winegold.node
+        name: Node
+        trigger: 'kind equals "directory"'
+        actions:
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+          - id: test
+            name: Test
+            cmd:
+              exec: npm test
+          - id: build
+            name: Build
+            cmd:
+              exec: npm run build
+        """ + "\n"
+        try Data(text.utf8).write(to: url)
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+
+        try RecipeCoordinator(root: root, db: db).reconcile()
+
+        XCTAssertEqual(Set(try ActionStore(db: db).listActions().map(\.name)), Set(["Dev", "Test", "Build"]))
+    }
+
+
+    func testRemovedChildBecomesUnavailableAndReturnsWithPreferences() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("node.wg.yml")
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        let store = ActionStore(db: db)
+
+        func writeChildren(_ children: String) throws {
+            let text = """
+            id: winegold.node
+            name: Node
+            trigger: 'kind equals "directory"'
+            actions:
+            \(children)
+            """ + "\n"
+            try Data(text.utf8).write(to: url)
+        }
+
+        try writeChildren("""
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+          - id: test
+            name: Test
+            cmd:
+              exec: npm test
+        """)
+        try coordinator.reconcile()
+        let testAction = try XCTUnwrap(try store.listActions().first { $0.name == "Test" })
+        try store.setFavorite(id: testAction.id, isFavorite: true)
+        try store.setLocalEnabledOverride(actionID: testAction.id, value: false)
+
+        try writeChildren("""
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+        """)
+        try coordinator.reconcile()
+        XCTAssertEqual(try store.listActions().map(\.name), ["Dev"])
+        XCTAssertEqual(try store.listActions(forParentID: "winegold.node", includeUnavailable: true).count, 2)
+
+        try writeChildren("""
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+          - id: test
+            name: Tests renamed
+            cmd:
+              exec: npm test
+        """)
+        try coordinator.reconcile()
+
+        let restored = try XCTUnwrap(store.metadata(for: testAction.id))
+        XCTAssertEqual(restored.action.name, "Tests renamed")
+        XCTAssertTrue(restored.action.isFavorite)
+        XCTAssertEqual(restored.localEnabledOverride, false)
+        XCTAssertFalse(restored.action.enabled)
+    }
+
+
+    func testEndToEndMultiActionYAMLUpdatePreservesLocalOverrides() throws {
+        let temp = temporaryDirectory()
+        let root = temp.appendingPathComponent("recipes")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let db = try Database(path: temp.appendingPathComponent("test.db").path)
+        try Migrations(db: db).run()
+        let coordinator = RecipeCoordinator(root: root, db: db)
+        let yaml = """
+        id: winegold.node
+        name: Node project
+        trigger: 'kind equals "directory"'
+        actions:
+          - id: dev
+            name: Dev
+            cmd:
+              exec: npm run dev
+          - id: test
+            name: Test
+            cmd:
+              exec: npm test
+        """
+
+        let selected = try coordinator.saveYAML(yaml, for: nil)
+        let store = ActionStore(db: db)
+        let testID = RecipeParser.runtimeUUID(for: "winegold.node/test")
+        XCTAssertEqual(selected, RecipeParser.runtimeUUID(for: "winegold.node/dev"))
+        try store.setLocalEnabledOverride(actionID: testID, value: false)
+        try store.incrementUsage(actionID: testID)
+
+        let updated = yaml.replacingOccurrences(of: "name: Test", with: "name: Run tests")
+        _ = try coordinator.saveYAML(updated, for: testID)
+
+        let metadata = try XCTUnwrap(store.metadata(for: testID))
+        XCTAssertEqual(metadata.action.name, "Run tests")
+        XCTAssertEqual(metadata.localEnabledOverride, false)
+        XCTAssertEqual(metadata.usageCount, 1)
+        XCTAssertFalse(metadata.action.enabled)
+    }
+
 }

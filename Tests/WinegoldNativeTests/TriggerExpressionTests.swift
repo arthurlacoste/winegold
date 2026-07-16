@@ -43,4 +43,10 @@ final class TriggerExpressionTests: XCTestCase {
         XCTAssertEqual(serializer.serialize(expression), "isFile")
         XCTAssertEqual(try parser.parse(serializer.serialize(expression)), expression)
     }
+
+    func testReferencedFieldsCollectNestedConditions() throws {
+        let expression = try TriggerParser().parse(#"mimeType startsWith "image/" or (inside contains "TODO" and size lessThan 100)"#)
+        XCTAssertEqual(expression.referencedFields, ["mimeType", "inside", "size"])
+    }
+
 }

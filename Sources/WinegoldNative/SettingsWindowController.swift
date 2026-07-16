@@ -299,24 +299,12 @@ class SettingsViewController: NSViewController {
         settingsContentView.addSubview(helpLine)
         y += 48
 
-        addFormLabel("Name", x: padding, y: y)
-        nameField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
-        settingsContentView.addSubview(nameField)
-        y += 38
+        nameField = NSTextField()
+        triggerEditor = TriggerEditorView(frame: .zero)
+        successMessageField = NSTextField()
 
-        addFormLabel("Trigger", x: padding, y: y)
-        triggerEditor = TriggerEditorView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 210))
-        settingsContentView.addSubview(triggerEditor)
-        y += 220
-
-        addFormLabel("On success", x: padding, y: y)
-        successMessageField = NSTextField(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 26))
-        successMessageField.placeholderString = "Optional, e.g. Created {basename}.jpg"
-        settingsContentView.addSubview(successMessageField)
-        y += 38
-
-        addFormLabel("Command", x: padding, y: y)
-        let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 145))
+        addFormLabel("Recipe YAML", x: padding, y: y)
+        let scroll = NSScrollView(frame: NSRect(x: padding + 110, y: y - 2, width: w - 110, height: 300))
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
@@ -324,7 +312,7 @@ class SettingsViewController: NSViewController {
         scroll.drawsBackground = true
         scroll.backgroundColor = .textBackgroundColor
 
-        commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 145))
+        commandTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: w - 124, height: 300))
         commandTextView.font = NSFont(name: "Menlo", size: 12) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
         commandTextView.isRichText = false
         commandTextView.importsGraphics = false
@@ -341,9 +329,9 @@ class SettingsViewController: NSViewController {
         commandTextView.string = ""
         scroll.documentView = commandTextView
         settingsContentView.addSubview(scroll)
-        y += 160
+        y += 315
 
-        let placeholderHelp = NSTextField(labelWithString: "Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}, {recipeDir}.")
+        let placeholderHelp = NSTextField(labelWithString: "Edit the complete .wg.yml document. Placeholders: {input}, {parent}, {filename}, {basename}, {extension}, {dotExtension}, {inside}, {desktop}, {downloads}, {timestamp}, {recipeDir}.")
         placeholderHelp.font = .systemFont(ofSize: 11)
         placeholderHelp.textColor = .tertiaryLabelColor
         placeholderHelp.lineBreakMode = .byWordWrapping
@@ -420,11 +408,13 @@ class SettingsViewController: NSViewController {
     func prepareNewScriptTemplate(for files: [URL]) {
         clearForm()
         let extensions = inferredExtensions(from: files)
-        nameField.stringValue = defaultScriptName(for: extensions)
-        triggerEditor.stringValue = extensionExpression(extensions)
+        let name = defaultScriptName(for: extensions)
+        let document = RecipeDocument(name: name, trigger: extensionExpression(extensions), command: defaultScriptCommand(for: extensions))
+        nameField.stringValue = name
+        triggerEditor.stringValue = document.trigger
         successMessageField.stringValue = ""
-        commandTextView.string = defaultScriptCommand(for: extensions)
-        nameField.becomeFirstResponder()
+        commandTextView.string = RecipeSerializer().serialize(document)
+        commandTextView.window?.makeFirstResponder(commandTextView)
     }
 
     private func inferredExtensions(from files: [URL]) -> [String] {
@@ -490,7 +480,19 @@ class SettingsViewController: NSViewController {
         nameField.stringValue = action.name
         triggerEditor.stringValue = action.triggerExpression ?? extensionExpression(action.acceptedExtensions)
         successMessageField.stringValue = action.successMessage ?? ""
-        commandTextView.string = shellCommand(for: action)
+        if let yaml = try? recipeCoordinator?.yaml(for: action.id) {
+            commandTextView.string = yaml
+        } else {
+            let document = RecipeDocument(
+                name: action.name,
+                description: action.description,
+                enabled: action.enabled,
+                trigger: action.triggerExpression ?? extensionExpression(action.acceptedExtensions),
+                command: shellCommand(for: action),
+                successMessage: action.successMessage
+            )
+            commandTextView.string = RecipeSerializer().serialize(document)
+        }
         refreshConfiguration(for: action)
         refreshRemoteStatus(for: action)
     }
@@ -674,7 +676,9 @@ class SettingsViewController: NSViewController {
         nameField.stringValue = ""
         triggerEditor.stringValue = "extension in {\"*\"}"
         successMessageField.stringValue = ""
-        commandTextView.string = ""
+        commandTextView.string = RecipeSerializer().serialize(
+            RecipeDocument(name: "New Winegold script", trigger: "extension in {\"*\"}", command: "echo \"{input}\"")
+        )
         provenanceLabel?.stringValue = "Source: Local"
         checkUpdateButton?.isEnabled = false
         updateButton?.isEnabled = false
@@ -769,9 +773,11 @@ class SettingsViewController: NSViewController {
     }
 
     private func helpPromptFromForm() -> String {
-        ScriptingHelpPrompt.make(
-            scriptName: nameField.stringValue,
-            extensions: currentExtensions(),
+        let validation = RecipeYAMLEditor().validate(commandTextView.string)
+        let document = validation.document
+        return ScriptingHelpPrompt.make(
+            scriptName: document?.name ?? "",
+            extensions: document.flatMap { try? TriggerParser().parse($0.trigger) }.map { RecipeParser.extensions(from: $0) } ?? [],
             command: commandTextView.string
         )
     }
@@ -793,31 +799,39 @@ class SettingsViewController: NSViewController {
 
     @objc private func newAction() {
         clearForm()
-        nameField.becomeFirstResponder()
+        commandTextView.window?.makeFirstResponder(commandTextView)
     }
 
     @objc private func saveAction() {
+        if let recipeCoordinator {
+            let yaml = commandTextView.string
+            let validation = recipeCoordinator.validateYAML(yaml)
+            guard validation.isValid else {
+                issueLabel.stringValue = validation.errors.joined(separator: " · ")
+                showMessage("Invalid recipe YAML: \(validation.errors.joined(separator: "\n"))")
+                return
+            }
+            do {
+                let selected = try recipeCoordinator.saveYAML(yaml, for: selectedActionID)
+                selectedRecipeIssuePath = nil
+                issueLabel.stringValue = validation.warnings.joined(separator: " · ")
+                reloadActions(select: selected)
+                onConfigurationChanged()
+            } catch {
+                showMessage("Save failed: \(error.localizedDescription)")
+            }
+            return
+        }
+
         let existing = selectedActionID.flatMap { id in actions.first { $0.id == id } }
         guard let action = formAction(existing: existing) else {
             showMessage("Name, a valid trigger, and command are required.")
             return
         }
-
         do {
-            if let issuePath = selectedRecipeIssuePath, let recipeCoordinator {
-                try recipeCoordinator.repairInvalidRecipe(at: issuePath, action: action)
-                selectedRecipeIssuePath = nil
-                reloadActions()
-            } else if let recipeCoordinator {
-                try recipeCoordinator.save(action: action)
-                reloadActions(select: action.id)
-            } else if existing == nil {
-                try actionStore.createAction(action)
-                reloadActions(select: action.id)
-            } else {
-                try actionStore.updateAction(action)
-                reloadActions(select: action.id)
-            }
+            if existing == nil { try actionStore.createAction(action) }
+            else { try actionStore.updateAction(action) }
+            reloadActions(select: action.id)
         } catch {
             showMessage("Save failed: \(error.localizedDescription)")
         }
@@ -858,7 +872,7 @@ class SettingsViewController: NSViewController {
         nameField.stringValue = draft.name
         triggerEditor.stringValue = draft.trigger
         successMessageField.stringValue = draft.successMessage ?? ""
-        commandTextView.string = draft.command
+        commandTextView.string = (try? String(contentsOf: path, encoding: .utf8)) ?? RecipeSerializer().serialize(draft)
         needsSetupBadge?.isHidden = true
         configurationView?.apply([])
         resizeConfigurationView()

@@ -16,4 +16,31 @@ final class SavedRunStoreTests: XCTestCase {
         store.unsave(item)
         XCTAssertFalse(store.isSaved(item))
     }
+
+    func testResolverUsesExactActionIDWithoutNameFallback() {
+        let originalID = UUID()
+        let item = RunHistoryItem(
+            actionId: originalID,
+            actionName: "Run tests - Node project",
+            parentRecipeID: "winegold.node-project",
+            childActionID: "test",
+            parentRecipeName: "Node project",
+            childActionName: "Run tests"
+        )
+        let renamedReplacement = Action(name: "Run tests - Node project", executablePath: "/bin/zsh")
+
+        XCTAssertEqual(
+            SavedRunResolver().resolve(item, actions: [renamedReplacement]),
+            .unavailable("This action no longer exists in its recipe.")
+        )
+    }
+
+    func testResolverFindsRenamedChildByStableID() {
+        let id = UUID()
+        let item = RunHistoryItem(actionId: id, actionName: "Old name")
+        let renamed = Action(id: id, name: "New name", executablePath: "/bin/zsh")
+
+        XCTAssertEqual(SavedRunResolver().resolve(item, actions: [renamed]), .available(renamed))
+    }
+
 }
