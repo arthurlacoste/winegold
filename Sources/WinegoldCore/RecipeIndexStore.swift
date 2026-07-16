@@ -291,6 +291,39 @@ public final class RecipeCoordinator {
 
     public func path(for actionID: UUID) throws -> URL? { try index.path(for: actionID) }
 
+    public func yaml(for actionID: UUID) throws -> String? {
+        guard let path = try index.path(for: actionID) else { return nil }
+        return try String(contentsOf: path, encoding: .utf8)
+    }
+
+    public func saveYAML(_ text: String, for actionID: UUID?) throws -> UUID {
+        let editor = RecipeYAMLEditor()
+        let validation = editor.validate(text)
+        guard var document = validation.document else {
+            throw RecipeYAMLEditorError.invalid(validation.errors.joined(separator: "\n"))
+        }
+        if document.id == nil { document.id = RecipeParser.generatedID() }
+        let persistedText = document.id == validation.document?.id
+            ? text
+            : RecipeSerializer().serialize(document)
+        let destination: URL
+        if let actionID, let existing = try index.path(for: actionID) {
+            destination = existing
+        } else {
+            destination = editor.destination(for: document, root: root)
+        }
+        try editor.save(persistedText, to: destination, inside: root)
+        _ = try reconcile()
+        let externalID = document.id ?? ""
+        let selectedID = document.actions.first.map { RecipeParser.runtimeUUID(for: "\(externalID)/\($0.id)") }
+            ?? RecipeParser.runtimeUUID(for: externalID)
+        return selectedID
+    }
+
+    public func validateYAML(_ text: String) -> RecipeYAMLValidation {
+        RecipeYAMLEditor().validate(text)
+    }
+
     public func resolveRecipeVariables(for actionID: UUID) -> (environment: [String: String], secretValues: [String])? {
         guard let variableStore, let keychainStore else { return nil }
         guard let path = try? index.path(for: actionID),
