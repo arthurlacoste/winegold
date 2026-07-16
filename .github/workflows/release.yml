@@ -14,14 +14,15 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Run tests
-        run: swift test
+        shell: bash
+        run: swift test >"$RUNNER_TEMP/swift-test.log" 2>&1 || { grep -Ei "failed|error:|assert" "$RUNNER_TEMP/swift-test.log" | tail -12; exit 1; }
 
       - name: Resolve build metadata
         id: metadata
@@ -55,15 +56,18 @@ jobs:
           OUTPUT_DIR: ${{ github.workspace }}/dist
         run: scripts/build-app.sh
 
-      - name: Package ZIP
-        run: scripts/package-release.sh dist/Winegold.app "dist/${{ steps.metadata.outputs.archive }}.zip"
+      - name: Package DMG
+        run: bash scripts/create-dmg.sh dist/Winegold.app "dist/${{ steps.metadata.outputs.archive }}.dmg" Winegold
+
+      - name: Verify DMG contents
+        run: bash scripts/test-dmg.sh "dist/${{ steps.metadata.outputs.archive }}.dmg"
 
       - name: Upload workflow artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.metadata.outputs.archive }}
-          path: dist/${{ steps.metadata.outputs.archive }}.zip
+          path: dist/${{ steps.metadata.outputs.archive }}.dmg
           if-no-files-found: error
 
       - name: Create GitHub release
@@ -72,7 +76,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/${{ steps.metadata.outputs.archive }}.zip" \
+            "dist/${{ steps.metadata.outputs.archive }}.dmg" \
             --verify-tag \
             --generate-notes \
             --title "Winegold ${{ steps.metadata.outputs.version }}"
