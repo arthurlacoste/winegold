@@ -14,6 +14,7 @@ class ActionPanelViewController: NSViewController {
     private var runGeneration = 0
     private var lastLayoutWidth: CGFloat = 0
     private var lastHadStatusArea = false
+    private var actionRenderWindow = ActionRenderWindow(batchSize: 20)
     private var isRefreshing = false
     private var lastFilesSignature = ""
     private var showsRecentRuns = false
@@ -90,6 +91,13 @@ class ActionPanelViewController: NSViewController {
         }
         (view as? PanelDropView)?.onDraggingChanged = draggingHandler
         scrollView.onDraggingChanged = draggingHandler
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(scrollBoundsChanged),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
         contentView.onDraggingChanged = draggingHandler
     }
 
@@ -344,6 +352,7 @@ class ActionPanelViewController: NSViewController {
         let signature = files.map { $0.path }.joined(separator: "\n")
         guard signature != dragPreviewFiles.map({ $0.path }).joined(separator: "\n") else { return }
         dragPreviewFiles = files
+        actionRenderWindow.reset()
         isDraggingFiles = true
         refresh()
         requestWindowResize(animated: true)
@@ -371,6 +380,7 @@ class ActionPanelViewController: NSViewController {
         isDraggingFiles = false
 
         state.files = files
+        actionRenderWindow.reset()
         state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
         state.lastResult = nil
         state.batchResults = []
@@ -477,7 +487,9 @@ class ActionPanelViewController: NSViewController {
         y += 20
 
         let dragActions = previewMatchedActions
-        let visibleActions = !dragPreviewFiles.isEmpty ? dragActions : (state.actions.isEmpty ? state.allActions : state.actions)
+        let allVisibleActions = !dragPreviewFiles.isEmpty ? dragActions : (state.actions.isEmpty ? state.allActions : state.actions)
+        let renderedCount = actionRenderWindow.visibleCount(total: allVisibleActions.count)
+        let visibleActions = Array(allVisibleActions.prefix(renderedCount))
 
         if visibleActions.isEmpty {
             let message = state.isMatchingActions ? "Finding actions…" : "No compatible actions"
@@ -558,6 +570,25 @@ class ActionPanelViewController: NSViewController {
             }
             y += containerHeight + 12
         }
+        if actionRenderWindow.hasMore(total: allVisibleActions.count) {
+            let remaining = allVisibleActions.count - visibleActions.count
+            let more = NSTextField(labelWithString: "Scroll to load \(remaining) more actions")
+            more.font = .systemFont(ofSize: 11)
+            more.textColor = .secondaryLabelColor
+            more.alignment = .center
+            more.frame = NSRect(x: padding, y: y, width: w, height: 18)
+            contentView.addSubview(more)
+            y += 24
+        }
+    }
+
+    @objc private func scrollBoundsChanged() {
+        guard let documentView = scrollView.documentView else { return }
+        let visibleMaxY = scrollView.contentView.bounds.maxY
+        guard visibleMaxY >= documentView.bounds.height - 120 else { return }
+        let total = !dragPreviewFiles.isEmpty ? previewMatchedActions.count : (state.actions.isEmpty ? state.allActions.count : state.actions.count)
+        guard actionRenderWindow.loadNext(total: total) else { return }
+        refresh(animatedStatusInsert: false)
     }
 
     private func addLoading(actionName: String, y: CGFloat, w: CGFloat) -> CGFloat {
@@ -957,6 +988,7 @@ class ActionPanelViewController: NSViewController {
         }
 
         state.files = files
+        actionRenderWindow.reset()
         state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
         state.lastResult = nil
         state.batchResults = []

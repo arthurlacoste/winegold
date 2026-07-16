@@ -32,6 +32,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var keychainStore: LocalSecretStore?
     private var pendingSetupRun: PendingSetupRun?
     private let actionMatchingQueue = DispatchQueue(label: "com.winegold.action-matching", qos: .userInitiated)
+    private let compiledActionCache = CompiledActionCache()
     private var panelWorkGeneration = PanelWorkGeneration()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -41,9 +42,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         setupGlobalHotKey()
         setupEdgeCatcher()
-        if ProcessInfo.processInfo.environment["WINEGOLD_UI_TEST_SHOW_PANEL"] == "1" {
+        let environment = ProcessInfo.processInfo.environment
+        if let dragPath = environment["WINEGOLD_UI_TEST_DRAG_PATH"], !dragPath.isEmpty {
+            DispatchQueue.main.async { [weak self] in
+                self?.showPanel(
+                    with: [URL(fileURLWithPath: dragPath)],
+                    on: ScreenResolver.currentInteractionScreen(),
+                    invocation: .drag
+                )
+            }
+        } else if environment["WINEGOLD_UI_TEST_SHOW_PANEL"] == "1" {
             DispatchQueue.main.async { [weak self] in
                 self?.showPanelFromShortcut()
+                if environment["WINEGOLD_UI_TEST_TOGGLE_CLOSE"] == "1" {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        self?.showPanelFromShortcut()
+                    }
+                }
             }
         }
     }
@@ -387,6 +402,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showPanel(with files: [URL], on requestedScreen: NSScreen? = nil, invocation: PanelInvocation = .menu) {
         let screen = requestedScreen ?? ScreenResolver.currentInteractionScreen()
+        logMsg("[Perf] panel_open_requested uptime=\(ProcessInfo.processInfo.systemUptime) invocation=\(invocation)")
         logMsg("[AppDelegate] showPanel files=\(files.count) mouse=\(NSStringFromPoint(NSEvent.mouseLocation)) screen=\(screen.map { NSStringFromRect($0.visibleFrame) } ?? "nil")")
         guard let screen else {
             logMsg("[AppDelegate] showPanel guard failed")
@@ -434,16 +450,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             self.actionMatchingQueue.async { [weak self, weak panel] in
                 guard let self else { return }
-                var matched = ActionMatcher().matchingActions(for: files, actions: actions)
-                matched = self.prioritizeInstallActionIfNeeded(matched, files: files)
-                DispatchQueue.main.async { [weak self, weak panel] in
-                    guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else { return }
-                    panel.replaceActions(
-                        allActions: actions,
-                        actions: matched,
-                        setupRequirements: requirements,
-                        isMatchingActions: false
-                    )
+                let compiled = self.compiledActionCache.compiled(actions: actions)
+                let batches = ProgressiveActionMatcher().batches(for: files, compiled: compiled)
+                if batches.isEmpty {
+                    DispatchQueue.main.async { [weak self, weak panel] in
+                        guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else { return }
+                        panel.replaceActions(allActions: actions, actions: [], setupRequirements: requirements)
+                    }
+                    return
+                }
+                for batch in batches {
+                    let matched = self.prioritizeInstallActionIfNeeded(batch.actions, files: files)
+                    DispatchQueue.main.async { [weak self, weak panel] in
+                        guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else { return }
+                        panel.replaceActions(
+                            allActions: actions,
+                            actions: matched,
+                            setupRequirements: requirements,
+                            isMatchingActions: batch.remaining > 0
+                        )
+                    }
                 }
             }
         }

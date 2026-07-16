@@ -19,7 +19,9 @@ public struct DraggedItem: Equatable {
         self.rawText = rawText ?? (inferred == .text ? Self.smallUTF8Contents(of: executionURL) : nil)
     }
 
-    public var values: [String: TriggerValue] {
+    public var values: [String: TriggerValue] { values(includeInside: true) }
+
+    public func values(includeInside: Bool) -> [String: TriggerValue] {
         var result: [String: TriggerValue] = [
             "kind": .string(kind.rawValue),
             "isFile": .bool(kind == .file),
@@ -42,14 +44,14 @@ public struct DraggedItem: Equatable {
         } else if kind == .text, let rawText {
             result["text"] = .string(rawText)
         } else if kind == .file || kind == .directory {
-            addFileValues(to: &result)
+            addFileValues(to: &result, includeInside: includeInside)
         }
         return result
     }
 
     public var input: String { kind == .url ? (rawURL ?? executionURL.path) : kind == .text ? (rawText ?? executionURL.path) : executionURL.path }
 
-    private func addFileValues(to result: inout [String: TriggerValue]) {
+    private func addFileValues(to result: inout [String: TriggerValue], includeInside: Bool) {
         let filename = executionURL.lastPathComponent
         let ext = executionURL.pathExtension
         let basename = ext.isEmpty ? filename : String(filename.dropLast(ext.count + 1))
@@ -70,7 +72,7 @@ public struct DraggedItem: Equatable {
             }
             if let tags = values.tagNames { result["finderTags"] = .collection(tags) }
         }
-        if kind == .file, let inside = Self.smallUTF8Contents(of: executionURL) { result["inside"] = .string(inside) }
+        if includeInside, kind == .file, let inside = Self.smallUTF8Contents(of: executionURL) { result["inside"] = .string(inside) }
     }
 
     private static func inferKind(for url: URL) -> Kind {

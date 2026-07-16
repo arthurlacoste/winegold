@@ -8,6 +8,9 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     private var targetScreen: NSScreen
     private var settingsStore: SettingsStore
     private var isProgrammaticFrameChange = false
+    private var resizeState = PanelResizeState()
+    private var resizeWorkItem: DispatchWorkItem?
+    private var persistResizeWorkItem: DispatchWorkItem?
     private var canPersistUserResize = false
     private var actionTriggeredSinceShow = false
     private var autoHideTimer: Timer?
@@ -224,6 +227,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         self.setFrame(shouldSlideIn ? startFrame : finalFrame, display: true)
         self.makeKeyAndOrderFront(nil)
         self.orderFrontRegardless()
+        logMsg("[Perf] panel_first_frame uptime=\(ProcessInfo.processInfo.systemUptime)")
         if shouldSlideIn {
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.18
@@ -269,6 +273,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     }
 
     func hide() {
+        logMsg("[Perf] panel_close_requested uptime=\(ProcessInfo.processInfo.systemUptime)")
         animateOutToRight()
     }
 
@@ -517,21 +522,28 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         } else {
             targetHeight = targetFrameHeight(forContentHeight: max(panelVC.currentContentHeight, idleDropFrameHeight))
         }
-
-        if abs(frame.height - targetHeight) < 1 { return }
-        if animated {
-            animateHeight(to: targetHeight)
-        } else {
-            let visibleFrame = currentVisibleFrame()
-            var newFrame = frame
-            let topY = frame.maxY
-            newFrame.size.height = targetHeight
-            newFrame.origin.y = max(visibleFrame.minY + 20, min(topY - targetHeight, visibleFrame.maxY - targetHeight - 20))
-            isProgrammaticFrameChange = true
-            setFrame(newFrame, display: true)
-            isProgrammaticFrameChange = false
-        }
+        guard resizeState.request(height: Double(targetHeight)) else { return }
+        resizeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in self?.applyPendingContentResize() }
+        resizeWorkItem = workItem
+        DispatchQueue.main.async(execute: workItem)
     }
+
+    private func applyPendingContentResize() {
+        resizeWorkItem = nil
+        guard let requestedHeight = resizeState.consumePendingHeight(), isVisible, !isAnimatingOut else { return }
+        let targetHeight = CGFloat(requestedHeight)
+        guard abs(frame.height - targetHeight) >= 1 else { return }
+        let visibleFrame = currentVisibleFrame()
+        var newFrame = frame
+        let topY = frame.maxY
+        newFrame.size.height = targetHeight
+        newFrame.origin.y = max(visibleFrame.minY + 20, min(topY - targetHeight, visibleFrame.maxY - targetHeight - 20))
+        isProgrammaticFrameChange = true
+        setFrame(newFrame, display: true)
+        isProgrammaticFrameChange = false
+    }
+
 
     private func targetFrameHeight(forContentHeight contentHeight: CGFloat) -> CGFloat {
         let visibleFrame = currentVisibleFrame()
@@ -573,6 +585,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         } completionHandler: { [weak self] in
             guard let self else { return }
             self.orderOut(nil)
+            logMsg("[Perf] panel_closed uptime=\(ProcessInfo.processInfo.systemUptime)")
             self.isProgrammaticFrameChange = false
             self.isAnimatingOut = false
         }
@@ -654,10 +667,18 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
 
     func windowDidResize(_ notification: Notification) {
         guard canPersistUserResize, !isProgrammaticFrameChange else { return }
-        let size = frame.size
-        settingsStore.panelWidth = Int(size.width.rounded())
-        settingsStore.panelHeight = Int(size.height.rounded())
-        logMsg("[ActionPanelWindow] saved size width=\(settingsStore.panelWidth) height=\(settingsStore.panelHeight)")
+        let width = Int(frame.width.rounded())
+        let height = Int(frame.height.rounded())
+        guard resizeState.shouldPersist(width: width, height: height) else { return }
+        persistResizeWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, !self.isProgrammaticFrameChange else { return }
+            self.settingsStore.panelWidth = width
+            self.settingsStore.panelHeight = height
+            logMsg("[ActionPanelWindow] saved size width=\(width) height=\(height)")
+        }
+        persistResizeWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: workItem)
     }
 
     private static func clampedPanelSize(width: CGFloat, height: CGFloat, visibleFrame: NSRect) -> NSSize {
