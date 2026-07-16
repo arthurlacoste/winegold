@@ -19,6 +19,15 @@ public struct ActionTemplateResolver {
         return resolvePlaceholders(in: template, for: DraggedItem(executionURL: inputFile))
     }
 
+
+    public func resolveWithoutInput(argumentsTemplate: [String]) -> [String] {
+        argumentsTemplate
+    }
+
+    public func resolveWithoutInput(workingDirectoryTemplate: String?) -> String? {
+        workingDirectoryTemplate
+    }
+
     public func resolve(outputPathTemplate: String?, for inputFile: URL) -> String? {
         guard let template = outputPathTemplate else { return nil }
         return resolvePlaceholders(in: template, for: DraggedItem(executionURL: inputFile))

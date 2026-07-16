@@ -363,3 +363,17 @@ A compatible repository can expose a JSON index over HTTPS:
 URLs may be absolute or relative to the index. Each recipe remains autonomous and is installed atomically. Published metadata may include `author`, `category`, and `homepage` for the future Winegold Recipes browser.
 
 Remote recipes stay linked to their source. Settings shows their source, installed version, local modification state, missing commands, and available updates. Updates are always manual. A locally modified recipe can be kept, replaced, or duplicated before updating. The duplicate receives a new local ID.
+
+## Recipes without input
+
+Omit `trigger` when a recipe does not need a file, folder, URL, or text input. These recipes appear in the global palette and run directly.
+
+```yml
+name: Clear local cache
+cmd:
+  exec: 'rm -rf "$HOME/Library/Caches/MyApp"'
+```
+
+A missing trigger means **no input**. It is different from `extension in {"*"}`, which still requires an input and accepts any extension.
+
+When a palette recipe requires input, Winegold uses simple file or folder constraints to guide the native picker, then evaluates the complete trigger after selection. Complex conditions such as filename patterns, folder contents, metadata, or `inside` are validated after selection.

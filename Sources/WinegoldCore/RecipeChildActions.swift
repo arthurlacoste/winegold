@@ -110,9 +110,9 @@ extension RecipeDocument {
         return actions.isEmpty ? [id] : actions.map { "\(id)/\($0.id)" }
     }
 
-    func resolvedActions(recipeURL: URL, triggerNode: TriggerExpression) -> [Action] {
-        let normalizedTrigger = TriggerSerializer().serialize(triggerNode)
-        let acceptedExtensions = RecipeParser.extensions(from: triggerNode)
+    func resolvedActions(recipeURL: URL, triggerNode: TriggerExpression?) -> [Action] {
+        let normalizedTrigger = triggerNode.map { TriggerSerializer().serialize($0) }
+        let acceptedExtensions = triggerNode.map { RecipeParser.extensions(from: $0) } ?? []
         let definitions = actions.isEmpty
             ? [RecipeChildAction(id: "", name: name, description: description, iconName: "terminal", command: command, successMessage: successMessage, requiresConfirmation: false, timeoutSeconds: 120, requirements: [], enabled: enabled)]
             : actions

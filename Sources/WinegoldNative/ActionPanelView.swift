@@ -1,4 +1,5 @@
 import Cocoa
+import UniformTypeIdentifiers
 import WinegoldCore
 import WinegoldUI
 
@@ -31,7 +32,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private(set) var currentContentHeight: CGFloat = 0
 
     var shouldShowActions: Bool {
-        !state.files.isEmpty || !dragPreviewFiles.isEmpty || state.runningActionName != nil || state.lastResult != nil
+        !state.allActions.isEmpty || !state.files.isEmpty || !dragPreviewFiles.isEmpty || state.runningActionName != nil || state.lastResult != nil
     }
 
     var hasActiveFileDrag: Bool {
@@ -109,6 +110,9 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        if state.files.isEmpty, actionSearchField.superview != nil {
+            view.window?.makeFirstResponder(actionSearchField)
+        }
         applyTheme()
         refresh(animatedStatusInsert: false)
     }
@@ -478,7 +482,14 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
 
     private func addActionsSection(y: inout CGFloat, w: CGFloat) {
         let dragActions = previewMatchedActions
-        let matchedActions = !dragPreviewFiles.isEmpty ? dragActions : state.actions
+        let matchedActions: [Action]
+        if !dragPreviewFiles.isEmpty {
+            matchedActions = dragActions
+        } else if state.files.isEmpty {
+            matchedActions = state.allActions.filter(\.enabled)
+        } else {
+            matchedActions = state.actions
+        }
         let presented = matchedActions.map { action -> PresentedAction in
             let metadata = state.actionMetadata[action.id]
             return PresentedAction(
@@ -499,7 +510,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         contentView.addSubview(label)
         y += 20
 
-        if matchedActions.count > 10 || !actionSearchQuery.isEmpty {
+        if state.files.isEmpty || matchedActions.count > 10 || !actionSearchQuery.isEmpty {
             actionSearchField.placeholderString = "Search \(matchedActions.count) actions"
             actionSearchField.stringValue = actionSearchQuery
             actionSearchField.target = nil
@@ -538,8 +549,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
                 parentName: item.parentName,
                 onDrop: { [weak self] droppedFiles in
                     let files = droppedFiles.isEmpty ? (self?.state.files ?? []) : droppedFiles
-                    guard !files.isEmpty else { return }
-                    self?.startRun(action: action, files: files)
+                    self?.select(action: action, files: files)
                 },
                 onSetup: { [weak self] action in self?.onSetupAction(action, self?.state.files ?? []) },
                 onToggleFavorite: { [weak self] action in self?.onToggleFavorite(action) },
@@ -608,13 +618,67 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         guard !visibleActionItems.isEmpty else { return }
         keyboardSelection.clamp(count: visibleActionItems.count)
         let action = visibleActionItems[keyboardSelection.index].action
-        let files = state.files
-        guard !files.isEmpty else { return }
-        if state.setupRequirements[action.id] == nil {
-            startRun(action: action, files: files)
-        } else {
+        select(action: action, files: state.files)
+    }
+
+    private func select(action: Action, files: [URL]) {
+        if state.setupRequirements[action.id] != nil {
             onSetupAction(action, files)
+            return
         }
+        let items = files.map { DraggedItem(executionURL: $0) }
+        switch RecipeInvocationValidator().validate(action, items: items) {
+        case .valid:
+            startRun(action: action, files: files)
+        case let .missingInput(requirement):
+            chooseInput(for: action, requirement: requirement)
+        case let .incompatible(issues):
+            showValidationError(issues.map(\.message).joined(separator: "\n"))
+        }
+    }
+
+    private func chooseInput(for action: Action, requirement: RecipeInputRequirement) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        switch requirement {
+        case let .files(extensions):
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = false
+            let types = extensions.compactMap { UTType(filenameExtension: $0) }
+            if !types.isEmpty { panel.allowedContentTypes = types }
+        case .directories:
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+        case .items, .unresolved:
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = true
+        case .none:
+            startRun(action: action, files: [])
+            return
+        }
+        let panelWindow = view.window as? ActionPanelWindow
+        panelWindow?.beginModalInteraction()
+        let response = panel.runModal()
+        panelWindow?.endModalInteraction()
+        guard response == .OK else { return }
+        let items = panel.urls.map { DraggedItem(executionURL: $0) }
+        switch RecipeInvocationValidator().validate(action, items: items) {
+        case .valid:
+            setDraggedFiles(panel.urls)
+            startRun(action: action, files: panel.urls)
+        case let .incompatible(issues):
+            showValidationError(issues.map(\.message).joined(separator: "\n"))
+        case .missingInput:
+            showValidationError("This recipe still needs input.")
+        }
+    }
+
+    private func showValidationError(_ message: String) {
+        let alert = makeAppAlert()
+        alert.messageText = "Recipe cannot run"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 
     private func addLoading(actionName: String, y: CGFloat, w: CGFloat) -> CGFloat {

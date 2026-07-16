@@ -5,44 +5,30 @@ public struct ActionMatcher {
 
     public func matchingActions(for files: [URL], actions: [Action]) -> [Action] {
         guard !files.isEmpty else { return [] }
-        let items = files.map { DraggedItem(executionURL: $0) }
-        return matchingActions(forItems: items, actions: actions)
+        return matchingActions(forItems: files.map { DraggedItem(executionURL: $0) }, actions: actions)
     }
 
     public func matchingActions(forItems items: [DraggedItem], actions: [Action]) -> [Action] {
         guard !items.isEmpty else { return [] }
-        let enabled = actions.filter { $0.enabled }
-        let parsedExpressions: [UUID: TriggerExpression] = Dictionary(uniqueKeysWithValues: enabled.compactMap { action in
-            guard let source = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !source.isEmpty,
-                  let expression = try? TriggerParser().parse(source) else { return nil }
-            return (action.id, expression)
-        })
-        let itemValues = items.map { $0.values(includeInside: false) }
-        let needsInside = parsedExpressions.values.contains { $0.referencedFields.contains("inside") }
-        let itemValuesWithInside = needsInside ? items.map { $0.values(includeInside: true) } : []
+        return actions.filter { $0.enabled && matches($0, forItems: items) }
+    }
 
-        return enabled.filter { action in
-            if let source = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines), !source.isEmpty {
-                guard let expression = parsedExpressions[action.id] else { return false }
-                let values = expression.referencedFields.contains("inside") ? itemValuesWithInside : itemValues
-                return values.allSatisfy { TriggerEvaluator().evaluate(expression, values: $0) }
-            }
-            let acceptedExtensions = normalizedExtensions(action.acceptedExtensions)
-            guard !acceptedExtensions.isEmpty else { return false }
-            if acceptedExtensions.contains("*") { return true }
-
-            return items.allSatisfy { item in
-                let file = item.executionURL
-                let ext = file.pathExtension.lowercased()
-                return acceptedExtensions.contains(ext)
+    public func matches(_ action: Action, forItems items: [DraggedItem]) -> Bool {
+        guard !items.isEmpty else { return false }
+        if let source = action.triggerExpression?.trimmingCharacters(in: .whitespacesAndNewlines), !source.isEmpty {
+            guard let expression = try? TriggerParser().parse(source) else { return false }
+            let includeInside = expression.referencedFields.contains("inside")
+            return items.allSatisfy {
+                TriggerEvaluator().evaluate(expression, values: $0.values(includeInside: includeInside))
             }
         }
+        let accepted = normalizedExtensions(action.acceptedExtensions)
+        guard !accepted.isEmpty else { return false }
+        if accepted.contains("*") { return true }
+        return items.allSatisfy { accepted.contains($0.executionURL.pathExtension.lowercased()) }
     }
 
     private func normalizedExtensions(_ extensions: [String]) -> [String] {
-        extensions
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-            .filter { !$0.isEmpty }
+        extensions.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }.filter { !$0.isEmpty }
     }
 }

@@ -106,9 +106,13 @@ public struct RecipeParser {
         var document = try parse(text: text)
         let externalID = document.id ?? Self.generatedID()
         document.id = externalID
-        let triggerNode: TriggerExpression
-        do { triggerNode = try TriggerParser().parse(document.trigger) }
-        catch { throw RecipeError.invalidTrigger(document.trigger) }
+        let triggerNode: TriggerExpression?
+        if document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            triggerNode = nil
+        } else {
+            do { triggerNode = try TriggerParser().parse(document.trigger) }
+            catch { throw RecipeError.invalidTrigger(document.trigger) }
+        }
         let actions = document.resolvedActions(recipeURL: url, triggerNode: triggerNode)
         let warnings = (!document.actions.isEmpty && !document.command.isEmpty)
             ? ["Recipe \"\(document.name)\" defines both cmd and actions. The top-level cmd was ignored."]
@@ -166,7 +170,9 @@ public struct RecipeParser {
         case "false", "no", "0": enabled = false
         default: throw RecipeError.invalidBoolean(enabledText)
         }
-        _ = try TriggerParser().parse(trigger)
+        if !trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            _ = try TriggerParser().parse(trigger)
+        }
         let variables = try RecipeVariableParser().parseVariables(lines: lines)
         return RecipeDocument(
             id: scalar("id", lines: lines),
@@ -190,7 +196,7 @@ public struct RecipeParser {
     private func triggerValue(lines: [String]) throws -> String {
         if let direct = scalar("trigger", lines: lines), !direct.isEmpty { return direct }
         let extensions = nestedList(section: "trigger", key: "fileExtension", lines: lines)
-        guard !extensions.isEmpty else { throw RecipeError.missingField("trigger") }
+        guard !extensions.isEmpty else { return "" }
         return TriggerSerializer().serialize(.condition(field: "extension", operator: .in, value: .collection(extensions)))
     }
 
@@ -308,7 +314,9 @@ public struct RecipeSerializer {
             lines.append(contentsOf: document.requirements.map { "    - \(quote($0))" })
         }
         lines.append("")
-        lines.append("trigger: \(quote(document.trigger))")
+        if !document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lines.append("trigger: \(quote(document.trigger))")
+        }
         if !document.actions.isEmpty {
             lines.append("")
             lines.append("actions:")
@@ -478,7 +486,7 @@ private struct RecipeRepairTextEditor {
         let serializer = RecipeSerializer()
         let replacements: [String: [String]] = [
             "name": ["name: \(serializer.quote(document.name))"],
-            "trigger": ["trigger: \(serializer.quote(document.trigger))"],
+            "trigger": document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : ["trigger: \(serializer.quote(document.trigger))"],
             "cmd": commandBlock(document.command),
             "successMessage": document.successMessage.map { ["successMessage: \(serializer.quote($0))"] } ?? []
         ]
@@ -549,7 +557,7 @@ private struct RecipeTextEditor {
         var values: [String: [String]] = [
             "name": ["name: \(serializer.quote(document.name))"],
             "enabled": ["enabled: \(document.enabled ? "true" : "false")"],
-            "trigger": ["trigger: \(serializer.quote(document.trigger))"],
+            "trigger": document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] : ["trigger: \(serializer.quote(document.trigger))"],
             "cmd": commandBlock(document.command)
         ]
         if let id = document.id { values["id"] = ["id: \(serializer.quote(id))"] }
