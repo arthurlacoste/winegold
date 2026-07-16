@@ -22,4 +22,14 @@ final class KeyboardActionSelectionTests: XCTestCase {
         selection.clamp(count: 0)
         XCTAssertEqual(selection.index, 0)
     }
+    func testDirectSelectionClampsToVisibleActions() {
+        var selection = KeyboardActionSelection()
+        selection.select(index: 2, count: 4)
+        XCTAssertEqual(selection.index, 2)
+        selection.select(index: 8, count: 4)
+        XCTAssertEqual(selection.index, 3)
+        selection.select(index: -2, count: 4)
+        XCTAssertEqual(selection.index, 0)
+    }
+
 }

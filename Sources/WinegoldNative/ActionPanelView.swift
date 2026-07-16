@@ -515,9 +515,9 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
             actionSearchField.stringValue = actionSearchQuery
             actionSearchField.target = nil
             actionSearchField.action = nil
-            actionSearchField.frame = NSRect(x: padding, y: y, width: w, height: 28)
+            actionSearchField.frame = NSRect(x: padding, y: y + 5, width: w, height: 28)
             contentView.addSubview(actionSearchField)
-            y += 36
+            y += 46
         }
 
         if visible.isEmpty {
@@ -554,7 +554,8 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
                 },
                 onSetup: { [weak self] action in self?.onSetupAction(action, self?.state.files ?? []) },
                 onToggleFavorite: { [weak self] action in self?.onToggleFavorite(action) },
-                onMoveBefore: { [weak self] source, target in self?.onMoveAction(source, target) }
+                onMoveBefore: { [weak self] source, target in self?.onMoveAction(source, target) },
+                onSelection: { [weak self] in self?.selectCard(at: index) }
             )
             card.frame = NSRect(x: 0, y: CGFloat(index) * rowHeight, width: w, height: rowHeight)
             container.addSubview(card)
@@ -570,6 +571,13 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         y += containerHeight + 12
     }
 
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        guard obj.object as AnyObject? === actionSearchField else { return }
+        keyboardSelection.reset()
+        releaseCardInteractionStates()
+        syncCardSelection()
+    }
+
     func controlTextDidChange(_ obj: Notification) {
         guard obj.object as AnyObject? === actionSearchField else { return }
         actionSearchQuery = actionSearchField.stringValue
@@ -583,10 +591,12 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         switch commandSelector {
         case #selector(NSResponder.moveUp(_:)):
             keyboardSelection.moveUp(count: visibleActionItems.count)
+            syncCardSelection()
             refreshKeepingSearchFocus()
             return true
         case #selector(NSResponder.moveDown(_:)):
             keyboardSelection.moveDown(count: visibleActionItems.count)
+            syncCardSelection()
             refreshKeepingSearchFocus()
             return true
         case #selector(NSResponder.insertNewline(_:)):
@@ -595,6 +605,22 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         default:
             return false
         }
+    }
+
+    private func selectCard(at index: Int) {
+        guard visibleActionItems.indices.contains(index) else { return }
+        keyboardSelection.select(index: index, count: visibleActionItems.count)
+        syncCardSelection()
+    }
+
+    private func syncCardSelection() {
+        for (index, card) in cardViews.enumerated() {
+            card.setSelected(index == keyboardSelection.index)
+        }
+    }
+
+    private func releaseCardInteractionStates() {
+        cardViews.forEach { $0.releaseInteractionState() }
     }
 
     private func refreshKeepingSearchFocus() {

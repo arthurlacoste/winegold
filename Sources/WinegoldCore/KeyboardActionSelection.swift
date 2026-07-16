@@ -21,6 +21,11 @@ public struct KeyboardActionSelection: Equatable {
         index = (index + 1) % count
     }
 
+    public mutating func select(index: Int, count: Int) {
+        guard count > 0 else { self.index = 0; return }
+        self.index = min(max(index, 0), count - 1)
+    }
+
     public mutating func clamp(count: Int) {
         guard count > 0 else { index = 0; return }
         index = min(max(index, 0), count - 1)
