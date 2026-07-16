@@ -22,7 +22,7 @@ jobs:
 
       - name: Run tests
         shell: bash
-        run: swift test >"$RUNNER_TEMP/swift-test.log" 2>&1 || { tail -30 "$RUNNER_TEMP/swift-test.log"; exit 1; }
+        run: swift test >"$RUNNER_TEMP/swift-test.log" 2>&1 || { grep -Ei "failed|error:|assert" "$RUNNER_TEMP/swift-test.log" | tail -12; exit 1; }
 
       - name: Resolve build metadata
         id: metadata
