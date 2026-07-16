@@ -41,7 +41,12 @@ public struct RecipeIndexStore {
         try db.execute("BEGIN IMMEDIATE TRANSACTION")
         do {
             let actionStore = ActionStore(db: db)
-            try actionStore.upsertDerivedRecipe(record.action, externalID: externalID, path: record.url.path, hash: record.contentHash, category: category(for: record.url), available: !needsSetup)
+            let disableRemoved = try db.prepare("UPDATE actions SET available=0 WHERE recipe_path=?")
+            disableRemoved.bindText(record.url.path, at: 1)
+            _ = disableRemoved.step()
+            for (action, actionExternalID) in zip(record.actions, record.document.actionExternalIDs) {
+                try actionStore.upsertDerivedRecipe(action, externalID: actionExternalID, path: record.url.path, hash: record.contentHash, category: category(for: record.url), available: !needsSetup)
+            }
             let stmt = try db.prepare("""
                 INSERT INTO recipe_index (recipe_path, external_id, content_hash, modification_time, file_size, status, parse_error)
                 VALUES (?, ?, ?, ?, ?, 'valid', NULL)
@@ -99,8 +104,9 @@ public struct RecipeIndexStore {
     }
     public func hasAvailableAction(externalID: String?) throws -> Bool {
         guard let externalID else { return false }
-        let stmt = try db.prepare("SELECT COUNT(*) FROM actions WHERE external_id=? AND available=1")
+        let stmt = try db.prepare("SELECT COUNT(*) FROM actions WHERE (external_id=? OR external_id LIKE ?) AND available=1")
         stmt.bindText(externalID, at: 1)
+        stmt.bindText(externalID + "/%", at: 2)
         return stmt.step() && stmt.columnInt(at: 0) > 0
     }
 

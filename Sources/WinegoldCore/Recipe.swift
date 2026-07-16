@@ -1,6 +1,32 @@
 import Foundation
 import CryptoKit
 
+public struct RecipeChildAction: Equatable {
+    public var id: String
+    public var name: String
+    public var description: String
+    public var iconName: String?
+    public var command: String
+    public var successMessage: String?
+    public var requiresConfirmation: Bool?
+    public var timeoutSeconds: Int?
+    public var requirements: [String]
+    public var enabled: Bool
+
+    public init(id: String, name: String, description: String = "", iconName: String? = nil, command: String, successMessage: String? = nil, requiresConfirmation: Bool? = nil, timeoutSeconds: Int? = nil, requirements: [String] = [], enabled: Bool = true) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.iconName = iconName
+        self.command = command
+        self.successMessage = successMessage
+        self.requiresConfirmation = requiresConfirmation
+        self.timeoutSeconds = timeoutSeconds
+        self.requirements = requirements
+        self.enabled = enabled
+    }
+}
+
 public struct RecipeDocument: Equatable {
     public var id: String?
     public var name: String
@@ -12,12 +38,13 @@ public struct RecipeDocument: Equatable {
     public var enabled: Bool
     public var trigger: String
     public var command: String
+    public var actions: [RecipeChildAction]
     public var successMessage: String?
     public var supportFiles: [String]
     public var requirements: [String]
     public var variables: [RecipeVariable]?
 
-    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, author: String? = nil, category: String? = nil, homepage: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil) {
+    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, author: String? = nil, category: String? = nil, homepage: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil, actions: [RecipeChildAction] = []) {
         self.id = id
         self.name = name
         self.description = description
@@ -28,6 +55,7 @@ public struct RecipeDocument: Equatable {
         self.enabled = enabled
         self.trigger = trigger
         self.command = command
+        self.actions = actions
         self.successMessage = successMessage
         self.supportFiles = supportFiles
         self.requirements = requirements
@@ -37,7 +65,9 @@ public struct RecipeDocument: Equatable {
 
 public struct RecipeRecord: Equatable {
     public let document: RecipeDocument
-    public let action: Action
+    public let actions: [Action]
+    public let warnings: [String]
+    public var action: Action { actions[0] }
     public let url: URL
     public let contentHash: String
 }
@@ -47,6 +77,8 @@ public enum RecipeError: LocalizedError, Equatable {
     case invalidBoolean(String)
     case invalidTrigger(String)
     case invalidFilename(String)
+    case invalidChildActionID(String)
+    case duplicateChildActionID(String)
     case outsideRoot
 
     public var errorDescription: String? {
@@ -55,6 +87,8 @@ public enum RecipeError: LocalizedError, Equatable {
         case .invalidBoolean(let value): return "Invalid boolean value: \(value)"
         case .invalidTrigger(let value): return "Invalid trigger: \(value)"
         case .invalidFilename(let value): return "Recipe filename must end in .wg.yml: \(value)"
+        case .invalidChildActionID(let value): return "Invalid child action id: \(value)"
+        case .duplicateChildActionID(let value): return "Duplicate child action id: \(value)"
         case .outsideRoot: return "Recipe path is outside the recipe root"
         }
     }
@@ -76,21 +110,11 @@ public struct RecipeParser {
         do { triggerNode = try TriggerParser().parse(document.trigger) }
         catch { throw RecipeError.invalidTrigger(document.trigger) }
         let normalizedTrigger = TriggerSerializer().serialize(triggerNode)
-        let action = Action(
-            id: Self.runtimeUUID(for: externalID),
-            name: document.name,
-            description: document.description,
-            iconName: "terminal",
-            enabled: document.enabled,
-            acceptedExtensions: Self.extensions(from: triggerNode),
-            triggerExpression: normalizedTrigger,
-            executablePath: "/bin/zsh",
-            argumentsTemplate: ["-lc", document.command],
-            workingDirectoryTemplate: url.deletingLastPathComponent().path,
-            successMessage: document.successMessage,
-            timeoutSeconds: 120
-        )
-        return RecipeRecord(document: document, action: action, url: url, contentHash: Self.hash(data))
+        let actions = document.resolvedActions(recipeURL: url, triggerNode: triggerNode)
+        let warnings = (!document.actions.isEmpty && !document.command.isEmpty)
+            ? ["Recipe \"\(document.name)\" defines both cmd and actions. The top-level cmd was ignored."]
+            : []
+        return RecipeRecord(document: document, actions: actions, warnings: warnings, url: url, contentHash: Self.hash(data))
     }
 
     public func repairDraft(url: URL) throws -> RecipeDocument {
@@ -133,9 +157,9 @@ public struct RecipeParser {
         let lines = text.components(separatedBy: .newlines)
         guard let name = scalar("name", lines: lines), !name.isEmpty else { throw RecipeError.missingField("name") }
         let trigger = try triggerValue(lines: lines)
-        guard let command = nestedScalar(section: "cmd", key: "exec", lines: lines), !command.isEmpty else {
-            throw RecipeError.missingField("cmd.exec")
-        }
+        let command = nestedScalar(section: "cmd", key: "exec", lines: lines) ?? ""
+        let actions = try RecipeChildActionParser().parse(lines: lines)
+        guard !command.isEmpty || !actions.isEmpty else { throw RecipeError.missingField("cmd.exec or actions") }
         let enabledText = scalar("enabled", lines: lines) ?? "true"
         let enabled: Bool
         switch enabledText.lowercased() {
@@ -159,7 +183,8 @@ public struct RecipeParser {
             successMessage: scalar("successMessage", lines: lines),
             supportFiles: topLevelList("files", lines: lines),
             requirements: requirementCommands(lines: lines),
-            variables: variables.isEmpty ? nil : variables
+            variables: variables.isEmpty ? nil : variables,
+            actions: actions
         )
     }
 
@@ -247,7 +272,7 @@ public struct RecipeParser {
 
     static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
-    private static func extensions(from node: TriggerExpression) -> [String] {
+    static func extensions(from node: TriggerExpression) -> [String] {
         guard case let .condition(field, op, value) = node, field == "extension", op == .in,
               case let .collection(values) = value else { return [] }
         return values
@@ -285,13 +310,40 @@ public struct RecipeSerializer {
         }
         lines.append("")
         lines.append("trigger: \(quote(document.trigger))")
-        lines.append("")
-        lines.append("cmd:")
-        if document.command.contains("\n") {
-            lines.append("  exec: |")
-            lines.append(contentsOf: document.command.components(separatedBy: .newlines).map { "    \($0)" })
+        if !document.actions.isEmpty {
+            lines.append("")
+            lines.append("actions:")
+            for action in document.actions {
+                lines.append("  - id: \(quote(action.id))")
+                lines.append("    name: \(quote(action.name))")
+                if !action.description.isEmpty { lines.append("    description: \(quote(action.description))") }
+                if let iconName = action.iconName { lines.append("    icon: \(quote(iconName))") }
+                lines.append("    enabled: \(action.enabled ? "true" : "false")")
+                if !action.requirements.isEmpty {
+                    lines.append("    requires:")
+                    lines.append("      commands:")
+                    lines.append(contentsOf: action.requirements.map { "        - \(quote($0))" })
+                }
+                lines.append("    cmd:")
+                if action.command.contains("\n") {
+                    lines.append("      exec: |")
+                    lines.append(contentsOf: action.command.components(separatedBy: .newlines).map { "        \($0)" })
+                } else {
+                    lines.append("      exec: \(quote(action.command))")
+                }
+                if let message = action.successMessage { lines.append("    successMessage: \(quote(message))") }
+                if let confirmation = action.requiresConfirmation { lines.append("    requiresConfirmation: \(confirmation ? "true" : "false")") }
+                if let timeout = action.timeoutSeconds { lines.append("    timeout: \(timeout)") }
+            }
         } else {
-            lines.append("  exec: \(quote(document.command))")
+            lines.append("")
+            lines.append("cmd:")
+            if document.command.contains("\n") {
+                lines.append("  exec: |")
+                lines.append(contentsOf: document.command.components(separatedBy: .newlines).map { "    \($0)" })
+            } else {
+                lines.append("  exec: \(quote(document.command))")
+            }
         }
         if let message = document.successMessage { lines.append("successMessage: \(quote(message))") }
         appendList("files", values: document.supportFiles, to: &lines)
