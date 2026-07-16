@@ -37,6 +37,8 @@ public struct RecipeDocument: Equatable {
     public var homepage: String?
     public var enabled: Bool
     public var trigger: String
+    public var minimumInputCount: Int?
+    public var maximumInputCount: Int?
     public var command: String
     public var actions: [RecipeChildAction]
     public var successMessage: String?
@@ -44,7 +46,7 @@ public struct RecipeDocument: Equatable {
     public var requirements: [String]
     public var variables: [RecipeVariable]?
 
-    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, author: String? = nil, category: String? = nil, homepage: String? = nil, enabled: Bool = true, trigger: String, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil, actions: [RecipeChildAction] = []) {
+    public init(id: String? = nil, name: String, description: String = "", version: String? = nil, author: String? = nil, category: String? = nil, homepage: String? = nil, enabled: Bool = true, trigger: String, minimumInputCount: Int? = nil, maximumInputCount: Int? = nil, command: String, successMessage: String? = nil, supportFiles: [String] = [], requirements: [String] = [], variables: [RecipeVariable]? = nil, actions: [RecipeChildAction] = []) {
         self.id = id
         self.name = name
         self.description = description
@@ -54,6 +56,8 @@ public struct RecipeDocument: Equatable {
         self.homepage = homepage
         self.enabled = enabled
         self.trigger = trigger
+        self.minimumInputCount = minimumInputCount
+        self.maximumInputCount = maximumInputCount
         self.command = command
         self.actions = actions
         self.successMessage = successMessage
@@ -148,6 +152,8 @@ public struct RecipeParser {
             homepage: scalar("homepage", lines: lines) ?? scalar("source", lines: lines),
             enabled: (scalar("enabled", lines: lines) ?? "true").lowercased() != "false",
             trigger: trigger,
+            minimumInputCount: nestedInt(section: "input", key: "min", lines: lines),
+            maximumInputCount: nestedInt(section: "input", key: "max", lines: lines),
             command: command,
             successMessage: scalar("successMessage", lines: lines),
             supportFiles: topLevelList("files", lines: lines),
@@ -184,6 +190,8 @@ public struct RecipeParser {
             homepage: scalar("homepage", lines: lines) ?? scalar("source", lines: lines),
             enabled: enabled,
             trigger: trigger,
+            minimumInputCount: nestedInt(section: "input", key: "min", lines: lines),
+            maximumInputCount: nestedInt(section: "input", key: "max", lines: lines),
             command: command,
             successMessage: scalar("successMessage", lines: lines),
             supportFiles: topLevelList("files", lines: lines),
@@ -222,6 +230,10 @@ public struct RecipeParser {
             return value.unquoted
         }
         return nil
+    }
+
+    private func nestedInt(section: String, key: String, lines: [String]) -> Int? {
+        nestedScalar(section: section, key: key, lines: lines).flatMap(Int.init)
     }
 
     private func nestedList(section: String, key: String, lines: [String]) -> [String] {
@@ -312,6 +324,12 @@ public struct RecipeSerializer {
             lines.append("requires:")
             lines.append("  commands:")
             lines.append(contentsOf: document.requirements.map { "    - \(quote($0))" })
+        }
+        if document.minimumInputCount != nil || document.maximumInputCount != nil {
+            lines.append("")
+            lines.append("input:")
+            if let minimum = document.minimumInputCount { lines.append("  min: \(minimum)") }
+            if let maximum = document.maximumInputCount { lines.append("  max: \(maximum)") }
         }
         lines.append("")
         if !document.trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

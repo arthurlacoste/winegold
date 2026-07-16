@@ -42,7 +42,9 @@ cmd:
   exec: 'echo "{input}" | pbcopy'
 ```
 
-See [Writing Winegold scripts](docs/scripting.md) for the supported format, triggers, and placeholders.
+Recipes may omit `trigger` when they do not need input. Use an `input` block with `min` and `max` when an action requires a specific number of files or folders.
+
+See [Writing Winegold scripts](docs/scripting.md) for the supported format, triggers, input rules, and placeholders.
 
 ## Security
 

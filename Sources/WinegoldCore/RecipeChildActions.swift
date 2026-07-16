@@ -113,6 +113,8 @@ extension RecipeDocument {
     func resolvedActions(recipeURL: URL, triggerNode: TriggerExpression?) -> [Action] {
         let normalizedTrigger = triggerNode.map { TriggerSerializer().serialize($0) }
         let acceptedExtensions = triggerNode.map { RecipeParser.extensions(from: $0) } ?? []
+        let minimumInputCount = minimumInputCount ?? (triggerNode == nil ? 0 : 1)
+        let maximumInputCount = maximumInputCount
         let definitions = actions.isEmpty
             ? [RecipeChildAction(id: "", name: name, description: description, iconName: "terminal", command: command, successMessage: successMessage, requiresConfirmation: false, timeoutSeconds: 120, requirements: [], enabled: enabled)]
             : actions
@@ -128,6 +130,8 @@ extension RecipeDocument {
                 enabled: enabled && child.enabled,
                 acceptedExtensions: acceptedExtensions,
                 triggerExpression: normalizedTrigger,
+                minimumInputCount: minimumInputCount,
+                maximumInputCount: maximumInputCount,
                 executablePath: "/bin/zsh",
                 argumentsTemplate: ["-lc", child.command],
                 workingDirectoryTemplate: recipeURL.deletingLastPathComponent().path,

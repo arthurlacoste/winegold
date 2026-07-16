@@ -10,6 +10,7 @@ class ActionCardView: NSView {
     private let isActive: Bool
     private let isKeyboardSelected: Bool
     private let setupRequirements: RecipeSetupRequirements?
+    private let inputActionLabel: String?
     private let onDrop: ([URL]) -> Void
     private let onSetup: (Action) -> Void
     private let onToggleFavorite: (Action) -> Void
@@ -36,6 +37,7 @@ class ActionCardView: NSView {
         isActive: Bool,
         isKeyboardSelected: Bool = false,
         setupRequirements: RecipeSetupRequirements? = nil,
+        inputActionLabel: String? = nil,
         isGroupedRow: Bool = false,
         parentName: String? = nil,
         onDrop: @escaping ([URL]) -> Void,
@@ -48,6 +50,7 @@ class ActionCardView: NSView {
         self.isActive = isActive
         self.isKeyboardSelected = isKeyboardSelected
         self.setupRequirements = setupRequirements
+        self.inputActionLabel = inputActionLabel
         self.isGroupedRow = isGroupedRow
         self.parentName = parentName
         self.onDrop = onDrop
@@ -83,7 +86,7 @@ class ActionCardView: NSView {
             configureSubtitle(setupRequirements?.summary ?? subtitle)
             if setupRequirements == nil { configureFavoriteButton() }
             else { favoriteButton.isHidden = true }
-            configureRunCard(label: setupRequirements?.actionLabel)
+            configureRunCard(label: setupRequirements?.actionLabel ?? inputActionLabel)
         case .missingDependency(let reason), .configError(let reason):
             layer?.backgroundColor = WinegoldTheme.layerColor(
                 WinegoldTheme.cardBackground(in: self, disabled: true),
@@ -139,9 +142,10 @@ class ActionCardView: NSView {
         super.layout()
         let rightInset: CGFloat = 12
         let leftTextX: CGFloat = 48
-        let buttonSize = NSSize(width: setupRequirements == nil ? 34 : 116, height: 30)
+        let hasLabel = setupRequirements != nil || inputActionLabel != nil
+        let buttonSize = NSSize(width: hasLabel ? 116 : 34, height: 30)
         let buttonX = max(leftTextX + 120, bounds.width - rightInset - buttonSize.width)
-        let textRightPadding: CGFloat = caseAvailable ? (setupRequirements == nil ? 88 : 150) : 12
+        let textRightPadding: CGFloat = caseAvailable ? (hasLabel ? 150 : 88) : 12
         let textWidth = max(80, bounds.width - leftTextX - textRightPadding)
 
         leadingIcon.frame = NSRect(x: 12, y: 20, width: 24, height: 24)

@@ -10,6 +10,13 @@ public struct ActionValidator {
     public init() {}
 
     public func validate(_ action: Action) -> ActionValidationStatus {
+        if let placeholder = RecipeTemplateInputValidator().missingInputPlaceholder(in: action) {
+            return .configError(reason: "\(placeholder) requires an input trigger")
+        }
+        guard action.minimumInputCount >= 0 else { return .configError(reason: "input.min must be >= 0") }
+        if let maximum = action.maximumInputCount, maximum < action.minimumInputCount {
+            return .configError(reason: "input.max must be >= input.min")
+        }
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: action.executablePath, isDirectory: &isDir) else {

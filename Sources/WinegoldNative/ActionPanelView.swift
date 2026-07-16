@@ -545,6 +545,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
                 isActive: state.activeActionId == action.id,
                 isKeyboardSelected: index == keyboardSelection.index,
                 setupRequirements: state.setupRequirements[action.id],
+                inputActionLabel: paletteActionLabel(for: action),
                 isGroupedRow: true,
                 parentName: item.parentName,
                 onDrop: { [weak self] droppedFiles in
@@ -572,6 +573,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
         guard obj.object as AnyObject? === actionSearchField else { return }
         actionSearchQuery = actionSearchField.stringValue
+        if state.files.isEmpty { showsRecentRuns = !actionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         keyboardSelection.reset()
         refreshKeepingSearchFocus()
     }
@@ -638,8 +640,12 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     }
 
     private func chooseInput(for action: Action, requirement: RecipeInputRequirement) {
+        if requirement == .url || requirement == .text {
+            chooseTextualInput(for: action, requirement: requirement)
+            return
+        }
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
+        panel.allowsMultipleSelection = action.maximumInputCount != 1
         switch requirement {
         case let .files(extensions):
             panel.canChooseFiles = true
@@ -652,6 +658,8 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         case .items, .unresolved:
             panel.canChooseFiles = true
             panel.canChooseDirectories = true
+        case .url, .text:
+            return
         case .none:
             startRun(action: action, files: [])
             return
@@ -670,6 +678,52 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
             showValidationError(issues.map(\.message).joined(separator: "\n"))
         case .missingInput:
             showValidationError("This recipe still needs input.")
+        }
+    }
+
+
+    private func chooseTextualInput(for action: Action, requirement: RecipeInputRequirement) {
+        let alert = makeAppAlert()
+        let isURL = requirement == .url
+        alert.messageText = isURL ? "Enter URL" : "Enter text"
+        alert.informativeText = isURL ? "Paste the URL required by this recipe." : "Enter the text required by this recipe."
+        alert.addButton(withTitle: "Continue")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: isURL ? 24 : 72))
+        field.placeholderString = isURL ? "https://example.com" : "Text"
+        alert.accessoryView = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { showValidationError("Input cannot be empty."); return }
+        if isURL, URLComponents(string: value)?.scheme == nil { showValidationError("Enter a valid URL."); return }
+        do {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("WinegoldPaletteInputs", isDirectory: true)
+            let file = try ContentAddressedFileStore(directory: directory).store(
+                contents: value,
+                prefix: isURL ? "dragged-url" : "dragged-text",
+                fileExtension: isURL ? "url" : "txt"
+            )
+            let item = DraggedItem(executionURL: file, kind: isURL ? .url : .text, rawURL: isURL ? value : nil, rawText: isURL ? nil : value)
+            switch RecipeInvocationValidator().validate(action, items: [item]) {
+            case .valid: startRun(action: action, files: [file])
+            case let .incompatible(issues): showValidationError(issues.map(\.message).joined(separator: "\n"))
+            case .missingInput: showValidationError("This recipe still needs input.")
+            }
+        } catch {
+            showValidationError(error.localizedDescription)
+        }
+    }
+
+    private func paletteActionLabel(for action: Action) -> String? {
+        guard state.files.isEmpty else { return nil }
+        if state.setupRequirements[action.id] != nil { return nil }
+        switch RecipeInputRequirementResolver().requirement(for: action) {
+        case .none: return "Run"
+        case .files: return "Choose file"
+        case .directories: return "Choose folder"
+        case .url: return "Enter URL"
+        case .text: return "Enter text"
+        case .items, .unresolved: return "Choose input"
         }
     }
 
@@ -1038,6 +1092,18 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
             y += 60
         }
         y += 4
+    }
+
+
+    private func matchingHistory(_ items: [RunHistoryItem]) -> [RunHistoryItem] {
+        let query = actionSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard state.files.isEmpty, !query.isEmpty else { return items }
+        let needle = query.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        return items.filter { item in
+            [item.actionName, item.parentRecipeName, item.childActionName, item.inputFiles.joined(separator: " ")]
+                .compactMap { $0 }
+                .contains { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).contains(needle) }
+        }
     }
 
     private func toggleSaved(_ item: RunHistoryItem) {
