@@ -25,7 +25,7 @@ public struct ActionTemplateResolver {
     }
 
     private func resolvePlaceholders(in template: String, for item: DraggedItem) -> String {
-        let values = item.values
+        let values = item.values(includeInside: template.contains("{inside}"))
         var result = template
         for (field, value) in values {
             let text: String

@@ -7,6 +7,18 @@ public indirect enum TriggerExpression: Codable, Equatable {
     case not(TriggerExpression)
 }
 
+
+public extension TriggerExpression {
+    var referencedFields: Set<String> {
+        switch self {
+        case let .condition(field, _, _): return [field]
+        case let .and(children), let .or(children):
+            return children.reduce(into: Set<String>()) { $0.formUnion($1.referencedFields) }
+        case let .not(child): return child.referencedFields
+        }
+    }
+}
+
 public enum TriggerOperator: String, Codable, CaseIterable {
     case equals, contains, startsWith, endsWith, matches, `in`, notIn, exists
     case greaterThan, greaterThanOrEqual, lessThan, lessThanOrEqual

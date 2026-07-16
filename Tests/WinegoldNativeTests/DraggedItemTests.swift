@@ -33,4 +33,16 @@ final class DraggedItemTests: XCTestCase {
         XCTAssertNil(values["inside"])
     }
 
+
+    func testInsideIsOnlyLoadedWhenExplicitlyRequested() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("txt")
+        try Data("hello".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let item = DraggedItem(executionURL: url)
+        XCTAssertNil(item.values(includeInside: false)["inside"])
+        XCTAssertEqual(item.values(includeInside: true)["inside"], .string("hello"))
+        XCTAssertEqual(item.values(includeInside: false)["mimeType"], .string("text/plain"))
+    }
+
 }
