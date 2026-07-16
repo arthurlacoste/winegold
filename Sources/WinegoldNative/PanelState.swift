@@ -22,6 +22,7 @@ class PanelState {
     var runningStdout = ""
     var runningStderr = ""
     var isCompact = false
+    var isMatchingActions = false
 
     func clearRunningDetails() {
         runningActionName = nil

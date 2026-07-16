@@ -30,6 +30,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         savedHistory: [RunHistoryItem],
         savedHistoryIds: Set<UUID>,
         setupRequirements: [UUID: RecipeSetupRequirements],
+        isMatchingActions: Bool = false,
         settingsStore: SettingsStore,
         onRunAction: @escaping (Action, [URL]) -> Void,
         onSetupAction: @escaping (Action, [URL]) -> Void,
@@ -46,6 +47,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         state.savedHistory = savedHistory
         state.savedHistoryIds = savedHistoryIds
         state.setupRequirements = setupRequirements
+        state.isMatchingActions = isMatchingActions
         self.panelState = state
         self.targetScreen = screen
         self.settingsStore = settingsStore
@@ -111,7 +113,8 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         history: [RunHistoryItem],
         savedHistory: [RunHistoryItem],
         savedHistoryIds: Set<UUID>,
-        setupRequirements: [UUID: RecipeSetupRequirements]
+        setupRequirements: [UUID: RecipeSetupRequirements],
+        isMatchingActions: Bool = false
     ) {
         targetScreen = screen
         panelState.files = files
@@ -121,6 +124,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.savedHistory = savedHistory
         panelState.savedHistoryIds = savedHistoryIds
         panelState.setupRequirements = setupRequirements
+        panelState.isMatchingActions = isMatchingActions
         panelState.lastResult = nil
         panelState.batchResults = []
         panelState.activeActionId = nil
@@ -142,11 +146,28 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
 
     var currentFiles: [URL] { panelState.files }
 
-    func replaceActions(allActions: [Action], actions: [Action], setupRequirements: [UUID: RecipeSetupRequirements]) {
+    func replaceActions(
+        allActions: [Action],
+        actions: [Action],
+        setupRequirements: [UUID: RecipeSetupRequirements],
+        isMatchingActions: Bool = false
+    ) {
         panelState.allActions = allActions
         panelState.actions = actions
         panelState.setupRequirements = setupRequirements
+        panelState.isMatchingActions = isMatchingActions
         panelVC.refresh()
+        resizeForCurrentContent(animated: true)
+    }
+
+    func updateAuxiliaryData(
+        history: [RunHistoryItem],
+        savedHistory: [RunHistoryItem],
+        savedHistoryIds: Set<UUID>
+    ) {
+        panelState.history = history
+        panelState.savedHistory = savedHistory
+        panelState.savedHistoryIds = savedHistoryIds
     }
 
     func updateSavedHistory(_ savedHistory: [RunHistoryItem], savedIds: Set<UUID>) {

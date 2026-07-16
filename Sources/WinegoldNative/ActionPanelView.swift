@@ -480,7 +480,8 @@ class ActionPanelViewController: NSViewController {
         let visibleActions = !dragPreviewFiles.isEmpty ? dragActions : (state.actions.isEmpty ? state.allActions : state.actions)
 
         if visibleActions.isEmpty {
-            let empty = NSTextField(labelWithString: "No compatible actions")
+            let message = state.isMatchingActions ? "Finding actions…" : "No compatible actions"
+            let empty = NSTextField(labelWithString: message)
             empty.font = .systemFont(ofSize: 13)
             empty.textColor = .secondaryLabelColor
             empty.frame = NSRect(x: padding, y: y, width: w, height: 20)

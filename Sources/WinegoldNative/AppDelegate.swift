@@ -31,6 +31,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var variableStore: RecipeVariableStore?
     private var keychainStore: LocalSecretStore?
     private var pendingSetupRun: PendingSetupRun?
+    private let actionMatchingQueue = DispatchQueue(label: "com.winegold.action-matching", qos: .userInitiated)
+    private var panelWorkGeneration = PanelWorkGeneration()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logMsg("[AppDelegate] app started")
@@ -286,6 +288,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showPanelFromShortcut() {
+        if actionPanelWindow?.isVisible == true {
+            invalidatePanelWork()
+            actionPanelWindow?.hide()
+            return
+        }
         showPanel(with: [], on: ScreenResolver.currentInteractionScreen(), invocation: .shortcut)
     }
 
@@ -301,6 +308,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func togglePanel() {
         if actionPanelWindow?.isVisible == true {
+            invalidatePanelWork()
             actionPanelWindow?.hide()
         } else {
             showPanel(with: [], on: ScreenResolver.currentInteractionScreen(), invocation: .menu)
@@ -380,79 +388,114 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showPanel(with files: [URL], on requestedScreen: NSScreen? = nil, invocation: PanelInvocation = .menu) {
         let screen = requestedScreen ?? ScreenResolver.currentInteractionScreen()
         logMsg("[AppDelegate] showPanel files=\(files.count) mouse=\(NSStringFromPoint(NSEvent.mouseLocation)) screen=\(screen.map { NSStringFromRect($0.visibleFrame) } ?? "nil")")
-        guard let store = actionStore,
-              let runHistoryStore = runHistoryStore,
-              let screen else {
+        guard let screen else {
             logMsg("[AppDelegate] showPanel guard failed")
             return
         }
 
-        let storedActions = panelStoredActions(store)
-        let actions = runtimeActions(storedActions, for: files.first)
-        let requirements = setupRequirements(for: actions)
-        var matched = ActionMatcher().matchingActions(for: files, actions: actions)
-        matched = prioritizeInstallActionIfNeeded(matched, files: files)
-        if invocation == .drag, matched.isEmpty, !shouldAutoImportScripts(files) {
-            logMsg("[AppDelegate] ignored drag with no matching action files=\(files.map { $0.lastPathComponent })")
-            return
-        }
-        let history = (try? runHistoryStore.recentRuns(limit: 10)) ?? []
-        let savedHistory = savedRunStore.savedRuns(limit: 10)
+        let generation = panelWorkGeneration.begin()
+        let isMatching = !files.isEmpty
+        let panel = presentPanelShell(
+            screen: screen,
+            files: files,
+            invocation: invocation,
+            isMatching: isMatching
+        )
+        panel.show(staysOpen: invocation.staysOpen)
 
-        if shouldAutoImportScripts(files), let installAction = actions.first(where: { $0.name == DefaultActions.installRecipeName }) {
-            logMsg("[AppDelegate] auto-importing script file(s): \(files.map { $0.lastPathComponent })")
-            importScripts(files, using: installAction, runHistoryStore: runHistoryStore)
-            return
-        }
+        guard !files.isEmpty else { return }
 
-        let panel: ActionPanelWindow
+        DispatchQueue.main.async { [weak self, weak panel] in
+            guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else { return }
+            guard let store = self.actionStore, let runHistoryStore = self.runHistoryStore else {
+                panel.replaceActions(allActions: [], actions: [], setupRequirements: [:], isMatchingActions: false)
+                return
+            }
+
+            let storedActions = self.panelStoredActions(store)
+            let actions = self.runtimeActions(storedActions, for: files.first)
+
+            if self.shouldAutoImportScripts(files),
+               let installAction = actions.first(where: { $0.name == DefaultActions.installRecipeName }) {
+                self.invalidatePanelWork()
+                panel.hide()
+                self.importScripts(files, using: installAction, runHistoryStore: runHistoryStore)
+                return
+            }
+
+            let requirements = self.setupRequirements(for: actions)
+            let history = (try? runHistoryStore.recentRuns(limit: 10)) ?? []
+            let savedHistory = self.savedRunStore.savedRuns(limit: 10)
+            panel.updateAuxiliaryData(
+                history: history,
+                savedHistory: savedHistory,
+                savedHistoryIds: Set(savedHistory.map { $0.id })
+            )
+
+            self.actionMatchingQueue.async { [weak self, weak panel] in
+                guard let self else { return }
+                var matched = ActionMatcher().matchingActions(for: files, actions: actions)
+                matched = self.prioritizeInstallActionIfNeeded(matched, files: files)
+                DispatchQueue.main.async { [weak self, weak panel] in
+                    guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else { return }
+                    panel.replaceActions(
+                        allActions: actions,
+                        actions: matched,
+                        setupRequirements: requirements,
+                        isMatchingActions: false
+                    )
+                }
+            }
+        }
+    }
+
+    private func presentPanelShell(
+        screen: NSScreen,
+        files: [URL],
+        invocation: PanelInvocation,
+        isMatching: Bool
+    ) -> ActionPanelWindow {
         if let existingPanel = actionPanelWindow {
             existingPanel.update(
                 screen: screen,
                 files: files,
-                actions: matched,
-                allActions: actions,
-                history: history,
-                savedHistory: savedHistory,
-                savedHistoryIds: Set(savedHistory.map { $0.id }),
-                setupRequirements: requirements
+                actions: [],
+                allActions: [],
+                history: [],
+                savedHistory: [],
+                savedHistoryIds: [],
+                setupRequirements: [:],
+                isMatchingActions: isMatching
             )
-            panel = existingPanel
-            logMsg("[AppDelegate] reused existing panel")
-        } else {
-            panel = ActionPanelWindow(
-                screen: screen,
-                files: files,
-                actions: matched,
-                allActions: actions,
-                history: history,
-                savedHistory: savedHistory,
-                savedHistoryIds: Set(savedHistory.map { $0.id }),
-                setupRequirements: requirements,
-                settingsStore: settingsStore,
-                onRunAction: { [weak self] action, files in
-                    self?.runAction(action, files: files)
-                },
-                onSetupAction: { [weak self] action, files in
-                    self?.beginSetup(action, files: files)
-                },
-                onToggleSavedRun: { [weak self] item in
-                    self?.toggleSavedRun(item)
-                },
-                onOpenSettings: { [weak self] in
-                    self?.openSettings()
-                },
-                onToggleFavorite: { [weak self] action in
-                    self?.toggleActionFavorite(action)
-                },
-                onMoveAction: { [weak self] source, target in
-                    self?.moveAction(source, before: target)
-                }
-            )
-            actionPanelWindow = panel
-            logMsg("[AppDelegate] created panel")
+            logMsg("[AppDelegate] reused existing panel shell")
+            return existingPanel
         }
-        panel.show(staysOpen: invocation.staysOpen)
+
+        let panel = ActionPanelWindow(
+            screen: screen,
+            files: files,
+            actions: [],
+            allActions: [],
+            history: [],
+            savedHistory: [],
+            savedHistoryIds: [],
+            setupRequirements: [:],
+            isMatchingActions: isMatching,
+            settingsStore: settingsStore,
+            onRunAction: { [weak self] action, files in self?.runAction(action, files: files) },
+            onSetupAction: { [weak self] action, files in self?.beginSetup(action, files: files) },
+            onToggleSavedRun: { [weak self] item in self?.toggleSavedRun(item) },
+            onOpenSettings: { [weak self] in self?.openSettings() },
+            onToggleFavorite: { [weak self] action in self?.toggleActionFavorite(action) },
+            onMoveAction: { [weak self] source, target in self?.moveAction(source, before: target) }
+        )
+        actionPanelWindow = panel
+        logMsg("[AppDelegate] created panel shell")
+        return panel
+    }
+
+    private func invalidatePanelWork() {
+        panelWorkGeneration.invalidate()
     }
 
 
