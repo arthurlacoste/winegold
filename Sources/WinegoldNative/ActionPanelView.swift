@@ -515,9 +515,9 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
             actionSearchField.stringValue = actionSearchQuery
             actionSearchField.target = nil
             actionSearchField.action = nil
-            actionSearchField.frame = NSRect(x: padding, y: y + 5, width: w, height: 28)
+            actionSearchField.frame = NSRect(x: padding, y: y + 10, width: w, height: 28)
             contentView.addSubview(actionSearchField)
-            y += 46
+            y += 56
         }
 
         if visible.isEmpty {
