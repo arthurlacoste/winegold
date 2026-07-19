@@ -5,6 +5,20 @@
   <p>A native macOS app that runs commands locally.</p>
 </div>
 
+## Installation
+
+Open a terminal and run the following command to install the latest community build of Winegold:
+
+```bash
+curl -fsSL https://spel.cc/winegold.sh | bash
+```
+
+Or manually:
+
+1. Download the DMG from the latest GitHub release.
+2. Open it and drag Winegold into Applications.
+3. If macOS blocks the app, open **System Settings → Privacy & Security** and choose **Open Anyway**. See Apple’s guidance: https://support.apple.com/en-us/102445.
+
 ## Build
 
 ```bash
@@ -55,6 +69,14 @@ Winegold checks the latest GitHub release once per day. Use **Check for Updates�
 ## Security
 
 Commands run locally. Imported scripts can execute shell commands, so review scripts before installing them.
+
+## Distribution and trust
+
+Winegold is distributed as free community builds and, when possible, as trusted notarized releases.
+
+Community builds are ad-hoc signed and are **not notarized by Apple**. On macOS they may show a Gatekeeper warning. Install from the command line:
+
+Only download Winegold from the official GitHub repository. Ad-hoc signing, self-signed certificates, Homebrew, and plain DMG distribution are not replacements for Apple notarization.
 
 ## Limitations
 
