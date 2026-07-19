@@ -80,6 +80,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         guard let recipeCoordinator else { return }
+        if actionPanelWindow?.isVisible == true {
+            completePendingSetupIfReady()
+            return
+        }
         do {
             try recipeCoordinator.reconcile()
             settingsWC?.refreshActions()
@@ -464,15 +468,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
-            let requirements = self.setupRequirements(for: actions)
-            let history = (try? runHistoryStore.recentRuns(limit: 10)) ?? []
-            let savedHistory = self.savedRunStore.savedRuns(limit: 10)
-            panel.updateAuxiliaryData(
-                history: history,
-                savedHistory: savedHistory,
-                savedHistoryIds: Set(savedHistory.map { $0.id })
-            )
-            panel.replaceActionMetadata((try? store.metadata(for: actions.map(\.id))) ?? [:])
+            let requirements = self.setupRequirements(for: blockedActions(in: actions, store: store))
 
             if files.isEmpty {
                 panel.replaceActions(
@@ -482,6 +478,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     isMatchingActions: false
                 )
                 logMsg("[Perf] palette_published uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) actions=\(actions.count)")
+                let history = (try? runHistoryStore.recentRuns(limit: 10)) ?? []
+                let savedHistory = self.savedRunStore.savedRuns(limit: 10)
+                panel.updateAuxiliaryData(
+                    history: history,
+                    savedHistory: savedHistory,
+                    savedHistoryIds: Set(savedHistory.map { $0.id })
+                )
+                panel.replaceActionMetadata((try? store.metadata(for: actions.map(\.id))) ?? [:])
                 return
             }
 
@@ -608,6 +612,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return available + blocked.filter { candidate in
             !available.contains(where: { $0.id == candidate.id })
         }
+    }
+
+    private func blockedActions(in actions: [Action], store: ActionStore) -> [Action] {
+        let blockedIDs = Set(((try? store.listNeedingSetup()) ?? []).map(\.id))
+        return actions.filter { blockedIDs.contains($0.id) }
     }
 
     private func setupRequirements(for actions: [Action]) -> [UUID: RecipeSetupRequirements] {

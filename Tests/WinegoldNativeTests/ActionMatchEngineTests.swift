@@ -91,13 +91,11 @@ final class ActionMatchEngineTests: XCTestCase {
         XCTAssertEqual(publications, 1)
     }
 
-    func testEightKilledWorkersDoNotStarveLaterRecipe() throws {
-        let worker = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try Data("#!/bin/sh\ninput=$(cat)\ncase \"$input\" in *Blocked*) sleep 10;; *) printf 1;; esac\n".utf8).write(to: worker)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: worker.path)
-        defer { try? FileManager.default.removeItem(at: worker) }
-        let engine = ActionMatchEngine(perRecipeSoftTimeout: 0.1, workerExecutableURL: worker)
-        let blockedActions = (0..<8).map { action("Blocked \($0)", trigger: "extension equals \"txt\"") }
+    func testTimedOutRecipesDoNotStarveLaterRecipe() {
+        let engine = ActionMatchEngine(perRecipeSoftTimeout: 0.02) { action in
+            if action.name.hasPrefix("Blocked") { Thread.sleep(forTimeInterval: 0.2) }
+        }
+        let blockedActions = (0..<32).map { action("Blocked \($0)", trigger: "extension equals \"txt\"") }
         _ = engine.match(files: [URL(fileURLWithPath: "/tmp/a.txt")], actions: blockedActions)
         let started = ProcessInfo.processInfo.systemUptime
 
@@ -106,7 +104,7 @@ final class ActionMatchEngineTests: XCTestCase {
             actions: [action("Fast", trigger: "extension equals \"txt\"")]
         )
 
-        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, 0.3)
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, 0.15)
         XCTAssertEqual(result.last?.actions.map(\.name), ["Fast"])
     }
 
@@ -148,6 +146,17 @@ final class ActionMatchEngineTests: XCTestCase {
         XCTAssertEqual(engine.evaluationCount, 24)
     }
 
+    func testDefaultEngineEvaluatesThreeHundredRecipesWithoutWorkerIsolation() {
+        let engine = ActionMatchEngine()
+        let actions = (0..<300).map { action("Fast \($0)", trigger: "extension equals \"txt\"") }
+
+        let result = engine.match(files: [URL(fileURLWithPath: "/tmp/a.txt")], actions: actions)
+
+        XCTAssertEqual(result.last?.actions.count, 300)
+        XCTAssertEqual(engine.evaluationCount, 300)
+        XCTAssertEqual(engine.timedOutRecipeCount, 0)
+    }
+
     func testCacheIsBounded() {
         let engine = ActionMatchEngine()
         let actions = [action("Text", trigger: "extension equals \"txt\"")]
@@ -168,6 +177,20 @@ final class ActionMatchEngineTests: XCTestCase {
         queued?()
 
         XCTAssertFalse(published)
+    }
+
+    func testFastRecipeInSameTierIsNotStarvedByBlockedRecipes() {
+        let engine = ActionMatchEngine(perRecipeSoftTimeout: 0.02) { action in
+            if action.name.hasPrefix("Blocked") { Thread.sleep(forTimeInterval: 0.2) }
+        }
+        let actions = (0..<32).map { action("Blocked \($0)", trigger: "extension equals \"txt\"") }
+            + [action("Fast", trigger: "extension equals \"txt\"")]
+        let started = ProcessInfo.processInfo.systemUptime
+
+        let result = engine.match(files: [URL(fileURLWithPath: "/tmp/a.txt")], actions: actions)
+
+        XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - started, 0.18)
+        XCTAssertEqual(result.last?.actions.map(\.name), ["Fast"])
     }
 
     func testMoreThanEightSlowRecipesStayWithinBoundedAggregateLatency() {

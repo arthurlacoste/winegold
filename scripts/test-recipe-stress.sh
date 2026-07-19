@@ -7,8 +7,8 @@ cd "$ROOT"
 RECIPE_COUNT="${RECIPE_COUNT:-300}"
 RUNS="${RUNS:-3}"
 FIRST_FRAME_LIMIT_MS="${FIRST_FRAME_LIMIT_MS:-100}"
-MATCHING_LIMIT_MS="${MATCHING_LIMIT_MS:-500}"
-PUBLISH_LIMIT_MS="${PUBLISH_LIMIT_MS:-800}"
+MATCHING_LIMIT_MS="${MATCHING_LIMIT_MS:-105}"
+PUBLISH_LIMIT_MS="${PUBLISH_LIMIT_MS:-400}"
 PALETTE_LIMIT_MS="${PALETTE_LIMIT_MS:-700}"
 INPUT_PATH="${1:-}"
 
@@ -168,6 +168,13 @@ cp Sources/WinegoldNative/WinegoldNative-Info.plist "$APP/Contents/Info.plist"
 cp "$BIN" "$APP/Contents/MacOS/WinegoldNative"
 chmod +x "$APP/Contents/MacOS/WinegoldNative"
 
+if [[ "${WINEGOLD_SKIP_MACOS_CONFIRMATION:-0}" != "1" ]]; then
+    pkill -x WinegoldNative 2>/dev/null || true
+    open -n -F "$APP"
+    printf 'Validate any macOS dialogs, then press Return to start measurements: '
+    read -r
+    pkill -x WinegoldNative 2>/dev/null || true
+fi
 
 # PR25: opening without input must publish the complete searchable palette.
 pkill -x WinegoldNative 2>/dev/null || true

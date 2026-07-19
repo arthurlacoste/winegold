@@ -20,8 +20,6 @@ public final class ActionMatchEngine: @unchecked Sendable {
     private let perRecipeSoftTimeout: TimeInterval
     private let evaluationHook: EvaluationHook?
     private let workerExecutableURL: URL?
-    private let forcesWorkerIsolation: Bool
-    private let evaluationQueue: OperationQueue
     private let cacheCapacity = 32
     private var cache: [CacheKey: [ProgressiveMatchBatch]] = [:]
     private var cacheOrder: [CacheKey] = []
@@ -40,14 +38,8 @@ public final class ActionMatchEngine: @unchecked Sendable {
         evaluationHook: EvaluationHook? = nil
     ) {
         self.perRecipeSoftTimeout = perRecipeSoftTimeout
-        self.workerExecutableURL = workerExecutableURL ?? Self.defaultWorkerExecutableURL
-        self.forcesWorkerIsolation = workerExecutableURL != nil
+        self.workerExecutableURL = workerExecutableURL
         self.evaluationHook = evaluationHook
-        let queue = OperationQueue()
-        queue.name = "com.winegold.recipe-matching"
-        queue.qualityOfService = .userInitiated
-        queue.maxConcurrentOperationCount = 32
-        self.evaluationQueue = queue
     }
 
     public func match(
@@ -174,17 +166,23 @@ public final class ActionMatchEngine: @unchecked Sendable {
             var matched = false
         }
         let results = candidates.map { _ in Result() }
+        guard let values = extractValues(items: items, includeInside: includeInside) else {
+            locked { _timedOutRecipeCount += candidates.count }
+            return []
+        }
+        let evaluationQueue = OperationQueue()
+        evaluationQueue.name = "com.winegold.recipe-matching"
+        evaluationQueue.qualityOfService = .userInitiated
+        evaluationQueue.maxConcurrentOperationCount = max(32, candidates.count)
 
         let group = DispatchGroup()
         for (index, trigger) in candidates.enumerated() {
             group.enter()
-            evaluationQueue.addOperation { [evaluationHook, workerExecutableURL, forcesWorkerIsolation] in
+            evaluationQueue.addOperation { [evaluationHook, workerExecutableURL] in
                 defer { group.leave() }
                 evaluationHook?(trigger.action)
                 let matched: Bool?
-                if (forcesWorkerIsolation || workerExecutableURL != nil),
-                   evaluationHook == nil,
-                   let workerExecutableURL {
+                if evaluationHook == nil, let workerExecutableURL {
                     matched = Self.evaluateInWorker(
                         action: trigger.action,
                         files: items.map(\.executionURL),
@@ -192,16 +190,13 @@ public final class ActionMatchEngine: @unchecked Sendable {
                         executableURL: workerExecutableURL,
                         timeout: self.perRecipeSoftTimeout
                     )
+                } else if let expression = trigger.expression {
+                    matched = values.allSatisfy { TriggerEvaluator().evaluate(expression, values: $0) }
+                } else if trigger.normalizedExtensions.contains("*") {
+                    matched = true
                 } else {
-                    let values = items.map { $0.values(includeInside: includeInside) }
-                    if let expression = trigger.expression {
-                        matched = values.allSatisfy { TriggerEvaluator().evaluate(expression, values: $0) }
-                    } else if trigger.normalizedExtensions.contains("*") {
-                        matched = true
-                    } else {
-                        matched = items.allSatisfy {
-                            trigger.normalizedExtensions.contains($0.executionURL.pathExtension.lowercased())
-                        }
+                    matched = items.allSatisfy {
+                        trigger.normalizedExtensions.contains($0.executionURL.pathExtension.lowercased())
                     }
                 }
                 guard let matched else { return }
@@ -215,7 +210,9 @@ public final class ActionMatchEngine: @unchecked Sendable {
             }
         }
         let waves = max(1, Int(ceil(Double(candidates.count) / 32.0)))
-        _ = group.wait(timeout: .now() + (perRecipeSoftTimeout + 0.05) * Double(waves))
+        let schedulingAllowance = workerExecutableURL == nil ? 0.05 : 0.2
+        let waitResult = group.wait(timeout: .now() + (perRecipeSoftTimeout + schedulingAllowance) * Double(waves))
+        if waitResult == .timedOut { evaluationQueue.cancelAllOperations() }
 
         let snapshots = results.map { result -> (Bool, Bool) in
             result.lock.lock()
@@ -228,6 +225,30 @@ public final class ActionMatchEngine: @unchecked Sendable {
             _timedOutRecipeCount += snapshots.filter { !$0.0 }.count
         }
         return candidates.enumerated().compactMap { snapshots[$0.offset].1 ? $0.element.action : nil }
+    }
+
+    private func extractValues(
+        items: [DraggedItem],
+        includeInside: Bool
+    ) -> [[String: TriggerValue]]? {
+        final class Box: @unchecked Sendable {
+            let lock = NSLock()
+            var values: [[String: TriggerValue]]?
+        }
+        let box = Box()
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let values = items.map { $0.values(includeInside: includeInside) }
+            box.lock.lock()
+            box.values = values
+            box.lock.unlock()
+            group.leave()
+        }
+        guard group.wait(timeout: .now() + perRecipeSoftTimeout) == .success else { return nil }
+        box.lock.lock()
+        defer { box.lock.unlock() }
+        return box.values
     }
 
     private static func evaluateInWorker(
