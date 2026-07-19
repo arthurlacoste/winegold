@@ -7,8 +7,8 @@ cd "$ROOT"
 RECIPE_COUNT="${RECIPE_COUNT:-300}"
 RUNS="${RUNS:-3}"
 FIRST_FRAME_LIMIT_MS="${FIRST_FRAME_LIMIT_MS:-100}"
-MATCHING_LIMIT_MS="${MATCHING_LIMIT_MS:-500}"
-PUBLISH_LIMIT_MS="${PUBLISH_LIMIT_MS:-800}"
+MATCHING_LIMIT_MS="${MATCHING_LIMIT_MS:-105}"
+PUBLISH_LIMIT_MS="${PUBLISH_LIMIT_MS:-400}"
 PALETTE_LIMIT_MS="${PALETTE_LIMIT_MS:-700}"
 INPUT_PATH="${1:-}"
 
@@ -168,6 +168,13 @@ cp Sources/WinegoldNative/WinegoldNative-Info.plist "$APP/Contents/Info.plist"
 cp "$BIN" "$APP/Contents/MacOS/WinegoldNative"
 chmod +x "$APP/Contents/MacOS/WinegoldNative"
 
+if [[ "${WINEGOLD_SKIP_MACOS_CONFIRMATION:-0}" != "1" ]]; then
+    pkill -x WinegoldNative 2>/dev/null || true
+    open -n -F "$APP"
+    printf 'Validate any macOS dialogs, then press Return to start measurements: '
+    read -r
+    pkill -x WinegoldNative 2>/dev/null || true
+fi
 
 # PR25: opening without input must publish the complete searchable palette.
 pkill -x WinegoldNative 2>/dev/null || true
@@ -249,6 +256,11 @@ if not final:
 
 publish_time = float(final.group(1))
 matches = int(final.group(2))
+refresh_times = [float(value) for value in re.findall(r"\[Perf\] partial_refresh duration_ms=([0-9.]+)", text)]
+if not refresh_times:
+    raise SystemExit(f"missing partial refresh measurement in run {run}")
+if max(refresh_times) >= 16:
+    raise SystemExit(f"partial refresh exceeded 16 ms in run {run}: {max(refresh_times):.2f} ms")
 if matches < expected:
     raise SystemExit(f"expected at least {expected} generated matches, got {matches} total in run {run}")
 

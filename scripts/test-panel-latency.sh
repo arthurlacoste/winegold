@@ -30,6 +30,12 @@ run_case() {
     grep -q '\[Perf\] panel_first_frame' "$LOG" && break
     sleep 0.02
   done
+  if [[ "$name" == "shortcut" ]]; then
+    for _ in $(seq 1 100); do
+      grep -q '\[Perf\] panel_closed' "$LOG" && break
+      sleep 0.02
+    done
+  fi
   screencapture -x "/tmp/winegold-${name}.png" 2>/dev/null || true
   python3 - "$LOG" "$name" <<'PY'
 import re, sys
@@ -43,6 +49,16 @@ latency = (value("panel_first_frame") - value("panel_open_requested")) * 1000
 print(f"{sys.argv[2]} first-frame latency: {latency:.2f} ms")
 if latency >= 100:
     raise SystemExit(f"first-frame latency exceeded 100 ms: {latency:.2f} ms")
+if sys.argv[2] == "shortcut":
+    close_latency = (value("panel_closed") - value("panel_close_requested")) * 1000
+    print(f"{sys.argv[2]} close latency: {close_latency:.2f} ms")
+    if close_latency >= 250:
+        raise SystemExit(f"close latency exceeded 250 ms: {close_latency:.2f} ms")
+refreshes = [float(item) for item in re.findall(r"\[Perf\] partial_refresh duration_ms=([0-9.]+)", text)]
+if refreshes:
+    print(f"{sys.argv[2]} worst partial refresh: {max(refreshes):.2f} ms")
+    if max(refreshes) >= 16:
+        raise SystemExit(f"partial refresh exceeded 16 ms: {max(refreshes):.2f} ms")
 PY
   [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
 }

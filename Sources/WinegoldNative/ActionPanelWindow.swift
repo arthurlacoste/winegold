@@ -163,7 +163,10 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelState.actions = actions
         panelState.setupRequirements = setupRequirements
         panelState.isMatchingActions = isMatchingActions
-        panelVC.refresh()
+        let refreshStart = ProcessInfo.processInfo.systemUptime
+        panelVC.refresh(reuseActionRows: true)
+        let refreshEnd = ProcessInfo.processInfo.systemUptime
+        logMsg("[Perf] partial_refresh duration_ms=\((refreshEnd - refreshStart) * 1000)")
         resizeForCurrentContent(animated: true)
     }
 

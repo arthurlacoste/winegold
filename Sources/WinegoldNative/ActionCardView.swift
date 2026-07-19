@@ -15,7 +15,7 @@ class ActionCardView: NSView {
     private let onSetup: (Action) -> Void
     private let onToggleFavorite: (Action) -> Void
     private let onMoveBefore: (Action, Action) -> Void
-    private let onSelection: () -> Void
+    private var onSelection: () -> Void
     private let isGroupedRow: Bool
     private let parentName: String?
 
@@ -69,6 +69,16 @@ class ActionCardView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:)") }
+
+    var actionID: UUID { action.id }
+    var representedAction: Action { action }
+    var representedSetupRequirements: RecipeSetupRequirements? { setupRequirements }
+    var representsActiveAction: Bool { isActive }
+    var representedParentName: String? { parentName }
+
+    func updateSelectionHandler(_ handler: @escaping () -> Void) {
+        onSelection = handler
+    }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
