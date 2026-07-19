@@ -46,6 +46,12 @@ Recipes may omit `trigger` when they do not need input. Use an `input` block wit
 
 See [Writing Winegold scripts](docs/scripting.md) for the supported format, triggers, input rules, and placeholders.
 
+## Releases and updates
+
+Push a semantic version tag such as `v0.2.0`. GitHub Actions tests the app, builds the DMG and ZIP, publishes SHA-256 checksums, and creates the GitHub release.
+
+Winegold checks the latest GitHub release once per day. Use **Check for Updates…** from the menu bar to check manually. Updates are downloaded from the tagged release, verified with SHA-256, installed over the current app, and relaunched.
+
 ## Security
 
 Commands run locally. Imported scripts can execute shell commands, so review scripts before installing them.

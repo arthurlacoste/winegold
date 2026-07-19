@@ -11,6 +11,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private let onOpenSettings: () -> Void
     private let onToggleFavorite: (Action) -> Void
     private let onMoveAction: (Action, Action) -> Void
+    private let onInstallUpdate: () -> Void
     private var cardViews: [ActionCardView] = []
     private var runGeneration = 0
     private var lastLayoutWidth: CGFloat = 0
@@ -24,6 +25,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private var dragPreviewFiles: [URL] = []
     private let settingsButton = NSButton()
     private let helpButton = NSButton()
+    private let updateButton = UpdatePillControl(frame: .zero)
     private let footerBar = PanelFooterBarView(frame: .zero)
     private let actionSearchField = NSSearchField()
     private var actionSearchQuery = ""
@@ -56,7 +58,8 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         onToggleSavedRun: @escaping (RunHistoryItem) -> Void,
         onOpenSettings: @escaping () -> Void,
         onToggleFavorite: @escaping (Action) -> Void,
-        onMoveAction: @escaping (Action, Action) -> Void
+        onMoveAction: @escaping (Action, Action) -> Void,
+        onInstallUpdate: @escaping () -> Void
     ) {
         self.state = state
         self.onRunAction = onRunAction
@@ -65,6 +68,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         self.onOpenSettings = onOpenSettings
         self.onToggleFavorite = onToggleFavorite
         self.onMoveAction = onMoveAction
+        self.onInstallUpdate = onInstallUpdate
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -309,6 +313,12 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         helpButton.target = self
         helpButton.action = #selector(helpClicked)
         footerBar.addSubview(helpButton)
+
+        updateButton.title = "Update"
+        updateButton.toolTip = "Install the latest Winegold release"
+        updateButton.onClick = { [weak self] in self?.updateClicked() }
+        updateButton.isHidden = true
+        footerBar.addSubview(updateButton)
         layoutFooterBar()
     }
 
@@ -321,6 +331,21 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         let itemSpacing: CGFloat = 14
         settingsButton.frame = NSRect(x: leftInset, y: 6, width: 24, height: 24)
         helpButton.frame = NSRect(x: leftInset + 24 + itemSpacing, y: 6, width: 24, height: 24)
+        let updateWidth = max(70, updateButton.intrinsicContentSize.width + 18)
+        updateButton.frame = NSRect(x: max(leftInset, footerBar.bounds.width - updateWidth - 12), y: 5, width: updateWidth, height: 26)
+    }
+
+    func setUpdateAvailable(version: String?) {
+        updateButton.title = version.map { "Update \($0)" } ?? "Update"
+        updateButton.isHidden = version == nil
+        updateButton.isEnabled = true
+        layoutFooterBar()
+    }
+
+    @objc private func updateClicked() {
+        updateButton.isEnabled = false
+        updateButton.title = "Updating…"
+        onInstallUpdate()
     }
 
     private func installScrollView(panelWidth: CGFloat, contentHeight: CGFloat) {
@@ -1303,6 +1328,56 @@ extension NSButton {
 }
 
 
+
+private final class UpdatePillControl: NSView {
+    var onClick: (() -> Void)?
+    var title: String = "Update" { didSet { label.stringValue = title; invalidateIntrinsicContentSize(); needsLayout = true } }
+    var isEnabled: Bool = true { didSet { alphaValue = isEnabled ? 1 : 0.65 } }
+
+    private let label = NSTextField(labelWithString: "Update")
+    private let fillColor = NSColor(calibratedRed: 1.0, green: 0.78, blue: 0.12, alpha: 1)
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 0
+        layer?.masksToBounds = false
+        layer?.backgroundColor = NSColor.clear.cgColor
+        label.font = .systemFont(ofSize: 11, weight: .semibold)
+        label.textColor = .black
+        label.alignment = .center
+        addSubview(label)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: label.intrinsicContentSize.width, height: 26)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        fillColor.setFill()
+        let radius = bounds.height / 2
+        NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
+    }
+
+    override func layout() {
+        super.layout()
+        label.frame = NSRect(x: 9, y: bounds.midY - label.intrinsicContentSize.height / 2, width: max(0, bounds.width - 18), height: label.intrinsicContentSize.height)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        alphaValue = 0.8
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard isEnabled else { return }
+        alphaValue = 1
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick?() }
+    }
+}
 
 private final class PanelFooterBarView: NSView {
     override var isFlipped: Bool { true }

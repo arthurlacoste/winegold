@@ -40,7 +40,8 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         onToggleSavedRun: @escaping (RunHistoryItem) -> Void,
         onOpenSettings: @escaping () -> Void,
         onToggleFavorite: @escaping (Action) -> Void,
-        onMoveAction: @escaping (Action, Action) -> Void
+        onMoveAction: @escaping (Action, Action) -> Void,
+        onInstallUpdate: @escaping () -> Void
     ) {
         let state = PanelState()
         state.files = files
@@ -62,7 +63,8 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
             onToggleSavedRun: onToggleSavedRun,
             onOpenSettings: onOpenSettings,
             onToggleFavorite: onToggleFavorite,
-            onMoveAction: onMoveAction
+            onMoveAction: onMoveAction,
+            onInstallUpdate: onInstallUpdate
         )
         self.panelVC = vc
 
@@ -139,6 +141,8 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         panelVC.refresh()
         resizeForCurrentContent(animated: true)
     }
+
+    func setUpdateAvailable(version: String?) { panelVC.setUpdateAvailable(version: version) }
 
     func markActionTriggered() {
         actionTriggeredSinceShow = true

@@ -56,6 +56,12 @@ jobs:
           OUTPUT_DIR: ${{ github.workspace }}/dist
         run: scripts/build-app.sh
 
+      - name: Package ZIP
+        run: bash scripts/package-release.sh dist/Winegold.app "dist/${{ steps.metadata.outputs.archive }}.zip"
+
+      - name: Create ZIP checksum
+        run: shasum -a 256 "dist/${{ steps.metadata.outputs.archive }}.zip" > "dist/${{ steps.metadata.outputs.archive }}.zip.sha256"
+
       - name: Package DMG
         run: bash scripts/create-dmg.sh dist/Winegold.app "dist/${{ steps.metadata.outputs.archive }}.dmg" Winegold
 
@@ -67,7 +73,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.metadata.outputs.archive }}
-          path: dist/${{ steps.metadata.outputs.archive }}.dmg
+          path: |
+            dist/${{ steps.metadata.outputs.archive }}.dmg
+            dist/${{ steps.metadata.outputs.archive }}.zip
+            dist/${{ steps.metadata.outputs.archive }}.zip.sha256
           if-no-files-found: error
 
       - name: Create GitHub release
@@ -77,6 +86,8 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             "dist/${{ steps.metadata.outputs.archive }}.dmg" \
+            "dist/${{ steps.metadata.outputs.archive }}.zip" \
+            "dist/${{ steps.metadata.outputs.archive }}.zip.sha256" \
             --verify-tag \
             --generate-notes \
             --title "Winegold ${{ steps.metadata.outputs.version }}"

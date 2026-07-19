@@ -34,6 +34,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let actionMatchingQueue = DispatchQueue(label: "com.winegold.action-matching", qos: .userInitiated)
     private let compiledActionCache = CompiledActionCache()
     private var panelWorkGeneration = PanelWorkGeneration()
+    private let appUpdateController = AppUpdateController()
+    private var availableUpdateVersion: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         logMsg("[AppDelegate] app started")
@@ -42,6 +44,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenuBar()
         setupGlobalHotKey()
         setupEdgeCatcher()
+        appUpdateController.onUpdateAvailable = { [weak self] version in
+            self?.availableUpdateVersion = version
+            self?.actionPanelWindow?.setUpdateAvailable(version: version)
+        }
+        if let forcedVersion = ProcessInfo.processInfo.environment["WINEGOLD_UI_TEST_UPDATE_VERSION"], !forcedVersion.isEmpty {
+            availableUpdateVersion = forcedVersion
+        } else {
+            appUpdateController.checkAutomatically()
+        }
         let environment = ProcessInfo.processInfo.environment
         if let dragPath = environment["WINEGOLD_UI_TEST_DRAG_PATH"], !dragPath.isEmpty {
             DispatchQueue.main.async { [weak self] in
@@ -213,6 +224,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu(title: "Winegold")
+        let checkUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        checkUpdatesItem.target = self
+        appMenu.addItem(checkUpdatesItem)
+        appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(NSMenuItem(title: "Quit Winegold", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
@@ -261,6 +276,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
 
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -319,6 +338,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self?.showPanel(with: files, on: screen, invocation: .drag)
         })
+    }
+
+    @objc private func checkForUpdates() {
+        appUpdateController.checkManually()
     }
 
     @objc private func togglePanel() {
@@ -535,8 +558,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             onToggleSavedRun: { [weak self] item in self?.toggleSavedRun(item) },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onToggleFavorite: { [weak self] action in self?.toggleActionFavorite(action) },
-            onMoveAction: { [weak self] source, target in self?.moveAction(source, before: target) }
+            onMoveAction: { [weak self] source, target in self?.moveAction(source, before: target) },
+            onInstallUpdate: { [weak self] in self?.appUpdateController.installAvailableUpdate() }
         )
+        panel.setUpdateAvailable(version: availableUpdateVersion)
         actionPanelWindow = panel
         logMsg("[AppDelegate] created panel shell")
         return panel
