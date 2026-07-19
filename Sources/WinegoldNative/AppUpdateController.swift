@@ -4,6 +4,7 @@ import WinegoldCore
 
 final class AppUpdateController {
     var onUpdateAvailable: ((String) -> Void)?
+    var onInstallationFailed: (() -> Void)?
     private let latestReleaseURL = URL(string: "https://api.github.com/repos/arthurlacoste/winegold/releases/latest")!
     private let session: URLSession
     private let defaults: UserDefaults
@@ -26,6 +27,7 @@ final class AppUpdateController {
             do {
                 try await checkForUpdates(showNoUpdateAlert: true)
             } catch {
+                onInstallationFailed?()
                 showAlert(title: "Update check failed", message: error.localizedDescription)
             }
         }
@@ -37,6 +39,7 @@ final class AppUpdateController {
                 let release = try await fetchLatestRelease()
                 try await downloadAndInstall(release)
             } catch {
+                onInstallationFailed?()
                 showAlert(title: "Update failed", message: error.localizedDescription)
             }
         }
@@ -128,25 +131,69 @@ final class AppUpdateController {
     }
 
     private func launchInstaller(newApp: URL, destination: URL) throws {
+        guard destination.pathExtension == "app" else {
+            throw NSError(domain: "WinegoldUpdate", code: 5, userInfo: [NSLocalizedDescriptionKey: "Winegold must be running from an application bundle to install an update."])
+        }
+
+        let destinationParent = destination.deletingLastPathComponent()
+        let installID = UUID().uuidString
+        let stagedApp = destinationParent.appendingPathComponent(".winegold-update-\(installID).app")
+        let backupApp = destinationParent.appendingPathComponent(".winegold-backup-\(installID).app")
+        try copyAppForAtomicInstall(from: newApp, to: stagedApp)
+
         let script = FileManager.default.temporaryDirectory.appendingPathComponent("winegold-install-\(UUID().uuidString).sh")
         let pid = ProcessInfo.processInfo.processIdentifier
         let body = """
         #!/bin/bash
         set -euo pipefail
+        cleanup() { rm -f "$0"; }
+        restore_backup() {
+          if [[ -e \(shellQuote(backupApp.path)) ]]; then
+            rm -rf \(shellQuote(destination.path))
+            mv \(shellQuote(backupApp.path)) \(shellQuote(destination.path))
+          fi
+        }
+        trap cleanup EXIT
         while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done
-        rm -rf \(shellQuote(destination.path))
-        ditto \(shellQuote(newApp.path)) \(shellQuote(destination.path))
+        if [[ -e \(shellQuote(destination.path)) ]]; then
+          mv \(shellQuote(destination.path)) \(shellQuote(backupApp.path))
+        fi
+        if ! mv \(shellQuote(stagedApp.path)) \(shellQuote(destination.path)); then
+          restore_backup
+          exit 1
+        fi
         xattr -dr com.apple.quarantine \(shellQuote(destination.path)) 2>/dev/null || true
-        open \(shellQuote(destination.path))
+        if ! open \(shellQuote(destination.path)); then
+          restore_backup
+          exit 1
+        fi
+        rm -rf \(shellQuote(backupApp.path))
         rm -rf \(shellQuote(newApp.deletingLastPathComponent().path))
-        rm -f "$0"
         """
-        try body.write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+        do {
+            try body.write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = [script.path]
+            try process.run()
+        } catch {
+            try? FileManager.default.removeItem(at: stagedApp)
+            try? FileManager.default.removeItem(at: script)
+            throw error
+        }
+    }
+
+    private func copyAppForAtomicInstall(from source: URL, to destination: URL) throws {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [script.path]
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        process.arguments = [source.path, destination.path]
         try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            try? FileManager.default.removeItem(at: destination)
+            throw NSError(domain: "WinegoldUpdate", code: 6, userInfo: [NSLocalizedDescriptionKey: "The update could not be prepared next to the installed application."])
+        }
     }
 
     private func shellQuote(_ value: String) -> String {

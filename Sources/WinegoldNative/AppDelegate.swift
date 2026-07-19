@@ -48,6 +48,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.availableUpdateVersion = version
             self?.actionPanelWindow?.setUpdateAvailable(version: version)
         }
+        appUpdateController.onInstallationFailed = { [weak self] in
+            guard let self else { return }
+            self.actionPanelWindow?.setUpdateAvailable(version: self.availableUpdateVersion)
+        }
         if let forcedVersion = ProcessInfo.processInfo.environment["WINEGOLD_UI_TEST_UPDATE_VERSION"], !forcedVersion.isEmpty {
             availableUpdateVersion = forcedVersion
         } else {
