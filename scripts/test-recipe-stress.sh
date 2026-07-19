@@ -249,6 +249,11 @@ if not final:
 
 publish_time = float(final.group(1))
 matches = int(final.group(2))
+refresh_times = [float(value) for value in re.findall(r"\[Perf\] partial_refresh duration_ms=([0-9.]+)", text)]
+if not refresh_times:
+    raise SystemExit(f"missing partial refresh measurement in run {run}")
+if max(refresh_times) >= 16:
+    raise SystemExit(f"partial refresh exceeded 16 ms in run {run}: {max(refresh_times):.2f} ms")
 if matches < expected:
     raise SystemExit(f"expected at least {expected} generated matches, got {matches} total in run {run}")
 

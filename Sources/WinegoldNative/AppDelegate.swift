@@ -32,7 +32,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var keychainStore: LocalSecretStore?
     private var pendingSetupRun: PendingSetupRun?
     private let actionMatchingQueue = DispatchQueue(label: "com.winegold.action-matching", qos: .userInitiated)
-    private let compiledActionCache = CompiledActionCache()
+    private let actionMatchEngine = ActionMatchEngine.shared
     private var panelWorkGeneration = PanelWorkGeneration()
     private let appUpdateController = AppUpdateController()
     private var availableUpdateVersion: String?
@@ -489,8 +489,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 let matchingStart = ProcessInfo.processInfo.systemUptime
                 logMsg("[Perf] matching_started uptime=\(matchingStart) generation=\(generation) actions=\(actions.count) files=\(files.count)")
-                let compiled = self.compiledActionCache.compiled(actions: actions)
-                let batches = ProgressiveActionMatcher().batches(for: files, compiled: compiled)
+                let batches = self.actionMatchEngine.match(files: files, actions: actions) { batch in
+                    let matched = self.prioritizeInstallActionIfNeeded(batch.actions, files: files)
+                    self.panelWorkGeneration.enqueueIfCurrent(
+                        generation,
+                        enqueue: { DispatchQueue.main.async(execute: $0) }
+                    ) { [weak panel] in
+                        guard let panel, panel.isVisible else {
+                            logMsg("[Perf] matching_discarded uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) reason=stale_or_hidden")
+                            return
+                        }
+                        panel.replaceActions(
+                            allActions: actions,
+                            actions: matched,
+                            setupRequirements: requirements,
+                            isMatchingActions: batch.remaining > 0
+                        )
+                        logMsg("[Perf] matching_published uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) tier=\(batch.cost) matches=\(matched.count) remaining=\(batch.remaining)")
+                    }
+                    return self.panelWorkGeneration.accepts(generation)
+                }
                 let matchingEnd = ProcessInfo.processInfo.systemUptime
                 logMsg("[Perf] matching_completed uptime=\(matchingEnd) generation=\(generation) batches=\(batches.count) matches=\(batches.last?.actions.count ?? 0) duration_ms=\((matchingEnd - matchingStart) * 1000)")
                 if batches.isEmpty {
@@ -503,22 +521,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         logMsg("[Perf] matching_published uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) tier=none matches=0 remaining=0")
                     }
                     return
-                }
-                for batch in batches {
-                    let matched = self.prioritizeInstallActionIfNeeded(batch.actions, files: files)
-                    DispatchQueue.main.async { [weak self, weak panel] in
-                        guard let self, let panel, self.panelWorkGeneration.accepts(generation), panel.isVisible else {
-                            logMsg("[Perf] matching_discarded uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) reason=stale_or_hidden")
-                            return
-                        }
-                        panel.replaceActions(
-                            allActions: actions,
-                            actions: matched,
-                            setupRequirements: requirements,
-                            isMatchingActions: batch.remaining > 0
-                        )
-                        logMsg("[Perf] matching_published uptime=\(ProcessInfo.processInfo.systemUptime) generation=\(generation) tier=\(batch.cost) matches=\(matched.count) remaining=\(batch.remaining)")
-                    }
                 }
             }
         }

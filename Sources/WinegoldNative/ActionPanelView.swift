@@ -13,6 +13,14 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private let onMoveAction: (Action, Action) -> Void
     private let onInstallUpdate: () -> Void
     private var cardViews: [ActionCardView] = []
+    private struct ReusableCard {
+        let action: Action
+        let setupRequirements: RecipeSetupRequirements?
+        let isActive: Bool
+        let parentName: String?
+        let view: ActionCardView
+    }
+    private var reusableCardViews: [UUID: ReusableCard] = [:]
     private var runGeneration = 0
     private var lastLayoutWidth: CGFloat = 0
     private var lastHadStatusArea = false
@@ -23,6 +31,12 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private var showsTechnicalDetails = false
     private var isDraggingFiles = false
     private var dragPreviewFiles: [URL] = []
+    private var dragPreviewActions: [Action] = []
+    private var dragPreviewGeneration: UInt64 = 0
+    private var committedMatchGeneration: UInt64 = 0
+    private var isMatchingDragPreview = false
+    private let dragPreviewQueue = DispatchQueue(label: "com.winegold.drag-preview-matching", qos: .userInteractive)
+    private let dragPreviewMatchEngine = ActionMatchEngine.shared
     private let settingsButton = NSButton()
     private let helpButton = NSButton()
     private let updateButton = UpdatePillControl(frame: .zero)
@@ -42,10 +56,6 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         isDraggingFiles || !dragPreviewFiles.isEmpty
     }
 
-    private var previewMatchedActions: [Action] {
-        guard !dragPreviewFiles.isEmpty else { return [] }
-        return ActionMatcher().matchingActions(for: dragPreviewFiles, actions: state.allActions)
-    }
 
     private let padding: CGFloat = 24
     private let scrollView = DropForwardingScrollView()
@@ -147,7 +157,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         }
     }
 
-    func refresh(animatedStatusInsert: Bool = false) {
+    func refresh(animatedStatusInsert: Bool = false, reuseActionRows: Bool = false) {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
@@ -157,12 +167,29 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
             ctx.duration = 0
             ctx.allowsImplicitAnimation = false
             contentView.layer?.removeAllAnimations()
-            contentView.subviews.forEach {
-                $0.layer?.removeAllAnimations()
-                $0.removeFromSuperview()
+            reusableCardViews = reuseActionRows
+                ? Dictionary(uniqueKeysWithValues: cardViews.map {
+                    ($0.actionID, ReusableCard(
+                        action: $0.representedAction,
+                        setupRequirements: $0.representedSetupRequirements,
+                        isActive: $0.representsActiveAction,
+                        parentName: $0.representedParentName,
+                        view: $0
+                    ))
+                })
+                : [:]
+            contentView.subviews.forEach { subview in
+                subview.layer?.removeAllAnimations()
+                if let list = subview as? PanelActionListView {
+                    list.subviews.forEach { child in
+                        if child is ActionCardView { child.removeFromSuperviewWithoutNeedingDisplay() }
+                    }
+                }
+                subview.removeFromSuperview()
             }
             cardViews.removeAll()
             buildUI()
+            reusableCardViews.removeAll()
         }
         lastHadStatusArea = hasStatusArea
     }
@@ -369,7 +396,10 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
             return
         }
         if !dragging {
+            dragPreviewGeneration &+= 1
             dragPreviewFiles = []
+            dragPreviewActions = []
+            isMatchingDragPreview = false
         }
         guard isDraggingFiles != dragging || !dragging else { return }
         isDraggingFiles = dragging
@@ -387,7 +417,27 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         let signature = files.map { $0.path }.joined(separator: "\n")
         guard signature != dragPreviewFiles.map({ $0.path }).joined(separator: "\n") else { return }
         dragPreviewFiles = files
+        isMatchingDragPreview = true
         isDraggingFiles = true
+        dragPreviewGeneration &+= 1
+        let generation = dragPreviewGeneration
+        let actions = state.allActions
+        dragPreviewQueue.async { [weak self] in
+            guard let self else { return }
+            let batches = self.dragPreviewMatchEngine.match(files: files, actions: actions)
+            let matched = batches.last?.actions ?? []
+            let actionGeneration = ActionMatchEngine.recipeGeneration(actions)
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.dragPreviewGeneration == generation,
+                      self.dragPreviewFiles == files,
+                      ActionMatchEngine.recipeGeneration(self.state.allActions) == actionGeneration else { return }
+                self.dragPreviewActions = matched
+                self.isMatchingDragPreview = false
+                self.refresh()
+                self.requestWindowResize(animated: true)
+            }
+        }
         refresh()
         requestWindowResize(animated: true)
     }
@@ -411,11 +461,15 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         ) { return }
         lastFilesSignature = signature
         actionRenderWindow.reset()
+        dragPreviewGeneration &+= 1
         dragPreviewFiles = []
+        let previewActions = dragPreviewActions
+        dragPreviewActions = []
+        isMatchingDragPreview = false
         isDraggingFiles = false
 
         state.files = files
-        state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
+        state.actions = previewActions
         state.lastResult = nil
         state.batchResults = []
         state.activeActionId = nil
@@ -423,6 +477,26 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         state.isCompact = false
         refresh()
         requestWindowResize(animated: true)
+        matchCommittedFiles(files)
+    }
+
+    private func matchCommittedFiles(_ files: [URL]) {
+        committedMatchGeneration &+= 1
+        let generation = committedMatchGeneration
+        let actions = state.allActions
+        dragPreviewQueue.async { [weak self] in
+            guard let self else { return }
+            let matched = self.dragPreviewMatchEngine.match(files: files, actions: actions).last?.actions ?? []
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.committedMatchGeneration == generation,
+                      self.state.files == files,
+                      ActionMatchEngine.recipeGeneration(self.state.allActions) == ActionMatchEngine.recipeGeneration(actions) else { return }
+                self.state.actions = matched
+                self.refresh()
+                self.requestWindowResize(animated: true)
+            }
+        }
     }
 
     private func addHeader(y: inout CGFloat, w: CGFloat) {
@@ -515,7 +589,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     }
 
     private func addActionsSection(y: inout CGFloat, w: CGFloat) {
-        let dragActions = previewMatchedActions
+        let dragActions = dragPreviewActions
         let matchedActions: [Action]
         if !dragPreviewFiles.isEmpty {
             matchedActions = dragActions
@@ -557,7 +631,9 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         }
 
         if visible.isEmpty {
-            let text = actionSearchQuery.isEmpty ? "No compatible actions" : "No matching actions"
+            let text = isMatchingDragPreview
+                ? "Matching actions…"
+                : (actionSearchQuery.isEmpty ? "No compatible actions" : "No matching actions")
             let empty = NSTextField(labelWithString: text)
             empty.font = .systemFont(ofSize: 13)
             empty.textColor = .secondaryLabelColor
@@ -575,7 +651,12 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
 
         for (index, item) in visible.enumerated() {
             let action = item.action
-            let card = ActionCardView(
+            let reusable = reusableCardViews.removeValue(forKey: action.id)
+            let canReuse = reusable?.action == action
+                && reusable?.setupRequirements == state.setupRequirements[action.id]
+                && reusable?.isActive == (state.activeActionId == action.id)
+                && reusable?.parentName == item.parentName
+            let card = canReuse ? reusable!.view : ActionCardView(
                 action: action,
                 status: validator.validate(action),
                 isActive: state.activeActionId == action.id,
@@ -593,6 +674,8 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
                 onMoveBefore: { [weak self] source, target in self?.onMoveAction(source, target) },
                 onSelection: { [weak self] in self?.selectCard(at: index) }
             )
+            card.updateSelectionHandler { [weak self] in self?.selectCard(at: index) }
+            card.setSelected(index == keyboardSelection.index)
             card.frame = NSRect(x: 0, y: CGFloat(index) * rowHeight, width: w, height: rowHeight)
             container.addSubview(card)
             cardViews.append(card)
@@ -630,7 +713,7 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
     private func currentPresentedActions() -> [PresentedAction] {
         let matchedActions: [Action]
         if !dragPreviewFiles.isEmpty {
-            matchedActions = previewMatchedActions
+            matchedActions = dragPreviewActions
         } else if state.files.isEmpty {
             matchedActions = state.allActions.filter(\.enabled)
         } else {
@@ -1253,13 +1336,14 @@ class ActionPanelViewController: NSViewController, NSSearchFieldDelegate {
         }
 
         state.files = files
-        state.actions = ActionMatcher().matchingActions(for: files, actions: state.allActions)
+        state.actions = []
         state.lastResult = nil
         state.batchResults = []
         state.activeActionId = action.id
         state.clearRunningDetails()
         state.isCompact = false
         refresh()
+        matchCommittedFiles(files)
         startRun(action: action, files: files)
     }
 
