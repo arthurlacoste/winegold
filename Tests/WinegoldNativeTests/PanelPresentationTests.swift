@@ -153,3 +153,25 @@ final class PanelPresentationTests: XCTestCase {
         )
     }
 }
+
+final class PanelAutoHideStateTests: XCTestCase {
+    func testDoesNotDismissBeforePointerHasEnteredPanel() {
+        var state = PanelAutoHideState()
+        XCTAssertFalse(state.update(isPointerInside: false))
+        XCTAssertFalse(state.hasEnteredPanel)
+    }
+
+    func testDismissesOnlyAfterPointerEntersThenLeaves() {
+        var state = PanelAutoHideState()
+        XCTAssertFalse(state.update(isPointerInside: true))
+        XCTAssertTrue(state.hasEnteredPanel)
+        XCTAssertTrue(state.update(isPointerInside: false))
+    }
+
+    func testResetRequiresAnewEntry() {
+        var state = PanelAutoHideState()
+        _ = state.update(isPointerInside: true)
+        state.reset()
+        XCTAssertFalse(state.update(isPointerInside: false))
+    }
+}
