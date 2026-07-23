@@ -174,4 +174,18 @@ final class PanelAutoHideStateTests: XCTestCase {
         state.reset()
         XCTAssertFalse(state.update(isPointerInside: false))
     }
+
+    func testRepeatedInsideUpdatesRemainNonDismissing() {
+        var state = PanelAutoHideState()
+        XCTAssertFalse(state.update(isPointerInside: true))
+        XCTAssertFalse(state.update(isPointerInside: true))
+        XCTAssertTrue(state.hasEnteredPanel)
+    }
+
+    func testRepeatedOutsideUpdatesAfterEntryRemainDismissing() {
+        var state = PanelAutoHideState()
+        _ = state.update(isPointerInside: true)
+        XCTAssertTrue(state.update(isPointerInside: false))
+        XCTAssertTrue(state.update(isPointerInside: false))
+    }
 }

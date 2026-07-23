@@ -243,15 +243,14 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         // or saved large frame and correcting it on the next run loop causes a blink.
         isProgrammaticFrameChange = true
         setFrame(finalFrame, display: false)
-        panelVC.view.frame = NSRect(origin: .zero, size: finalFrame.size)
         layoutIfNeeded()
         makeKeyAndOrderFront(nil)
         orderFrontRegardless()
-        isProgrammaticFrameChange = false
-        canPersistUserResize = true
 
         NSApp.setActivationPolicy(.accessory)
         NSApp.activate(ignoringOtherApps: true)
+        canPersistUserResize = true
+        isProgrammaticFrameChange = false
         logMsg("[ActionPanelWindow] show stableFrame=\(NSStringFromRect(finalFrame))")
         logMsg("[Perf] panel_first_frame uptime=\(ProcessInfo.processInfo.systemUptime)")
 
