@@ -223,7 +223,12 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         let panelWidth = savedPanelSize.width
         let panelHeight: CGFloat
         if panelVC.shouldShowActions {
-            panelHeight = savedPanelSize.height
+            // Keep the user's saved height, but never open smaller than the current content.
+            // The first visible frame is therefore final and does not need a corrective resize.
+            panelHeight = min(
+                max(savedPanelSize.height, targetFrameHeight(forContentHeight: panelVC.currentContentHeight)),
+                visibleFrame.height - 40
+            )
         } else {
             let contentRect = NSRect(x: 0, y: 0, width: panelWidth, height: idleDropFrameHeight)
             let naturalHeight = frameRect(forContentRect: contentRect).height
@@ -243,7 +248,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         // or saved large frame and correcting it on the next run loop causes a blink.
         isProgrammaticFrameChange = true
         setFrame(finalFrame, display: false)
-        layoutIfNeeded()
+        contentView?.layoutSubtreeIfNeeded()
         makeKeyAndOrderFront(nil)
         orderFrontRegardless()
 
