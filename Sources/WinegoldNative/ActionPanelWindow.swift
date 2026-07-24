@@ -221,10 +221,20 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
             visibleFrame: visibleFrame
         )
         let panelWidth = savedPanelSize.width
+        // Lay out once while hidden at the final width. Content height can depend on width,
+        // especially after a screen or settings change between initialization and show().
+        let provisionalFrame = NSRect(
+            x: frame.origin.x,
+            y: frame.origin.y,
+            width: panelWidth,
+            height: savedPanelSize.height
+        )
+        isProgrammaticFrameChange = true
+        setFrame(provisionalFrame, display: false)
+        panelVC.view.layoutSubtreeIfNeeded()
+
         let panelHeight: CGFloat
         if panelVC.shouldShowActions {
-            // Keep the user's saved height, but never open smaller than the current content.
-            // The first visible frame is therefore final and does not need a corrective resize.
             panelHeight = min(
                 max(savedPanelSize.height, targetFrameHeight(forContentHeight: panelVC.currentContentHeight)),
                 visibleFrame.height - 40
@@ -246,16 +256,15 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
 
         // Decide geometry before the window becomes visible. Showing an off-screen
         // or saved large frame and correcting it on the next run loop causes a blink.
-        isProgrammaticFrameChange = true
         setFrame(finalFrame, display: false)
-        contentView?.layoutSubtreeIfNeeded()
+        panelVC.view.layoutSubtreeIfNeeded()
         makeKeyAndOrderFront(nil)
         orderFrontRegardless()
 
         NSApp.setActivationPolicy(.accessory)
         NSApp.activate(ignoringOtherApps: true)
-        canPersistUserResize = true
         isProgrammaticFrameChange = false
+        canPersistUserResize = true
         logMsg("[ActionPanelWindow] show stableFrame=\(NSStringFromRect(finalFrame))")
         logMsg("[Perf] panel_first_frame uptime=\(ProcessInfo.processInfo.systemUptime)")
 
