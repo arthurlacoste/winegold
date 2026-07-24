@@ -98,3 +98,21 @@ public struct PanelPresentation: Equatable {
         ].joined(separator: "\n")
     }
 }
+
+public struct PanelAutoHideState: Equatable {
+    public private(set) var hasEnteredPanel = false
+
+    public init() {}
+
+    public mutating func update(isPointerInside: Bool) -> Bool {
+        if isPointerInside {
+            hasEnteredPanel = true
+            return false
+        }
+        return hasEnteredPanel
+    }
+
+    public mutating func reset() {
+        hasEnteredPanel = false
+    }
+}

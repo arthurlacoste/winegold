@@ -15,6 +15,7 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
     private var actionTriggeredSinceShow = false
     private var autoHideTimer: Timer?
     private var pendingAutoHideWorkItem: DispatchWorkItem?
+    private var autoHideState = PanelAutoHideState()
     private var outsideClickMonitor: Any?
     private var hideAfterSuccessWorkItem: DispatchWorkItem?
     private var successHoverTimer: Timer?
@@ -205,10 +206,14 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         isAnimatingOut = false
         actionTriggeredSinceShow = false
         panelState.isCompact = false
+        autoHideState.reset()
         cancelPendingAutoHide()
         cancelHideAfterSuccess()
         stopSuccessHoverMonitor()
+        stopAutoHideMonitor()
+        stopOutsideClickMonitor()
         applyTheme()
+
         let visibleFrame = targetScreen.visibleFrame
         let savedPanelSize = ActionPanelWindow.clampedPanelSize(
             width: CGFloat(settingsStore.panelWidth),
@@ -216,51 +221,56 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
             visibleFrame: visibleFrame
         )
         let panelWidth = savedPanelSize.width
+        // Lay out once while hidden at the final width. Content height can depend on width,
+        // especially after a screen or settings change between initialization and show().
+        let provisionalFrame = NSRect(
+            x: frame.origin.x,
+            y: frame.origin.y,
+            width: panelWidth,
+            height: savedPanelSize.height
+        )
+        isProgrammaticFrameChange = true
+        setFrame(provisionalFrame, display: false)
+        panelVC.view.layoutSubtreeIfNeeded()
+
         let panelHeight: CGFloat
         if panelVC.shouldShowActions {
-            panelHeight = savedPanelSize.height
+            panelHeight = min(
+                max(savedPanelSize.height, targetFrameHeight(forContentHeight: panelVC.currentContentHeight)),
+                visibleFrame.height - 40
+            )
         } else {
             let contentRect = NSRect(x: 0, y: 0, width: panelWidth, height: idleDropFrameHeight)
             let naturalHeight = frameRect(forContentRect: contentRect).height
             panelHeight = max(compactFrameHeight, min(naturalHeight, visibleFrame.height - 40))
         }
-        let targetX = settingsStore.panelSide == .left ? visibleFrame.minX + 20 : max(visibleFrame.minX, visibleFrame.maxX - panelWidth - 20)
-        var frame = self.frame
-        frame.origin.x = targetX
-        frame.origin.y = max(visibleFrame.minY + 20, visibleFrame.maxY - panelHeight - 20)
-        frame.size = NSSize(width: panelWidth, height: panelHeight)
-        logMsg("[ActionPanelWindow] show visibleFrame=\(NSStringFromRect(visibleFrame)) frame=\(NSStringFromRect(frame))")
-        let finalFrame = frame
-        var startFrame = finalFrame
-        startFrame.origin.x = settingsStore.panelSide == .left ? visibleFrame.minX - panelWidth - 8 : visibleFrame.maxX + 8
-        let shouldSlideIn = !isVisible || self.frame.origin.x >= visibleFrame.maxX - 2
+        let targetX = settingsStore.panelSide == .left
+            ? visibleFrame.minX + 20
+            : max(visibleFrame.minX, visibleFrame.maxX - panelWidth - 20)
+        let finalFrame = NSRect(
+            x: targetX,
+            y: max(visibleFrame.minY + 20, visibleFrame.maxY - panelHeight - 20),
+            width: panelWidth,
+            height: panelHeight
+        )
 
-        isProgrammaticFrameChange = true
-        self.setFrame(shouldSlideIn ? startFrame : finalFrame, display: true)
-        self.makeKeyAndOrderFront(nil)
-        self.orderFrontRegardless()
-        logMsg("[Perf] panel_first_frame uptime=\(ProcessInfo.processInfo.systemUptime)")
-        if shouldSlideIn {
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.18
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                self.animator().setFrame(finalFrame, display: true)
-            } completionHandler: { [weak self] in
-                self?.isProgrammaticFrameChange = false
-            }
-        } else {
-            isProgrammaticFrameChange = false
-        }
+        // Decide geometry before the window becomes visible. Showing an off-screen
+        // or saved large frame and correcting it on the next run loop causes a blink.
+        setFrame(finalFrame, display: false)
+        panelVC.view.layoutSubtreeIfNeeded()
+        makeKeyAndOrderFront(nil)
+        orderFrontRegardless()
+
         NSApp.setActivationPolicy(.accessory)
         NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.async { [weak self] in
-            self?.applyTheme()
-            self?.resizeForCurrentContent(animated: false)
-            self?.canPersistUserResize = true
-            if self?.staysOpenUntilExplicitClose == false {
-                self?.startAutoHideMonitor()
-                self?.startOutsideClickMonitor()
-            }
+        isProgrammaticFrameChange = false
+        canPersistUserResize = true
+        logMsg("[ActionPanelWindow] show stableFrame=\(NSStringFromRect(finalFrame))")
+        logMsg("[Perf] panel_first_frame uptime=\(ProcessInfo.processInfo.systemUptime)")
+
+        if !staysOpenUntilExplicitClose {
+            startAutoHideMonitor()
+            startOutsideClickMonitor()
         }
     }
 
@@ -497,7 +507,8 @@ class ActionPanelWindow: NSPanel, NSWindowDelegate {
         }
 
         let expandedFrame = frame.insetBy(dx: -20, dy: -20)
-        if expandedFrame.contains(NSEvent.mouseLocation) {
+        let pointerInside = expandedFrame.contains(NSEvent.mouseLocation)
+        if !autoHideState.update(isPointerInside: pointerInside) {
             cancelPendingAutoHide()
         } else {
             scheduleAutoHide()
